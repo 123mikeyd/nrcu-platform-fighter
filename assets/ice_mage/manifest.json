@@ -1,0 +1,33 @@
+{
+  "uv_source_match_fraction_1e5": 1.0,
+  "service_albedo_mean_pixel_error": 5.7590910991032915,
+  "bones": 24,
+  "triangles": 34972,
+  "clips": {
+    "Idle": {
+      "seconds": 4.0,
+      "source": "animation_glb_url.glb",
+      "full_rest_match": true,
+      "horizontal_hip_travel_removed": true
+    },
+    "Walk": {
+      "seconds": 1.033333420753479,
+      "source": "walking_glb_url.glb",
+      "full_rest_match": true,
+      "horizontal_hip_travel_removed": true
+    },
+    "Run": {
+      "seconds": 0.6333333253860474,
+      "source": "running_glb_url.glb",
+      "full_rest_match": true,
+      "horizontal_hip_travel_removed": true
+    }
+  },
+  "uv_triangle_match_fraction_1e5": 1.0,
+  "service_albedo_correlation": 0.9932251464035496,
+  "compacted_bytes": 28732220,
+  "original_source_sha256": "3598278317f320caa7af298d821812bb6cc240f7a84fcb6c24b915d3ab0180cb",
+  "glb_sha256": "4cc6d4e17bfd638af957e02367f17bfeb7f596c7b4c38cea3e0dc74d36e770e7",
+  "material_treatment": "Exact original approved PBR images restored after UV and pixel checks. Provider-added emission removed. No recolor or eye glow.",
+  "consumed_credits": 8
+}

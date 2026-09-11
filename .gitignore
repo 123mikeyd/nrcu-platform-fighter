@@ -1,0 +1,11 @@
+.godot/
+.verification/
+builds/
+__pycache__/
+*.pyc
+.env
+.env.*
+*.log
+export_credentials.cfg
+*.blend
+*.blend1

@@ -1,0 +1,23 @@
+{
+  "source_path": "witcheer.blend",
+  "source_sha256": "79a65eef165987a98cb8a43872b4db8adf0169de8695723c97298667f879e9e8",
+  "source_action": "Armature|running|baselayer",
+  "source_range": [
+    0.8000000715255737,
+    16.0
+  ],
+  "source_fps": 24.0,
+  "duration_seconds": 0.6333333303531011,
+  "export_range": [
+    0,
+    19
+  ],
+  "export_fps": 30,
+  "mapping": "(source_frame - 0.8) * 1.25; same real seconds",
+  "animations": [
+    "Run"
+  ],
+  "bones": 24,
+  "root_motion": "Authored in-place hips sway/bob preserved; controller owns travel. First/last root agree within 0.00001 m.",
+  "limitations": "No idle, jump, fall, hit or attack clips; paused Run sample is explicitly not an Idle animation."
+}

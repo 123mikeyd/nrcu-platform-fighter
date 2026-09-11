@@ -1,0 +1,41 @@
+name: Playtest report
+description: Report a reproducible gameplay or presentation problem.
+title: "[Playtest] "
+body:
+  - type: input
+    id: build
+    attributes:
+      label: Build tag or commit
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: Mode, stage, fighters, human/bot slots, Windows version, and keyboard or controller model.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps and exact inputs
+      description: Include tap versus hold, facing, and ground versus air.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and reproduction frequency
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Clip, screenshot, or relevant log
+      description: Remove private local paths and unrelated desktop information before attaching.

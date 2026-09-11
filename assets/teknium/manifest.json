@@ -1,0 +1,198 @@
+{
+  "sources": [
+    {
+      "path": "Teknium_Spell_Demo_v007.blend",
+      "sha256": "ce34764df56b907352c8fcef23c5c46e595450963b015597479fc44b21e1ebaf"
+    },
+    {
+      "path": "Teknium_FightMoves_All_PREVIEW_v002.blend",
+      "sha256": "43334fc279133a78a619ca828139f32002409e7ba17e92543397b633b0db90f2"
+    }
+  ],
+  "rest_matrix_max_delta": 0.0,
+  "retargeted": false,
+  "clips": {
+    "Jump": {
+      "source_file": "Teknium_TurboFit_Jump_VIEWPORT_REVIEW_v001.blend",
+      "source_sha256": "d2847ea10653d9c509ef0f72f1e9f607c30970bd9a6f4c49003dc0e66bb42eaf",
+      "source_action": "Teknium_TurboFit_Jump_CANDIDATE_source_15-58_30fps",
+      "source_frames": [15, 58],
+      "fps": 30,
+      "samples": 44,
+      "seconds": 1.4333333333333333,
+      "retargeted": true,
+      "approval": "User approved separate Teknium viewport retarget; baked selected Action used without retargeting again.",
+      "root_policy": "Hips XYZ translation fixed at installed rest; physics owns complete jump arc. All other approved pose samples retained.",
+      "runtime": "One source-speed episode per accepted jump; double jump restarts; falling holds final pose; attacks/hit/freeze retain priority; grounded/lifecycle reset clears."
+    },
+    "Walk": {
+      "source_action": "Tek_Walk",
+      "source_frames": [
+        0.8000000715255737,
+        25.60000228881836
+      ],
+      "seconds": 1.0333334257205327
+    },
+    "Run": {
+      "source_action": "Tek_Run",
+      "source_frames": [
+        0.8000000715255737,
+        16.0
+      ],
+      "seconds": 0.6333333303531011
+    },
+    "Projectile": {
+      "source_action": "Tek_Projectile_01",
+      "source_frames": [
+        0.8000000715255737,
+        104.0
+      ],
+      "seconds": 4.299999997019768
+    },
+    "RaiseWall": {
+      "source_action": "Tek_Cast_RaiseWall",
+      "source_frames": [
+        0.8000000715255737,
+        64.80000305175781
+      ],
+      "seconds": 2.66666679084301
+    },
+    "MageSpell": {
+      "source_action": "Tek_Cast_MageSpell_03",
+      "source_frames": [
+        0.8000000715255737,
+        80.79999542236328
+      ],
+      "seconds": 3.333333139618238
+    },
+    "Idle": {
+      "source_action": "Teknium_F01_Idle_Body_RestCorrected",
+      "source_frames": [
+        1.0,
+        110.0
+      ],
+      "seconds": 4.541666666666667
+    },
+    "Block": {
+      "source_action": "Teknium_F02_Blocking_Body_RestCorrected",
+      "source_frames": [
+        1.0,
+        37.0
+      ],
+      "seconds": 1.5
+    },
+    "Punch": {
+      "source_action": "Teknium_F04_Punching_Body_RestCorrected",
+      "source_frames": [
+        1.0,
+        32.0
+      ],
+      "seconds": 1.2916666666666667
+    },
+    "Kick": {
+      "source_action": "Teknium_F06_Kicking_01_Body_RestCorrected",
+      "source_frames": [
+        1.0,
+        46.0
+      ],
+      "seconds": 1.875
+    },
+    "Hit": {
+      "source_action": "Teknium_F10_Hit_Reaction_Body_RestCorrected",
+      "source_frames": [
+        1.0,
+        49.0
+      ],
+      "seconds": 2.0
+    },
+    "ForcePush": {
+      "source_action": "Tek_Projectile_01",
+      "source_frames": [
+        30,
+        64
+      ],
+      "seconds": 1.4166666666666667
+    },
+    "GrabStart": {
+      "source_action": "Tek_Cast_MageSpell_03",
+      "source_frames": [
+        11,
+        28
+      ],
+      "seconds": 0.7083333333333334
+    },
+    "GrabLoop": {
+      "source_action": "Tek_Cast_MageSpell_03",
+      "source_frames": [
+        28,
+        58
+      ],
+      "seconds": 1.25
+    },
+    "GrabEnd": {
+      "source_action": "Tek_Cast_MageSpell_03",
+      "source_frames": [
+        59,
+        72
+      ],
+      "seconds": 0.5416666666666666
+    }
+  },
+  "bones": 24,
+  "vertices": 14943,
+  "rest_bounds": {
+    "min": [
+      -0.6582819819450378,
+      -0.2695024311542511,
+      1.5260368968483817e-07
+    ],
+    "max": [
+      0.6582822799682617,
+      0.2695024907588959,
+      1.6999999284744263
+    ]
+  },
+  "orange_lens_pixels": 26654,
+  "lens_treatment": "Head-UV masked red lens texels shifted orange; coat accents unchanged; no emission.",
+  "glb_sha256": "8d6c07cb309fdd7fba9ac7c55f1e751ff425e81fddb54524e48091f500c72560",
+  "magic_source": {
+    "source": "Teknium_Magic_REVIEW_v001.blend",
+    "source_sha256": "27df50345f03a3b671d2a91f2f0edbb18c730f3bf9a287eff6e3f0619b8dd7fb",
+    "fps": 24,
+    "clips": {
+      "ForcePush": [
+        "Tek_Projectile_01",
+        30,
+        64
+      ],
+      "GrabStart": [
+        "Tek_Cast_MageSpell_03",
+        11,
+        28
+      ],
+      "GrabLoop": [
+        "Tek_Cast_MageSpell_03",
+        28,
+        58
+      ],
+      "GrabEnd": [
+        "Tek_Cast_MageSpell_03",
+        59,
+        72
+      ]
+    },
+    "hand_local_tail": {
+      "LeftHand": [
+        0,
+        18.405174255371094,
+        0
+      ],
+      "RightHand": [
+        0,
+        19.50612449645996,
+        0
+      ]
+    }
+  },
+  "magic_preservation": "Original mesh/skin/nodes/materials/images/textures and binary prefix exact; all ten original animations unchanged."
+}

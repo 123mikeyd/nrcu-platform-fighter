@@ -1,0 +1,66 @@
+{
+  "status": "approved mechanic; provisional balance",
+  "input": "Grounded: hold S+G (Down+special), release G; Down may be released first. Air Down+G remains prior no-op.",
+  "charge": {
+    "clip": "GroundCharge",
+    "source_action": "Armature|Indoor_Play|baselayer",
+    "source_rig": "charge_up_frames102-end",
+    "source_frames": [
+      102,
+      156
+    ],
+    "source_fps": 24,
+    "effective_key_grid_hz": 30,
+    "duration_seconds": 2.25,
+    "policy": "User correction: continuous source-preserving cosine ping-pong of full 102..156 range, 4.5s cycle, zero-speed turnarounds. Power caps at 2.25s but animation clock continues; no auto-release. Controller planted and vulnerable. Playback time is deliberately eased, not constant source speed."
+  },
+  "rush": {
+    "clip": "GroundRush",
+    "source_action": "Armature|Female_Bow_Charge_Left_Hand|baselayer",
+    "source_rig": "charged_tackle",
+    "source_frames": [
+      0.8000000715255737,
+      12.80000114440918
+    ],
+    "source_duration_seconds": 0.5000000447034836,
+    "duration_seconds_min_max": [0.3, 0.75],
+    "speed_min_max": [
+      7,
+      18
+    ],
+    "unobstructed_distance_min_max": [
+      3.02168893814087,
+      15.8700556755066
+    ],
+    "damage": 14,
+    "damage_note": "Doge down-special previously no-op; new provisional fixed damage, not borrowed neutral charge scaling",
+    "knockback_base_min_max": [
+      5,
+      8
+    ],
+    "launch_direction": [
+      0.2,
+      1,
+      0
+    ],
+    "facing": "snapshot release; locked through rush",
+    "policy": "Full tackle source once, mapped to charge-scaled rush duration; 0.08s release crossfade. One packet per opponent; existing team/shield math. Brake-only travel excluded even within a fractional final rush tick. Listed unobstructed distances are measured at 60Hz including braking, not terrain-limited distances."
+  },
+  "recovery_seconds": 0.28,
+  "brake_policy": "Smoothstep deceleration during vulnerable non-damaging recovery, 0.18s blend into original Idle. Forward ground/wall stopping-distance anticipation; hard safety clamp has priority. No borrowed Landing clip.",
+  "safety": {
+    "ground_only": true,
+    "full_capsule_radius": 0.55,
+    "edge_margin": 0.02,
+    "path_probe_spacing": 0.08,
+    "support_ray_up_down": [
+      0.1,
+      0.12
+    ],
+    "terrain": "actual ray terrain excluding all fighters and ignored pass-through platforms; conservative brake on steps/steep slopes instead of jump or hover",
+    "walls": "native solid capsule plus post-move terrain normals; terrain occlusion before contact damage",
+    "interruption": "hit freeze grab stock reset controls-disable clear state and target latch; gravity unchanged; no armor or resource refund"
+  },
+  "animation_contract": "Latest installed 18 old animations retained byte-for-byte; append animation-only binary/accessors. 24 bones/full rest matrices verified; all XYZ hip travel anchored to installed rest; source normalized all-bone landmarks checked at 96Hz. No source files modified.",
+  "pose_review": "Original source pose_sheet.png plus corrected GPU loop/brake evidence: continuous charge weight shift with smooth ping-pong rather than endpoint freeze; full hunched tackle once; original Idle blended for braking. No arbitrary source cuts or source asset edits."
+}

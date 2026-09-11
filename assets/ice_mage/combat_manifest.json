@@ -1,0 +1,36 @@
+{
+  "original_glb_sha256": "4cc6d4e17bfd638af957e02367f17bfeb7f596c7b4c38cea3e0dc74d36e770e7",
+  "clips": {
+    "IceStrike": {
+      "duration": 0.55,
+      "impact_time": 0.2,
+      "right_hand_world_start": [
+        -0.6566664832727376,
+        1.206537621958951,
+        -0.16731465140462362
+      ],
+      "right_hand_world_peak": [
+        -0.27715858201876253,
+        1.6087989229127202,
+        0.672987830825013
+      ]
+    },
+    "IceCast": {
+      "duration": 0.5,
+      "impact_time": 0.2,
+      "right_hand_world_start": [
+        -0.6566664832727376,
+        1.206537621958951,
+        -0.16731465140462362
+      ],
+      "right_hand_world_peak": [
+        -0.27715858201876253,
+        1.6087989229127202,
+        0.672987830825013
+      ]
+    }
+  },
+  "authoring": "Same installed Idle pose, arm directions solved in global glTF +Z forward using actual parent/rest transforms. No retarget.",
+  "combat_glb_sha256": "5f7e01262964e94a28d597466872995f79df7f8c2587047095f50b67404d6a74",
+  "original_binary_and_asset_definitions_preserved": true
+}
