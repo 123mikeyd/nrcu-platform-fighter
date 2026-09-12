@@ -7,10 +7,12 @@ const DemoStyle = preload("res://scripts/demo_style.gd")
 const StoryStageScript = preload("res://scripts/story_stage.gd")
 const StageSelectScript = preload("res://scripts/stage_select.gd")
 const CharSelectScript = preload("res://scripts/char_select.gd")
+const ResultScreenScript = preload("res://scripts/result_screen.gd")
 var ready_remaining := 0.0
 var go_remaining := 0.0
 var ready_label: Label
-var result_panel: Panel
+var result_panel: Control
+var result_screen: Control
 
 var fighters: Array = []
 var active_level := "debug"
@@ -101,6 +103,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
         get_viewport().set_input_as_handled()
     elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R and match_over:
         _reset_match()
+    elif result_panel != null and result_panel.visible and event is InputEventKey and event.pressed and not event.echo:
+        # Result grammar: any key starts the panels early; LEFT/RIGHT walk the
+        # pages once the panels are up.
+        if result_screen.is_waiting():
+            result_screen.skip_wait()
+        elif event.keycode == KEY_LEFT:
+            result_screen.prev_page()
+        elif event.keycode == KEY_RIGHT:
+            result_screen.next_page()
 
 func back_to_menu() -> void:
     show_setup()
@@ -594,32 +605,24 @@ func _build_hud() -> void:
     controls.modulate = Color(0.7, 0.78, 0.9)
     layer.add_child(controls)
 
-    winner_label = Label.new()
-    winner_label.position = Vector2(340, 270)
-    winner_label.size = Vector2(600, 120)
-    winner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    winner_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    winner_label.add_theme_font_size_override("font_size", 38)
-    winner_label.visible = false
-    result_panel = Panel.new()
-    result_panel.name = "WinnerPanel"
-    result_panel.position = Vector2(290,235)
-    result_panel.size = Vector2(700,250)
+    # Result screen (Melee result grammar, Doc 03 5): full layer; the winner
+    # banner is up immediately, the stat pages + actions phase in after the
+    # 160-tick wait or the first input (see result_screen.gd).
+    result_panel = Control.new()
+    result_panel.name = "ResultPanel"
     result_panel.theme = DemoStyle.make()
-    result_panel.add_theme_stylebox_override("panel",DemoStyle.box(Color("273a37"),Color("aa784c"),2))
+    result_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     layer.add_child(result_panel)
-    winner_label.position = Vector2(20,15)
-    winner_label.size = Vector2(660,110)
-    winner_label.add_theme_font_size_override("font_size",30)
-    result_panel.add_child(winner_label)
-    for i in 2:
-        var action := Button.new()
-        action.name = "Rematch" if i == 0 else "ChangeFighters"
-        action.text = "Rematch" if i == 0 else "Change Fighters"
-        action.position = Vector2(30+i*335,160)
-        action.size = Vector2(305,55)
-        result_panel.add_child(action)
-        action.pressed.connect(_reset_match if i == 0 else show_setup)
+    var result_shade := ColorRect.new()
+    result_shade.color = Color("273a37")
+    result_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    result_panel.add_child(result_shade)
+    result_screen = ResultScreenScript.new()
+    result_screen.name = "ResultScreen"
+    result_panel.add_child(result_screen)
+    winner_label = result_screen.banner
+    result_screen.rematch_requested.connect(_reset_match)
+    result_screen.setup_requested.connect(show_setup)
     result_panel.hide()
     ready_label = Label.new()
     ready_label.name = "ReadyGo"
@@ -673,8 +676,17 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
     else:
         winner_label.text = "P%d %s WINS!" % [survivors[0].player_index, survivors[0].fighter_name]
     winner_label.visible = true
+    var rows: Array = []
+    for fighter in fighters:
+        rows.append({
+            "name": fighter.fighter_name,
+            "index": fighter.player_index,
+            "stocks": fighter.stocks,
+            "damage": roundi(fighter.damage_percent),
+        })
+    rows.sort_custom(func(a, b): return int(a["index"]) < int(b["index"]))
     result_panel.show()
-    result_panel.get_node("Rematch").grab_focus()
+    result_screen.show_results(rows)
 
 func _reset_match() -> void:
     if story_state in ["complete", "lost"]:
