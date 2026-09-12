@@ -25,7 +25,7 @@ const DAMP := 26.0
 const LEAN_SCALE := 0.0016
 const LEAN_MAX := 0.38
 const BASE_TILT := -0.42
-const PRESS_SECONDS := 0.16
+const PRESS_SECONDS := 0.22
 const ATTRACT_SECONDS := 0.9
 const ATTRACT_RELEASE_DIST := 28.0
 
@@ -35,6 +35,7 @@ const TIP_POINT := Vector2(15.5, 1.0)
 const TIP_OPEN := Vector2(59.0, 1.0)
 const TIP_GRAB := Vector2(50.0, 1.0)
 const TIP_CARRY := Vector2(67.5, 32.0)
+const TIP_PRESS := Vector2(49.0, 22.0)  # tap frame: glove tip (spark marks excluded)
 
 # Carried chip: William's pose 1 carries the chip INSIDE the art — the coin
 # (one of his generated coins) is baked into hand_carry.png at the pose's
@@ -58,10 +59,13 @@ var _mouse := Vector2.ZERO
 var _tex_point: Texture2D
 var _tex_open: Texture2D
 var _tex_carry: Texture2D
+var _tex_press: Texture2D
 var carrying := false
 # Programmatic focus grabs (results screen) set this false so the hand is not
 # pulled toward a target the user did not navigate to. See main.gd.
 var attract_enabled := true
+# Tap-frame on mouse-down; the story selection turns it off (carry pose rules there).
+var press_frame_enabled := true
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -70,6 +74,7 @@ func _ready() -> void:
     _tex_point = load("res://assets/ui/hand_point.png")
     _tex_open = load("res://assets/ui/hand_open.png")
     _tex_carry = load("res://assets/ui/hand_carry.png")
+    _tex_press = load("res://assets/ui/hand_press.png")
 
 func add_target(target: Control) -> void:
     if target == null or targets.has(target):
@@ -188,18 +193,28 @@ func _draw() -> void:
 func _tex_ready() -> bool:
     return _tex_point != null and _tex_open != null and _tex_carry != null
 
-func _draw_texture_pose() -> void:
-    var tex: Texture2D = _tex_point
-    var tip := TIP_POINT
+func active_texture() -> Texture2D:
+    if carrying and _tex_carry != null:
+        return _tex_carry
+    if _press > 0.0 and press_frame_enabled and _tex_press != null:
+        return _tex_press
+    if _pose == Pose.HOVER and _tex_open != null:
+        return _tex_open
+    return _tex_point
+
+func active_tip() -> Vector2:
     if carrying:
-        tex = _tex_carry
-        tip = TIP_CARRY
-    elif _pose == Pose.HOVER:
-        tex = _tex_open
-        tip = TIP_OPEN
-    var squash := 0.92 if _press > 0.0 else 1.0
+        return TIP_CARRY
+    if _press > 0.0 and press_frame_enabled:
+        return TIP_PRESS
+    if _pose == Pose.HOVER:
+        return TIP_OPEN
+    return TIP_POINT
+
+func _draw_texture_pose() -> void:
+    var squash := 0.92 if (_press > 0.0 and carrying) else 1.0
     draw_set_transform(_pos, _lean, Vector2(HAND_SCALE, HAND_SCALE * squash))
-    draw_texture(tex, -tip)
+    draw_texture(active_texture(), -active_tip())
 
 
 

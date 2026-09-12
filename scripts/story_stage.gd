@@ -112,6 +112,7 @@ func begin_pick() -> void:
     _place_t = 0.0
     _settle = 1.0
     cursor.set_carry()
+    cursor.press_frame_enabled = false
     _refresh_styles()
 
 func get_chip_position() -> Vector2:

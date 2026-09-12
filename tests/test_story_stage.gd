@@ -26,6 +26,11 @@ func run():
             var label := cards[2].get_child(1) as Label
             check(label != null and label.text == roster.display_name(playable[2]).to_upper(), "card label matches roster")
             check(hand.is_carrying(), "hand carries the chip before a pick")
+            check(hand.active_texture() == hand._tex_carry, "carry pose while carrying")
+            check(not hand.press_frame_enabled, "no tap frame during the selection")
+            hand._press = 0.2
+            check(hand.active_texture() == hand._tex_carry, "carry pose wins over the tap frame")
+            hand._press = 0.0
             cards[2].pressed.emit()
             check(stage.get_selected_id() == playable[2], "card press selects id")
             check(arena.story_character.get_selected_metadata() == playable[2], "selection model synced")
