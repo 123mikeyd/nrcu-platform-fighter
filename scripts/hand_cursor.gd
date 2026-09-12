@@ -39,7 +39,7 @@ const TIP_GRAB := Vector2(50.7, 1.5)
 # drawn BEHIND the hand texture so the fingers overlap its rim. Radius is in
 # texture units (screen radius = CHIP_RADIUS * HAND_SCALE ~= 22 px, matching
 # the token that lands on a card).
-const CHIP_TEX_POS := Vector2(0.0, 9.0)
+const CHIP_TEX_POS := Vector2(-24.0, -28.0)
 const CHIP_RADIUS := 66.0
 const CHIP_RIM_WIDTH := 9.0
 const CHIP_FONT_SIZE := 48
