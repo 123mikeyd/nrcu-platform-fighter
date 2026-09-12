@@ -89,7 +89,7 @@ func _ready() -> void:
         caption.add_theme_font_size_override("font_size",16)
         caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card.add_child(caption)
-        card.pressed.connect(func(): level.select(i))
+        card.pressed.connect(_select_level.bind(i))
     var defaults := Config.default_slots()
     var player_row_containers: Array = []
     for i in range(4):
@@ -181,6 +181,12 @@ func _ready() -> void:
     _register_hand(main_menu)
     visibility_changed.connect(_on_visibility_changed)
 
+func _select_level(index: int) -> void:
+    level.select(index)
+    var f: int = main_menu.focus
+    _sync_menus()
+    main_menu.set_focus(f)
+
 func _texts_of(choice: OptionButton) -> Array:
     var values: Array = []
     for i in choice.item_count:
@@ -193,7 +199,8 @@ func _sync_menus() -> void:
         {"label": "LEVEL", "kind": "value", "values": _texts_of(level), "value": level.selected, "enabled": true},
     ]
     for i in range(4):
-        defs.append({"label": "PLAYER %d" % (i + 1), "kind": "action", "enabled": true})
+        var model: Dictionary = rows[i]
+        defs.append({"label": "PLAYER %d   %s" % [i + 1, model.character.get_item_text(model.character.selected)], "kind": "action", "enabled": true})
     main_menu.build(defs)
     if _player_index >= 0 and player_menu.visible:
         _build_player_defs()
@@ -202,10 +209,10 @@ func _build_player_defs() -> void:
     var model: Dictionary = rows[_player_index]
     player_menu.build([
         {"label": "KIND", "kind": "value", "values": _texts_of(model.kind), "value": model.kind.selected, "enabled": true},
-        {"label": "FIGHTER", "kind": "value", "values": _texts_of(model.character), "value": model.character.selected, "enabled": true},
-        {"label": "LEVEL", "kind": "value", "values": _texts_of(model.difficulty), "value": model.difficulty.selected, "enabled": true},
-        {"label": "TEAM", "kind": "value", "values": _texts_of(model.team), "value": model.team.selected, "enabled": true},
-        {"label": "INPUT", "kind": "value", "values": _texts_of(model.device), "value": model.device.selected, "enabled": true},
+        {"label": "FIGHTER", "kind": "value", "values": _texts_of(model.character), "value": model.character.selected, "enabled": not model.character.disabled},
+        {"label": "LEVEL", "kind": "value", "values": _texts_of(model.difficulty), "value": model.difficulty.selected, "enabled": not model.difficulty.disabled},
+        {"label": "TEAM", "kind": "value", "values": _texts_of(model.team), "value": model.team.selected, "enabled": not model.team.disabled},
+        {"label": "INPUT", "kind": "value", "values": _texts_of(model.device), "value": model.device.selected, "enabled": not model.device.disabled},
         {"label": "BACK", "kind": "action", "enabled": true},
     ])
     _register_hand(player_menu)
@@ -242,6 +249,10 @@ func _on_player_changed(row: int, value: int) -> void:
         3: model.team.select(value)
         4: model.device.select(value)
     _refresh()
+    if player_menu.visible:
+        var f: int = player_menu.focus
+        _build_player_defs()
+        player_menu.set_focus(f)
 
 func _on_player_confirmed(row: int) -> void:
     if row == 5:
@@ -254,6 +265,7 @@ func _return_to_main() -> void:
     # Reference rule (Doc 01 §3.5): back lands on the option we entered from.
     player_menu.visible = false
     main_menu.visible = true
+    _sync_menus()
     main_menu.play_enter()
     main_menu.set_focus(_player_index + 2)
 
