@@ -6,6 +6,7 @@ const SetupScript = preload("res://scripts/match_setup.gd")
 const DemoStyle = preload("res://scripts/demo_style.gd")
 const StoryStageScript = preload("res://scripts/story_stage.gd")
 const StageSelectScript = preload("res://scripts/stage_select.gd")
+const CharSelectScript = preload("res://scripts/char_select.gd")
 var ready_remaining := 0.0
 var go_remaining := 0.0
 var ready_label: Label
@@ -31,6 +32,9 @@ var story_choice_row: HBoxContainer
 var story_stage: Control
 var stage_panel: Control
 var stage_select: Control
+var char_panel: Control
+var char_select: Control
+var _char_player := -1
 var hud_title: Label
 var hud_controls: Label
 var freeplay_controls: String
@@ -69,9 +73,11 @@ func _ready() -> void:
     setup.start_requested.connect(start_match)
     setup.story_requested.connect(open_story)
     setup.stage_select_requested.connect(open_stage_select)
+    setup.character_select_requested.connect(open_char_select)
     setup.back_requested.connect(back_to_menu)
     _build_story_panel(menu_layer)
     _build_stage_panel(menu_layer)
+    _build_char_panel(menu_layer)
 
 func _process(_delta: float) -> void:
     for i in range(fighters.size()):
@@ -86,7 +92,9 @@ func _process(_delta: float) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
         if setup.visible and setup.close_help(): return
-        if stage_panel != null and stage_panel.visible:
+        if char_panel != null and char_panel.visible:
+            char_select.request_back()
+        elif stage_panel != null and stage_panel.visible:
             stage_select.request_back()
         elif setup.visible: back_to_menu()
         else: _leave_story()
@@ -110,6 +118,10 @@ func show_setup() -> void:
         stage_panel.hide()
     if stage_select != null:
         stage_select.reset()
+    if char_panel != null:
+        char_panel.hide()
+    if char_select != null:
+        char_select.reset()
     bobo_health_bar.hide()
     for fighter in fighters:
         fighter.controls_enabled = false
@@ -142,6 +154,8 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false) -> bool:
     story_panel.hide()
     if stage_panel != null:
         stage_panel.hide()
+    if char_panel != null:
+        char_panel.hide()
     hud_title.text = "NRCU"
     hud_controls.text = freeplay_controls
     active_slots = slots.duplicate(true)
@@ -288,6 +302,54 @@ func open_stage_select(focus_id: String) -> void:
     var focus: String = focus_id if focus_id in SetupScript.LEVEL_IDS else current
     stage_panel.show()
     stage_select.open_with(current, focus)
+
+func _build_char_panel(layer: CanvasLayer) -> void:
+    # Character page (CSS grammar): roster grid, hand + token, name swap.
+    char_panel = Control.new()
+    char_panel.name = "CharPanel"
+    char_panel.theme = DemoStyle.make()
+    char_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    layer.add_child(char_panel)
+    var shade := ColorRect.new()
+    shade.color = Color("273a37")
+    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    char_panel.add_child(shade)
+    char_select = CharSelectScript.new()
+    char_select.name = "CharSelect"
+    char_panel.add_child(char_select)
+    var roster = load("res://scripts/roster.gd")
+    var slots: Array = []
+    for id in roster.ids():
+        slots.append({
+            "id": id,
+            "name": roster.display_name(id).to_upper(),
+            "palette": roster.palette(id, 0),
+        })
+    char_select.build(slots)
+    char_select.confirmed.connect(_on_char_confirmed)
+    char_select.exit_finished.connect(_on_char_exit)
+    char_panel.hide()
+
+func _on_char_confirmed(id: String) -> void:
+    if _char_player >= 0:
+        setup.select_character_by_id(_char_player, id)
+
+func _on_char_exit() -> void:
+    show_setup()
+    if _char_player >= 0:
+        setup.reopen_player(_char_player)
+    _char_player = -1
+
+func open_char_select(player_index: int, focus_id: String) -> void:
+    if player_index < 0 or player_index >= setup.rows.size():
+        return
+    var current: String = Config.CHARACTERS[setup.rows[player_index].character.selected]
+    show_setup()
+    setup.hide()
+    _char_player = player_index
+    var focus: String = focus_id if focus_id in Config.CHARACTERS else current
+    char_panel.show()
+    char_select.open_with(current, focus, player_index)
 
 func apply_level(id: String) -> void:
     if id not in SetupScript.LEVEL_IDS: id = "debug"

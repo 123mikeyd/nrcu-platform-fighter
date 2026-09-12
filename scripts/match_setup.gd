@@ -4,6 +4,7 @@ const Config = preload("res://scripts/match_config.gd")
 signal start_requested(slots: Array, teams: bool)
 signal story_requested
 signal stage_select_requested(focus_id: String)
+signal character_select_requested(player_index: int, focus_id: String)
 signal back_requested
 const Style = preload("res://scripts/demo_style.gd")
 const MenuOptions = preload("res://scripts/menu_options.gd")
@@ -198,6 +199,33 @@ func select_level_by_id(id: String) -> void:
         return
     _select_level(index)
 
+func select_character_by_id(player_index: int, id: String) -> void:
+    # The character page reports its choice here; the dropdown stays the model.
+    if player_index < 0 or player_index >= rows.size():
+        return
+    var index: int = Config.CHARACTERS.find(id)
+    if index < 0:
+        return
+    rows[player_index].character.select(index)
+    _refresh()
+    if player_menu.visible:
+        var f: int = player_menu.focus
+        _build_player_defs()
+        player_menu.set_focus(f)
+
+func reopen_player(index: int) -> void:
+    # Back-to-entry rule (Doc 01 3.5): the character page returns to the
+    # player subpage it was entered from, landing on the FIGHTER row.
+    if index < 0 or index >= rows.size():
+        return
+    _player_index = index
+    main_menu.visible = false
+    _build_player_defs()
+    player_menu.visible = true
+    player_menu.lock_start()
+    player_menu.play_enter()
+    player_menu.set_focus(1)
+
 func _texts_of(choice: OptionButton) -> Array:
     var values: Array = []
     for i in choice.item_count:
@@ -223,7 +251,7 @@ func _build_player_defs() -> void:
     var model: Dictionary = rows[_player_index]
     player_menu.build([
         {"label": "KIND", "kind": "value", "values": _texts_of(model.kind), "value": model.kind.selected, "enabled": true},
-        {"label": "FIGHTER", "kind": "value", "values": _texts_of(model.character), "value": model.character.selected, "enabled": not model.character.disabled},
+        {"label": "FIGHTER   %s" % model.character.get_item_text(model.character.selected), "kind": "action", "enabled": not model.character.disabled},
         {"label": "LEVEL", "kind": "value", "values": _texts_of(model.difficulty), "value": model.difficulty.selected, "enabled": not model.difficulty.disabled},
         {"label": "TEAM", "kind": "value", "values": _texts_of(model.team), "value": model.team.selected, "enabled": not model.team.disabled},
         {"label": "INPUT", "kind": "value", "values": _texts_of(model.device), "value": model.device.selected, "enabled": not model.device.disabled},
@@ -271,7 +299,9 @@ func _on_player_changed(row: int, value: int) -> void:
         player_menu.set_focus(f)
 
 func _on_player_confirmed(row: int) -> void:
-    if row == 5:
+    if row == 1 and _player_index >= 0:
+        character_select_requested.emit(_player_index, Config.CHARACTERS[rows[_player_index].character.selected])
+    elif row == 5:
         _close_player()
 
 func _close_player() -> void:
