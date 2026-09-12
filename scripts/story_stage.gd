@@ -43,6 +43,10 @@ var _chip_index := -1
 var _chip_pos := Vector2.ZERO
 var _settle := 1.0
 var _tex_coin: Texture2D
+var _row: Container
+# Melee-style input hygiene (01 §2.2/§4.1): inputs are swallowed during a
+# short scene-start lock and a short cooldown after every pick.
+var _input_lock := 0.0
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -59,6 +63,7 @@ func _ready() -> void:
         add_child(cursor)
 
 func build(fighter_ids: Array[String], row: Container) -> void:
+    _row = row
     ids = fighter_ids.duplicate()
     var roster = load("res://scripts/roster.gd")
     for index in ids.size():
@@ -113,7 +118,26 @@ func begin_pick() -> void:
     _settle = 1.0
     cursor.set_carry()
     cursor.press_frame_enabled = false
+    lock_input(0.33)
     _refresh_styles()
+
+func get_input_lock() -> float:
+    return _input_lock
+
+func lock_input(seconds: float) -> void:
+    _input_lock = maxf(_input_lock, seconds)
+
+func play_enter() -> void:
+    # 20F one-shot enter (Melee ENTER_TO): the card row eases in from slightly
+    # small + transparent. Containers own position, so we animate scale+fade.
+    if _row == null:
+        return
+    _row.pivot_offset = Vector2(_row.size.x * 0.5, 0.0)
+    _row.modulate.a = 0.0
+    _row.scale = Vector2(0.96, 0.92)
+    var tween := create_tween().set_parallel()
+    tween.tween_property(_row, "modulate:a", 1.0, 0.33).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    tween.tween_property(_row, "scale", Vector2.ONE, 0.33).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func get_chip_position() -> Vector2:
     return _chip_pos
@@ -133,6 +157,9 @@ func is_chip_landed() -> bool:
     return _token_mode == TokenMode.LANDED
 
 func _on_card_pressed(index: int) -> void:
+    if _input_lock > 0.0:
+        return
+    lock_input(0.083)
     var first_pick: bool = not _picked
     _picked = true
     _selected_id = ids[index]
@@ -175,6 +202,8 @@ func _begin_place(from: Vector2, to: Vector2, index: int) -> void:
     queue_redraw()
 
 func _process(delta: float) -> void:
+    if _input_lock > 0.0:
+        _input_lock = maxf(_input_lock - delta, 0.0)
     if _token_mode == TokenMode.PLACING:
         _place_t = minf(_place_t + delta / PLACE_SECONDS, 1.0)
         var ease := 1.0 - pow(1.0 - _place_t, 3.0)

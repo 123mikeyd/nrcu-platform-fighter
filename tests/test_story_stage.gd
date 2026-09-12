@@ -25,6 +25,10 @@ func run():
         if cards.size() == 6:
             var label := cards[2].get_child(1) as Label
             check(label != null and label.text == roster.display_name(playable[2]).to_upper(), "card label matches roster")
+            check(stage.get_input_lock() > 0.0, "scene-start input lock is active")
+            cards[2].pressed.emit()
+            check(stage.get_selected_id() != playable[2], "pick ignored during the scene-start lock")
+            await create_timer(0.45).timeout
             check(hand.is_carrying(), "hand carries the chip before a pick")
             check(hand.active_texture() == hand._tex_carry, "carry pose while carrying")
             check(not hand.press_frame_enabled, "no tap frame during the selection")
