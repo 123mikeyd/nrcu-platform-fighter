@@ -36,15 +36,11 @@ const TIP_OPEN := Vector2(59.0, 1.0)
 const TIP_GRAB := Vector2(50.0, 1.0)
 const TIP_CARRY := Vector2(67.5, 32.0)
 
-# Carried chip: one of William's generated coins (assets/ui/coin_p1.png). The
-# carry pose (hand_carry.png) is William's pose 1 — its built-in placeholder
-# marks the exact chip spot; the placeholder is masked to transparent and the
-# live chip is drawn BEHIND the hand texture at that spot, so the finger pads
-# hold its rim. CHIP_TEX_SIZE = placeholder dia / coin content fraction.
+# Carried chip: William's pose 1 carries the chip INSIDE the art — the coin
+# (one of his generated coins) is baked into hand_carry.png at the pose's
+# built-in placeholder spot, exactly like his Krita reference. CHIP_TEX_POS
+# stays as the chip's texture-space center, used for the placement origin.
 const CHIP_TEX_POS := Vector2(35.5, 34.0)
-const CHIP_TEX_SIZE := 61.5
-const CHIP_FALLBACK_FACE := Color("e5ad69")
-const CHIP_FALLBACK_RIM := Color("8a5a2b")
 
 var targets: Array[Control] = []
 var hovered: Control = null
@@ -63,7 +59,6 @@ var _tex_point: Texture2D
 var _tex_open: Texture2D
 var _tex_grab: Texture2D
 var _tex_carry: Texture2D
-var _tex_coin: Texture2D
 var carrying := false
 
 func _ready() -> void:
@@ -74,7 +69,6 @@ func _ready() -> void:
     _tex_open = load("res://assets/ui/hand_open.png")
     _tex_grab = load("res://assets/ui/hand_grab.png")
     _tex_carry = load("res://assets/ui/hand_carry.png")
-    _tex_coin = load("res://assets/ui/coin_p1.png")
 
 func add_target(target: Control) -> void:
     if target == null or targets.has(target):
@@ -200,17 +194,9 @@ func _draw_texture_pose() -> void:
         tip = TIP_OPEN
     var squash := 0.92 if _press > 0.0 else 1.0
     draw_set_transform(_pos, _lean, Vector2(HAND_SCALE, HAND_SCALE * squash))
-    if carrying:
-        _draw_chip(CHIP_TEX_POS)
     draw_texture(tex, -tip)
 
-func _draw_chip(center: Vector2) -> void:
-    if _tex_coin != null:
-        var half := Vector2(CHIP_TEX_SIZE, CHIP_TEX_SIZE) * 0.5
-        draw_texture_rect(_tex_coin, Rect2(center - half, half * 2.0), false)
-        return
-    draw_circle(center, CHIP_TEX_SIZE * 0.5, CHIP_FALLBACK_RIM)
-    draw_circle(center, CHIP_TEX_SIZE * 0.44, CHIP_FALLBACK_FACE)
+
 
 func _draw_pointing_hand() -> void:
     draw_line(Vector2(0, 16), Vector2(0, 2), INK, 10.0, true)
