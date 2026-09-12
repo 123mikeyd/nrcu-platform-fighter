@@ -10,7 +10,7 @@ extends Control
 #   story_panel
 #   ├── shade
 #   ├── center/column          (title, detail, card row via build(), buttons)
-#   └── StoryStage (this)      (full-rect overlay; owns the HandCursor)
+#   └── StoryStage (this)      (full-rect overlay; binds the global hand cursor)
 #       └── HandCursor
 
 signal chosen(id: String)
@@ -50,8 +50,10 @@ func _ready() -> void:
     _tex_coin = load("res://assets/ui/coin_p1.png")
     # Prefer the global hand cursor (autoload) so the same glove appears on
     # every screen; fall back to a local instance when it is unavailable.
-    cursor = get_node_or_null("/root/Cursor/hand")
-    if cursor == null:
+    var global_cursor := get_node_or_null("/root/Cursor")
+    if global_cursor != null and global_cursor.hand != null:
+        cursor = global_cursor.hand
+    else:
         cursor = HandCursorScript.new()
         cursor.name = "HandCursor"
         add_child(cursor)

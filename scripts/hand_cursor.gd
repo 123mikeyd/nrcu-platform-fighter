@@ -57,7 +57,6 @@ var _started := false
 var _mouse := Vector2.ZERO
 var _tex_point: Texture2D
 var _tex_open: Texture2D
-var _tex_grab: Texture2D
 var _tex_carry: Texture2D
 var carrying := false
 
@@ -67,7 +66,6 @@ func _ready() -> void:
     z_index = 50
     _tex_point = load("res://assets/ui/hand_point.png")
     _tex_open = load("res://assets/ui/hand_open.png")
-    _tex_grab = load("res://assets/ui/hand_grab.png")
     _tex_carry = load("res://assets/ui/hand_carry.png")
 
 func add_target(target: Control) -> void:
@@ -183,7 +181,7 @@ func _draw() -> void:
         draw_arc(Vector2(0.0, 16.0), 18.0, 0.0, TAU, 40, Color(GOLD, 0.75), 2.0, true)
 
 func _tex_ready() -> bool:
-    return _tex_point != null and _tex_open != null and _tex_grab != null
+    return _tex_point != null and _tex_open != null and _tex_carry != null
 
 func _draw_texture_pose() -> void:
     var tex: Texture2D = _tex_point
@@ -191,9 +189,6 @@ func _draw_texture_pose() -> void:
     if carrying:
         tex = _tex_carry
         tip = TIP_CARRY
-    elif _press > 0.0:
-        tex = _tex_grab
-        tip = TIP_GRAB
     elif _pose == Pose.HOVER:
         tex = _tex_open
         tip = TIP_OPEN
