@@ -74,11 +74,6 @@ func set_selected_id(id: String) -> void:
     _selected_id = id
     _refresh_styles()
 
-func focus_selected() -> void:
-    var index := ids.find(_selected_id)
-    if index >= 0 and index < _cards.size():
-        _cards[index].grab_focus()
-
 func _make_card(index: int, roster) -> Button:
     var id: String = ids[index]
     var card := Button.new()

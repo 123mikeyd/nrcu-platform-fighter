@@ -279,7 +279,6 @@ func open_story() -> void:
     var current: String = current_meta if current_meta is String and current_meta != "" else "turbofit"
     story_stage.set_selected_id(current)
     story_stage.cursor.reset()
-    story_stage.focus_selected()
     Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 
 func _story_playable_ids() -> Array[String]:
@@ -543,7 +542,9 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
         story_choice_row.hide()
         winner_label.visible = false
         story_panel.show()
+        story_stage.cursor.attract_enabled = false
         story_action.grab_focus()
+        story_stage.cursor.attract_enabled = true
         return
     if survivors.is_empty():
         winner_label.text = "DRAW"

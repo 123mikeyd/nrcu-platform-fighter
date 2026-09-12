@@ -59,6 +59,9 @@ var _tex_point: Texture2D
 var _tex_open: Texture2D
 var _tex_carry: Texture2D
 var carrying := false
+# Programmatic focus grabs (results screen) set this false so the hand is not
+# pulled toward a target the user did not navigate to. See main.gd.
+var attract_enabled := true
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -75,6 +78,8 @@ func add_target(target: Control) -> void:
     target.focus_entered.connect(attract_to.bind(target))
 
 func attract_to(target: Control) -> void:
+    if not attract_enabled:
+        return
     _attract = target
     _attract_timer = ATTRACT_SECONDS
     _attract_anchor = _mouse
