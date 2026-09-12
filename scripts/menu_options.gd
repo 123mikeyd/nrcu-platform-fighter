@@ -41,15 +41,21 @@ func _ready() -> void:
 
 # --- setup ------------------------------------------------------------------
 
-func build(defs: Array, parent: Control) -> void:
+func build(defs: Array) -> void:
     # defs: {label: String, kind: "value"|"action", values: [String], value: int,
     #        enabled: bool  (disabled rows are skipped by focus, Doc 01 §3.3)}
+    if _list == null:
+        _list = VBoxContainer.new()
+        _list.add_theme_constant_override("separation", 6)
+        add_child(_list)
+        _list.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    for c in _list.get_children():
+        _list.remove_child(c)
+        c.queue_free()
+    _row_nodes.clear()
     rows.clear()
     for d in defs:
         rows.append((d as Dictionary).duplicate(true))
-    _list = VBoxContainer.new()
-    _list.add_theme_constant_override("separation", 6)
-    parent.add_child(_list)
     for i in rows.size():
         _row_nodes.append(_make_row(i, _list))
     focus = 0
@@ -58,6 +64,7 @@ func build(defs: Array, parent: Control) -> void:
             focus = i
             break
     _refresh_all()
+    custom_minimum_size.y = _list.get_combined_minimum_size().y + 4.0
 
 func _make_row(index: int, into: Container) -> Control:
     var row_def: Dictionary = rows[index]
@@ -122,6 +129,9 @@ func lock_start() -> void:
 
 func get_cooldown() -> float:
     return _cooldown
+
+func row_buttons() -> Array:
+    return _row_nodes.duplicate()
 
 func is_exiting() -> bool:
     return _exiting
@@ -217,11 +227,14 @@ func _process(delta: float) -> void:
 
 # --- input (keyboard/gamepad; mouse is row-level) ---------------------------
 
-func _unhandled_key_input(event: InputEvent) -> void:
-    if not is_visible_in_tree():
+func _input(event: InputEvent) -> void:
+    # Navigation keys are handled eagerly (and consumed) so the list is the
+    # cursor; Enter stays unhandled so a focused button still gets it first.
+    if not is_visible_in_tree() or not (event is InputEventKey) or event.echo:
         return
-    if event is InputEventKey and event.pressed and not event.echo:
-        match event.keycode:
+    var key: InputEventKey = event
+    if key.pressed:
+        match key.keycode:
             KEY_UP, KEY_W:
                 set_nav_held(-1)
             KEY_DOWN, KEY_S:
@@ -230,13 +243,23 @@ func _unhandled_key_input(event: InputEvent) -> void:
                 adjust(-1)
             KEY_RIGHT, KEY_D:
                 adjust(1)
-            KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
-                confirm()
             KEY_ESCAPE, KEY_BACKSPACE:
                 go_back()
-    elif event is InputEventKey and not event.pressed:
-        if event.keycode in [KEY_UP, KEY_W, KEY_DOWN, KEY_S]:
+            KEY_ENTER, KEY_KP_ENTER:
+                pass  # left to _unhandled_key_input / focused buttons
+            _:
+                return
+        get_viewport().set_input_as_handled()
+    else:
+        if key.keycode in [KEY_UP, KEY_W, KEY_DOWN, KEY_S]:
             set_nav_held(0)
+            get_viewport().set_input_as_handled()
+
+func _unhandled_key_input(event: InputEvent) -> void:
+    if not is_visible_in_tree():
+        return
+    if event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ENTER, KEY_KP_ENTER]:
+        confirm()
 
 func _on_row_hover(index: int) -> void:
     if _cooldown <= 0.0 and focus_enabled(index) and index != focus:

@@ -5,12 +5,17 @@ signal start_requested(slots: Array, teams: bool)
 signal story_requested
 signal back_requested
 const Style = preload("res://scripts/demo_style.gd")
+const MenuOptions = preload("res://scripts/menu_options.gd")
 var help_page: Control
 var rows: Array = []
 var mode: OptionButton
 var level: OptionButton
 const LEVEL_IDS = ["debug", "toy_room", "sky"]
 var error_label: Label
+var main_menu: Control
+var player_menu: Control
+var _player_index := -1
+var _menu_host: VBoxContainer = VBoxContainer.new()
 
 func _ready() -> void:
     theme = Style.make()
@@ -86,6 +91,7 @@ func _ready() -> void:
         card.add_child(caption)
         card.pressed.connect(func(): level.select(i))
     var defaults := Config.default_slots()
+    var player_row_containers: Array = []
     for i in range(4):
         var row := HBoxContainer.new()
         row.add_theme_constant_override("separation", 12)
@@ -110,6 +116,7 @@ func _ready() -> void:
         if i >= 2 and device.item_count > 1:
             device.select(mini(i - 1, device.item_count - 1))
         rows.append({"kind": kind, "character": character, "difficulty": difficulty, "team": team, "device": device})
+        player_row_containers.append(row)
         kind.item_selected.connect(func(_index): _refresh())
     mode.item_selected.connect(func(_index): _refresh())
     var controls := Label.new()
@@ -151,7 +158,122 @@ func _ready() -> void:
     help_button.pressed.connect(func(): help_page = Style.help(self, func(): help_button.grab_focus()))
     navigation.add_child(help_button)
     _refresh()
-    start.grab_focus()
+    # The options list owns the keyboard; a focused button would swallow Enter
+    # before it reaches the list (Doc 01: the cursor is the input owner).
+    # Melee-style presentation layer (Doc 01 §5.3 Rules-Muster): the dropdown
+    # form stays as the hidden state model; the options lists drive it.
+    mode_row.visible = false
+    for r in player_row_containers:
+        r.visible = false
+    column.add_child(_menu_host)
+    column.move_child(_menu_host, 2)
+    main_menu = MenuOptions.new()
+    _menu_host.add_child(main_menu)
+    player_menu = MenuOptions.new()
+    player_menu.visible = false
+    _menu_host.add_child(player_menu)
+    main_menu.changed.connect(_on_main_changed)
+    main_menu.confirmed.connect(_on_main_confirmed)
+    main_menu.back_requested.connect(func() -> void: back_requested.emit())
+    player_menu.changed.connect(_on_player_changed)
+    player_menu.confirmed.connect(_on_player_confirmed)
+    _sync_menus()
+    _register_hand(main_menu)
+    visibility_changed.connect(_on_visibility_changed)
+
+func _texts_of(choice: OptionButton) -> Array:
+    var values: Array = []
+    for i in choice.item_count:
+        values.append(choice.get_item_text(i))
+    return values
+
+func _sync_menus() -> void:
+    var defs: Array = [
+        {"label": "MATCH MODE", "kind": "value", "values": _texts_of(mode), "value": mode.selected, "enabled": true},
+        {"label": "LEVEL", "kind": "value", "values": _texts_of(level), "value": level.selected, "enabled": true},
+    ]
+    for i in range(4):
+        defs.append({"label": "PLAYER %d" % (i + 1), "kind": "action", "enabled": true})
+    main_menu.build(defs)
+    if _player_index >= 0 and player_menu.visible:
+        _build_player_defs()
+
+func _build_player_defs() -> void:
+    var model: Dictionary = rows[_player_index]
+    player_menu.build([
+        {"label": "KIND", "kind": "value", "values": _texts_of(model.kind), "value": model.kind.selected, "enabled": true},
+        {"label": "FIGHTER", "kind": "value", "values": _texts_of(model.character), "value": model.character.selected, "enabled": true},
+        {"label": "LEVEL", "kind": "value", "values": _texts_of(model.difficulty), "value": model.difficulty.selected, "enabled": true},
+        {"label": "TEAM", "kind": "value", "values": _texts_of(model.team), "value": model.team.selected, "enabled": true},
+        {"label": "INPUT", "kind": "value", "values": _texts_of(model.device), "value": model.device.selected, "enabled": true},
+        {"label": "BACK", "kind": "action", "enabled": true},
+    ])
+    _register_hand(player_menu)
+
+func _on_main_changed(row: int, value: int) -> void:
+    if row == 0:
+        mode.select(value)
+    elif row == 1:
+        level.select(value)
+    _refresh()
+
+func _on_main_confirmed(row: int) -> void:
+    if row >= 2:
+        _open_player(row - 2)
+
+func _open_player(index: int) -> void:
+    _player_index = index
+    main_menu.play_exit(_enter_player_page)
+
+func _enter_player_page() -> void:
+    main_menu.visible = false
+    _build_player_defs()
+    player_menu.visible = true
+    player_menu.play_enter()
+
+func _on_player_changed(row: int, value: int) -> void:
+    if _player_index < 0:
+        return
+    var model: Dictionary = rows[_player_index]
+    match row:
+        0: model.kind.select(value)
+        1: model.character.select(value)
+        2: model.difficulty.select(value)
+        3: model.team.select(value)
+        4: model.device.select(value)
+    _refresh()
+
+func _on_player_confirmed(row: int) -> void:
+    if row == 5:
+        _close_player()
+
+func _close_player() -> void:
+    player_menu.play_exit(_return_to_main)
+
+func _return_to_main() -> void:
+    # Reference rule (Doc 01 §3.5): back lands on the option we entered from.
+    player_menu.visible = false
+    main_menu.visible = true
+    main_menu.play_enter()
+    main_menu.set_focus(_player_index + 2)
+
+func _on_visibility_changed() -> void:
+    if not visible:
+        return
+    _player_index = -1
+    player_menu.visible = false
+    main_menu.visible = true
+    _sync_menus()
+    main_menu.lock_start()
+    main_menu.play_enter()
+    _register_hand(main_menu)
+
+func _register_hand(menu: Control) -> void:
+    var cursor = get_node_or_null("/root/Cursor")
+    if cursor == null or cursor.hand == null:
+        return
+    for button in menu.row_buttons():
+        cursor.hand.add_target(button)
 
 func close_help() -> bool:
     if is_instance_valid(help_page) and not help_page.is_queued_for_deletion():

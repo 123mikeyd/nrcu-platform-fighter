@@ -27,7 +27,7 @@ func run():
         {"label": "Grey", "kind": "value", "values": ["x", "y"], "value": 0, "enabled": false},
         {"label": "Bravo", "kind": "value", "values": ["A", "B"], "value": 0, "enabled": true},
         {"label": "Go", "kind": "action", "enabled": true},
-    ], host)
+    ])
     check(menu.rows.size() == 4, "rows built")
     check(menu.focus == 0, "initial focus on first enabled row")
     check(menu.get_cooldown() > 0.0, "scene-start cooldown active")
