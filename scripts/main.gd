@@ -4,6 +4,7 @@ const FighterScript = preload("res://scripts/fighter.gd")
 const Config = preload("res://scripts/match_config.gd")
 const SetupScript = preload("res://scripts/match_setup.gd")
 const DemoStyle = preload("res://scripts/demo_style.gd")
+const StoryStageScript = preload("res://scripts/story_stage.gd")
 var ready_remaining := 0.0
 var go_remaining := 0.0
 var ready_label: Label
@@ -26,6 +27,7 @@ var story_action: Button
 var story_back: Button
 var story_character: OptionButton
 var story_choice_row: HBoxContainer
+var story_stage: Control
 var hud_title: Label
 var hud_controls: Label
 var freeplay_controls: String
@@ -91,6 +93,7 @@ func back_to_menu() -> void:
 
 func show_setup() -> void:
     _cancel_ready()
+    Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
     result_panel.hide()
     story_state = ""
     story_panel.hide()
@@ -188,19 +191,30 @@ func _build_story_panel(layer: CanvasLayer) -> void:
     story_choice_row.alignment = BoxContainer.ALIGNMENT_CENTER
     story_choice_row.add_theme_constant_override("separation", 20)
     column.add_child(story_choice_row)
+    var choice_stack := VBoxContainer.new()
+    choice_stack.add_theme_constant_override("separation", 14)
+    story_choice_row.add_child(choice_stack)
     var choice_label := Label.new()
-    choice_label.text = "YOUR CHARACTER / P1"
-    story_choice_row.add_child(choice_label)
+    choice_label.text = "PICK YOUR FIGHTER / P1"
+    choice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    choice_stack.add_child(choice_label)
+    var cards_row := HBoxContainer.new()
+    cards_row.name = "FighterCardRow"
+    cards_row.alignment = BoxContainer.ALIGNMENT_CENTER
+    cards_row.add_theme_constant_override("separation", 18)
+    choice_stack.add_child(cards_row)
+    # Hidden selection model: the card stage drives it; kept for state + tests.
+    var roster = load("res://scripts/roster.gd")
+    var playable_ids := _story_playable_ids()
     story_character = OptionButton.new()
     story_character.name = "StoryCharacterSelect"
     story_character.custom_minimum_size = Vector2(300, 48)
-    var roster = load("res://scripts/roster.gd")
-    var playable_ids := _story_playable_ids()
     for id in playable_ids:
         story_character.add_item(roster.display_name(id))
         story_character.set_item_metadata(story_character.item_count - 1, id)
     story_character.select(playable_ids.find("turbofit"))
-    story_choice_row.add_child(story_character)
+    story_character.hide()
+    story_panel.add_child(story_character)
     story_action = Button.new()
     story_action.custom_minimum_size.y = 54
     story_action.pressed.connect(start_story)
@@ -210,6 +224,14 @@ func _build_story_panel(layer: CanvasLayer) -> void:
     story_back.custom_minimum_size.y = 48
     story_back.pressed.connect(show_setup)
     column.add_child(story_back)
+    story_stage = StoryStageScript.new()
+    story_stage.name = "StoryStage"
+    story_panel.add_child(story_stage)
+    story_stage.build(playable_ids, cards_row)
+    story_stage.chosen.connect(_on_story_card_chosen)
+    story_stage.cursor.add_target(story_action)
+    story_stage.cursor.add_target(story_back)
+    story_stage.set_selected_id("turbofit")
     story_panel.hide()
 
 func apply_level(id: String) -> void:
@@ -251,7 +273,12 @@ func open_story() -> void:
     story_choice_row.show()
     story_action.text = "START ENCOUNTER"
     story_panel.show()
-    story_character.grab_focus()
+    var current_meta = story_character.get_selected_metadata()
+    var current: String = current_meta if current_meta is String and current_meta != "" else "turbofit"
+    story_stage.set_selected_id(current)
+    story_stage.cursor.reset()
+    story_stage.focus_selected()
+    Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 
 func _story_playable_ids() -> Array[String]:
     # The prototype remains available to encounters and freeplay, not Story P1.
@@ -268,6 +295,7 @@ func start_story() -> void:
             if story_character.get_item_metadata(index) == selected:
                 story_character.select(index)
                 break
+    story_stage.set_selected_id(selected)
     slots[0].character = selected
     slots[0].kind = "human"
     slots[0].device = -1
@@ -277,6 +305,7 @@ func start_story() -> void:
     slots[2].kind = "empty"
     slots[3].kind = "empty"
     if start_match(slots, false, true):
+        Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
         story_state = "playing"
         hud_title.text = "STORY 01 — %s VS BOBO" % player_one.fighter_name
         hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\nBobo: 400 HP · slow two-hit claws · punish his recovery! · Esc: match setup"
@@ -504,6 +533,7 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
     for projectile in get_tree().get_nodes_in_group("projectiles") + get_tree().get_nodes_in_group("goo_puddles"):
         projectile.queue_free()
     if story_state == "playing":
+        Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
         var won: bool = player_one.stocks > 0 and player_two.stocks <= 0
         story_state = "complete" if won else "lost"
         story_title.text = "your pretty cool" if won else "TRY AGAIN"
@@ -569,3 +599,12 @@ func _physics_process(delta: float) -> void:
     elif go_remaining > 0:
         go_remaining = maxf(0,go_remaining-delta)
         if go_remaining == 0: ready_label.hide()
+
+func _on_story_card_chosen(id: String) -> void:
+    var index := _story_playable_ids().find(id)
+    if index >= 0:
+        story_character.select(index)
+
+func _exit_tree() -> void:
+    if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
+        Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
