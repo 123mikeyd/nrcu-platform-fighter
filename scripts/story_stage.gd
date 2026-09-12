@@ -18,12 +18,24 @@ signal chosen(id: String)
 const HandCursorScript = preload("res://scripts/hand_cursor.gd")
 const CARD_SIZE := Vector2(150, 172)
 
+# Chip flow (Melee CSS grammar): the hand carries the P1 chip until the first
+# pick; the chip then falls out of the pinch onto the chosen card. Later picks
+# hop the landed chip to the new card.
+enum TokenMode { NONE, CARRY, FALLING, LANDED }
+const FALL_SECONDS := 0.32
+
 var cursor: Control
 var ids: Array[String] = []
 
 var _cards: Array[Button] = []
 var _tokens: Array[Control] = []
 var _selected_id := ""
+var _token_mode: TokenMode = TokenMode.NONE
+var _picked := false
+var _fall_from := Vector2.ZERO
+var _fall_to := Vector2.ZERO
+var _fall_t := 0.0
+var _fall_index := -1
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -101,27 +113,79 @@ func _make_card(index: int, roster) -> Button:
     _tokens.append(token)
     return card
 
-func _on_card_pressed(index: int) -> void:
-    _selected_id = ids[index]
+func begin_pick() -> void:
+    # Called when the screen opens: no pick yet, the hand carries the chip.
+    _picked = false
+    _token_mode = TokenMode.CARRY
+    _fall_index = -1
+    _fall_t = 0.0
+    cursor.set_carry("P1")
     _refresh_styles()
-    _pop_token(index)
+
+func _on_card_pressed(index: int) -> void:
+    var first_pick: bool = not _picked
+    _picked = true
+    _selected_id = ids[index]
+    if first_pick:
+        var from: Vector2 = cursor.release_carry() if cursor.is_carrying() else _token_center(index)
+        _begin_fall(from, index)
+    elif _token_mode == TokenMode.FALLING:
+        # Re-pick while the chip is mid-air: retarget the fall.
+        _fall_index = index
+        _fall_to = _token_center(index)
+    elif index != _fall_index:
+        _begin_fall(_token_center(_fall_index), index)
+    _refresh_styles()
     chosen.emit(_selected_id)
 
 func _refresh_styles() -> void:
     for index in _cards.size():
-        var selected: bool = ids[index] == _selected_id
+        var selected: bool = _picked and ids[index] == _selected_id
         var fill := Color("35595a") if selected else Color("284e50")
         var border := Color("e5ad69") if selected else Color("1b3436")
         _cards[index].add_theme_stylebox_override("normal", _box(fill, border, 3 if selected else 2))
-        _tokens[index].visible = selected
+        _tokens[index].visible = selected and _token_mode == TokenMode.LANDED and index == _fall_index
 
-func _pop_token(index: int) -> void:
-    var token := _tokens[index]
-    token.show()
+func _token_center(index: int) -> Vector2:
+    return _tokens[index].get_global_rect().get_center()
+
+func _begin_fall(from: Vector2, index: int) -> void:
+    _fall_from = from
+    _fall_to = _token_center(index)
+    _fall_index = index
+    _fall_t = 0.0
+    _token_mode = TokenMode.FALLING
+    _refresh_styles()
+    queue_redraw()
+
+func _process(delta: float) -> void:
+    if _token_mode != TokenMode.FALLING:
+        return
+    _fall_t = minf(_fall_t + delta / FALL_SECONDS, 1.0)
+    if _fall_t >= 1.0:
+        _land()
+    queue_redraw()
+
+func _land() -> void:
+    _token_mode = TokenMode.LANDED
+    _refresh_styles()
+    var token := _tokens[_fall_index]
     token.pivot_offset = token.size * 0.5
-    token.scale = Vector2(1.6, 1.6)
+    token.scale = Vector2(1.28, 0.72)
     var tween := create_tween()
-    tween.tween_property(token, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tween.tween_property(token, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _draw() -> void:
+    if _token_mode != TokenMode.FALLING:
+        return
+    var progress_x := minf(_fall_t * 1.35, 1.0)
+    var progress_y := pow(_fall_t, 1.4)
+    var pos := Vector2(lerpf(_fall_from.x, _fall_to.x, progress_x), lerpf(_fall_from.y, _fall_to.y, progress_y))
+    draw_circle(pos, 22.0, Color("8a5a2b"))
+    draw_circle(pos, 20.0, Color("e5ad69"))
+    var font := ThemeDB.fallback_font
+    var width := font.get_string_size("P1", HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
+    draw_string(font, pos + Vector2(-width * 0.5, 6.0), "P1", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("284e50"))
 
 func _box(bg: Color, border: Color, width: int, radius := 10) -> StyleBoxFlat:
     var box := StyleBoxFlat.new()

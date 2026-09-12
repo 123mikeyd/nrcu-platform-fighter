@@ -273,6 +273,7 @@ func open_story() -> void:
     story_choice_row.show()
     story_action.text = "START ENCOUNTER"
     story_panel.show()
+    story_stage.begin_pick()
     var current_meta = story_character.get_selected_metadata()
     var current: String = current_meta if current_meta is String and current_meta != "" else "turbofit"
     story_stage.set_selected_id(current)

@@ -25,10 +25,14 @@ func run():
         if cards.size() == 6:
             var label := cards[2].get_child(1) as Label
             check(label != null and label.text == roster.display_name(playable[2]).to_upper(), "card label matches roster")
+            check(hand.is_carrying(), "hand carries the chip before a pick")
+            check(not cards[2].get_child(2).visible, "no token before a pick")
             cards[2].pressed.emit()
             check(stage.get_selected_id() == playable[2], "card press selects id")
             check(arena.story_character.get_selected_metadata() == playable[2], "selection model synced")
-            check(cards[2].get_child(2).visible, "token shown on selected card")
+            check(not hand.is_carrying(), "chip released on pick")
+            await create_timer(0.7).timeout
+            check(cards[2].get_child(2).visible, "chip landed on the selected card")
             check(not cards[1].get_child(2).visible, "token hidden elsewhere")
             arena.story_action.pressed.emit()
             check(arena.player_one.character_id == playable[2], "encounter starts with card choice")

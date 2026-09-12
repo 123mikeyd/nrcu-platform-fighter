@@ -35,6 +35,18 @@ const TIP_POINT := Vector2(16.0, 1.1)
 const TIP_OPEN := Vector2(58.9, 1.0)
 const TIP_GRAB := Vector2(50.7, 1.5)
 
+# Carried chip: sits in the pinch gap of hand_grab (texture space, gap ~(40,62));
+# drawn BEHIND the hand texture so the fingers overlap its rim. Radius is in
+# texture units (screen radius = CHIP_RADIUS * HAND_SCALE ~= 22 px, matching
+# the token that lands on a card).
+const CHIP_TEX_POS := Vector2(0.0, 9.0)
+const CHIP_RADIUS := 66.0
+const CHIP_RIM_WIDTH := 9.0
+const CHIP_FONT_SIZE := 48
+const CHIP_FACE := Color("e5ad69")
+const CHIP_RIM := Color("8a5a2b")
+const CHIP_TEXT := Color("284e50")
+
 var targets: Array[Control] = []
 var hovered: Control = null
 
@@ -51,6 +63,8 @@ var _mouse := Vector2.ZERO
 var _tex_point: Texture2D
 var _tex_open: Texture2D
 var _tex_grab: Texture2D
+var carrying := false
+var carry_label := "P1"
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -76,6 +90,24 @@ func reset() -> void:
     _pos = _mouse
     _vel = Vector2.ZERO
     _started = true
+
+func set_carry(label: String = "P1") -> void:
+    carrying = true
+    carry_label = label
+    queue_redraw()
+
+func is_carrying() -> bool:
+    return carrying
+
+func chip_world_position() -> Vector2:
+    # Center of the carried chip in this control's space (used as the fall origin).
+    return _pos + ((CHIP_TEX_POS - TIP_GRAB) * HAND_SCALE).rotated(_lean)
+
+func release_carry() -> Vector2:
+    var at := chip_world_position()
+    carrying = false
+    queue_redraw()
+    return at
 
 func active_target() -> Control:
     if hovered != null and is_instance_valid(hovered) and hovered.is_visible_in_tree():
@@ -155,14 +187,24 @@ func _tex_ready() -> bool:
 func _draw_texture_pose() -> void:
     var tex: Texture2D = _tex_point
     var tip := TIP_POINT
-    if _pose == Pose.HOVER:
-        tex = _tex_open
-        tip = TIP_OPEN
-    elif _pose == Pose.PRESS:
+    if _press > 0.0 or carrying:
         tex = _tex_grab
         tip = TIP_GRAB
-    draw_set_transform(_pos, _lean, Vector2(HAND_SCALE, HAND_SCALE))
+    elif _pose == Pose.HOVER:
+        tex = _tex_open
+        tip = TIP_OPEN
+    var squash := 0.92 if _press > 0.0 else 1.0
+    draw_set_transform(_pos, _lean, Vector2(HAND_SCALE, HAND_SCALE * squash))
+    if carrying:
+        _draw_chip(CHIP_TEX_POS)
     draw_texture(tex, -tip)
+
+func _draw_chip(center: Vector2) -> void:
+    draw_circle(center, CHIP_RADIUS, CHIP_RIM)
+    draw_circle(center, CHIP_RADIUS - CHIP_RIM_WIDTH, CHIP_FACE)
+    var font := ThemeDB.fallback_font
+    var width := font.get_string_size(carry_label, HORIZONTAL_ALIGNMENT_LEFT, -1, CHIP_FONT_SIZE).x
+    draw_string(font, center + Vector2(-width * 0.5, CHIP_FONT_SIZE * 0.36), carry_label, HORIZONTAL_ALIGNMENT_LEFT, -1, CHIP_FONT_SIZE, CHIP_TEXT)
 
 func _draw_pointing_hand() -> void:
     draw_line(Vector2(0, 16), Vector2(0, 2), INK, 10.0, true)
