@@ -26,6 +26,10 @@ func run():
     arena.add_child(bolt)
     mage.receive_hit(150, Vector3.RIGHT, 4)
     check(arena.match_over and arena.story_state == "complete", "Ice Mage final elimination completes one-stage story")
+    var stage = arena.story_panel.find_child("StoryStage", true, false)
+    check(stage != null and not stage.is_chip_visible(), "no placed chip on the results screen")
+    if stage != null:
+        check(not stage.cursor.is_carrying(), "hand no longer carries into the results")
     check(arena.story_panel.visible and arena.story_title.text == "your pretty cool", "victory title is exact requested lowercase string")
     check(arena.story_action.text == "REPLAY" and arena.story_back.visible, "victory offers replay and back")
     check(not arena.winner_label.visible, "generic freeplay winner text does not leak")

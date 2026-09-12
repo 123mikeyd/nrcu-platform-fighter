@@ -118,6 +118,17 @@ func begin_pick() -> void:
 func get_chip_position() -> Vector2:
     return _chip_pos
 
+func is_chip_visible() -> bool:
+    return _token_mode == TokenMode.PLACING or _token_mode == TokenMode.LANDED
+
+func clear_chip() -> void:
+    # Drop the selection chip entirely (the selection is over, e.g. the
+    # encounter started and the results screen reuses this panel).
+    _token_mode = TokenMode.NONE
+    _chip_index = -1
+    _settle = 1.0
+    queue_redraw()
+
 func is_chip_landed() -> bool:
     return _token_mode == TokenMode.LANDED
 
