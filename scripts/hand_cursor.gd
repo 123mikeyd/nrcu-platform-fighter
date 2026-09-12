@@ -105,6 +105,11 @@ func release_carry() -> Vector2:
     queue_redraw()
     return at
 
+func clear_carry() -> void:
+    # Silent release (no fall origin) — used when leaving the selection screen.
+    carrying = false
+    queue_redraw()
+
 func active_target() -> Control:
     if hovered != null and is_instance_valid(hovered) and hovered.is_visible_in_tree():
         return hovered

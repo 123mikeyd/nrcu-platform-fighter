@@ -33,3 +33,7 @@ window/stretch/mode="canvas_items"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.018, 0.024, 0.04, 1)
+
+[autoload]
+
+Cursor="*res://scripts/cursor_layer.gd"

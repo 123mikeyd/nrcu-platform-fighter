@@ -19,7 +19,7 @@ func run():
         playable.erase("ice_mage")
         var cards: Array = stage.get_cards()
         check(cards.size() == 6, "six fighter cards")
-        var hand = stage.find_child("HandCursor", true, false)
+        var hand = stage.cursor
         check(hand != null and hand.targets.size() >= 6, "hand cursor registered on cards")
         check(cards[0].name == "FighterCard0", "card naming")
         if cards.size() == 6:

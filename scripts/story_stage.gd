@@ -48,9 +48,13 @@ func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _tex_coin = load("res://assets/ui/coin_p1.png")
-    cursor = HandCursorScript.new()
-    cursor.name = "HandCursor"
-    add_child(cursor)
+    # Prefer the global hand cursor (autoload) so the same glove appears on
+    # every screen; fall back to a local instance when it is unavailable.
+    cursor = get_node_or_null("/root/Cursor/hand")
+    if cursor == null:
+        cursor = HandCursorScript.new()
+        cursor.name = "HandCursor"
+        add_child(cursor)
 
 func build(fighter_ids: Array[String], row: Container) -> void:
     ids = fighter_ids.duplicate()

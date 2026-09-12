@@ -93,7 +93,8 @@ func back_to_menu() -> void:
 
 func show_setup() -> void:
     _cancel_ready()
-    Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+    if story_stage != null and story_stage.cursor != null:
+        story_stage.cursor.clear_carry()
     result_panel.hide()
     story_state = ""
     story_panel.hide()
@@ -306,7 +307,6 @@ func start_story() -> void:
     slots[2].kind = "empty"
     slots[3].kind = "empty"
     if start_match(slots, false, true):
-        Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
         story_state = "playing"
         hud_title.text = "STORY 01 — %s VS BOBO" % player_one.fighter_name
         hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\nBobo: 400 HP · slow two-hit claws · punish his recovery! · Esc: match setup"
@@ -606,6 +606,3 @@ func _on_story_card_chosen(id: String) -> void:
     if index >= 0:
         story_character.select(index)
 
-func _exit_tree() -> void:
-    if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
-        Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
