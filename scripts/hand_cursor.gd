@@ -29,6 +29,12 @@ const PRESS_SECONDS := 0.16
 const ATTRACT_SECONDS := 0.9
 const ATTRACT_RELEASE_DIST := 28.0
 
+# Texture poses (art in assets/ui; anchors = fingertip in texture space).
+const HAND_SCALE := 0.33
+const TIP_POINT := Vector2(18.5, 1.3)
+const TIP_OPEN := Vector2(65.5, 2.0)
+const TIP_GRAB := Vector2(50.8, 1.7)
+
 var targets: Array[Control] = []
 var hovered: Control = null
 
@@ -42,11 +48,17 @@ var _attract_timer := 0.0
 var _attract_anchor := Vector2.ZERO
 var _started := false
 var _mouse := Vector2.ZERO
+var _tex_point: Texture2D
+var _tex_open: Texture2D
+var _tex_grab: Texture2D
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     z_index = 50
+    _tex_point = load("res://assets/ui/hand_point.png")
+    _tex_open = load("res://assets/ui/hand_open.png")
+    _tex_grab = load("res://assets/ui/hand_grab.png")
 
 func add_target(target: Control) -> void:
     if target == null or targets.has(target):
@@ -124,6 +136,9 @@ func _input(event: InputEvent) -> void:
         queue_redraw()
 
 func _draw() -> void:
+    if _tex_ready():
+        _draw_texture_pose()
+        return
     var squash := 0.78 if _pose == Pose.PRESS else 1.0
     draw_set_transform(_pos, _lean, Vector2(1.0, squash))
     draw_circle(Vector2(2.0, 6.0), 13.0, Color(0.02, 0.05, 0.06, 0.35))
@@ -133,6 +148,21 @@ func _draw() -> void:
         _draw_pointing_hand()
     if _pose == Pose.PRESS:
         draw_arc(Vector2(0.0, 16.0), 18.0, 0.0, TAU, 40, Color(GOLD, 0.75), 2.0, true)
+
+func _tex_ready() -> bool:
+    return _tex_point != null and _tex_open != null and _tex_grab != null
+
+func _draw_texture_pose() -> void:
+    var tex: Texture2D = _tex_point
+    var tip := TIP_POINT
+    if _pose == Pose.HOVER:
+        tex = _tex_open
+        tip = TIP_OPEN
+    elif _pose == Pose.PRESS:
+        tex = _tex_grab
+        tip = TIP_GRAB
+    draw_set_transform(_pos, _lean, Vector2(HAND_SCALE, HAND_SCALE))
+    draw_texture(tex, -tip)
 
 func _draw_pointing_hand() -> void:
     draw_line(Vector2(0, 16), Vector2(0, 2), INK, 10.0, true)
