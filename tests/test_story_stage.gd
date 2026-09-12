@@ -31,9 +31,9 @@ func run():
             check(arena.story_character.get_selected_metadata() == playable[2], "selection model synced")
             check(not hand.is_carrying(), "chip released on pick")
             await create_timer(0.7).timeout
-            check(stage.is_chip_landed(), "chip landed")
+            check(stage.is_chip_landed(), "chip placed")
             var chip_pos: Vector2 = stage.get_chip_position()
-            check(cards[2].get_global_rect().grow(12.0).has_point(chip_pos), "chip fell onto the picked card")
+            check(cards[2].get_global_rect().grow(12.0).has_point(chip_pos), "chip set down on the picked card")
             check(not cards[1].get_global_rect().has_point(chip_pos), "chip not on another card")
             arena.story_action.pressed.emit()
             check(arena.player_one.character_id == playable[2], "encounter starts with card choice")

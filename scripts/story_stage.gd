@@ -21,8 +21,13 @@ const CARD_SIZE := Vector2(150, 172)
 # Chip flow (Melee CSS grammar): the hand carries the P1 chip until the first
 # pick; the chip then falls out of the pinch onto the chosen card. Later picks
 # hop the landed chip to the new card.
-enum TokenMode { NONE, CARRY, FALLING, LANDED }
-const FALL_SECONDS := 0.32
+enum TokenMode { NONE, CARRY, PLACING, LANDED }
+# Melee grammar: the chip is SET DOWN, not dropped — a short settle from the
+# carried spot (with a small downward nudge), no vertical travel to a slot.
+const PLACE_SECONDS := 0.14
+const PLACE_NUDGE := 10.0
+const CHIP_INSET := 14.1
+const CHIP_PX := 20.3
 
 var cursor: Control
 var ids: Array[String] = []
@@ -31,16 +36,18 @@ var _cards: Array[Button] = []
 var _selected_id := ""
 var _token_mode: TokenMode = TokenMode.NONE
 var _picked := false
-var _fall_from := Vector2.ZERO
-var _fall_to := Vector2.ZERO
-var _fall_t := 0.0
-var _fall_index := -1
+var _place_from := Vector2.ZERO
+var _place_to := Vector2.ZERO
+var _place_t := 0.0
+var _chip_index := -1
 var _chip_pos := Vector2.ZERO
 var _settle := 1.0
+var _tex_coin: Texture2D
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    _tex_coin = load("res://assets/ui/coin_p1.png")
     cursor = HandCursorScript.new()
     cursor.name = "HandCursor"
     add_child(cursor)
@@ -100,10 +107,10 @@ func begin_pick() -> void:
     # Called when the screen opens: no pick yet, the hand carries the chip.
     _picked = false
     _token_mode = TokenMode.CARRY
-    _fall_index = -1
-    _fall_t = 0.0
+    _chip_index = -1
+    _place_t = 0.0
     _settle = 1.0
-    cursor.set_carry("P1")
+    cursor.set_carry()
     _refresh_styles()
 
 func get_chip_position() -> Vector2:
@@ -118,13 +125,14 @@ func _on_card_pressed(index: int) -> void:
     _selected_id = ids[index]
     if first_pick:
         var from: Vector2 = cursor.release_carry() if cursor.is_carrying() else _chip_pos
-        _begin_fall(from, index)
-    elif _token_mode == TokenMode.FALLING:
-        # Re-pick while the chip is mid-air: retarget the fall (keep the drop line).
-        _fall_index = index
-        _fall_to = _landing_pos(_fall_from, index)
-    elif index != _fall_index:
-        _begin_fall(_chip_pos, index)
+        _begin_place(from, from + Vector2(0.0, PLACE_NUDGE), index)
+    elif _token_mode == TokenMode.PLACING:
+        # Re-pick while the chip is moving: retarget the placement.
+        _chip_index = index
+        _place_to = _place_target(_place_from + Vector2(0.0, PLACE_NUDGE), index)
+    elif index != _chip_index:
+        var anchor: Vector2 = cursor.chip_world_position() + Vector2(0.0, PLACE_NUDGE)
+        _begin_place(_chip_pos, anchor, index)
     _refresh_styles()
     chosen.emit(_selected_id)
 
@@ -135,31 +143,31 @@ func _refresh_styles() -> void:
         var border := Color("e5ad69") if selected else Color("1b3436")
         _cards[index].add_theme_stylebox_override("normal", _box(fill, border, 3 if selected else 2))
 
-func _landing_pos(from: Vector2, index: int) -> Vector2:
-    # The chip falls straight down from where it was released and rests on the
-    # card's floor. x stays put (clamped so the chip keeps fully inside the
-    # picked card) — it never drifts to a preset slot.
+func _place_target(from: Vector2, index: int) -> Vector2:
+    # Keep the set-down chip fully inside the picked card, near where the hand
+    # was — it is never re-homed to a preset slot.
     var rect := _cards[index].get_global_rect()
-    return Vector2(clampf(from.x, rect.position.x + 26.0, rect.end.x - 26.0), rect.position.y + rect.size.y - 26.0)
+    return Vector2(
+        clampf(from.x, rect.position.x + CHIP_INSET, rect.end.x - CHIP_INSET),
+        clampf(from.y, rect.position.y + CHIP_INSET, rect.end.y - CHIP_INSET))
 
-func _begin_fall(from: Vector2, index: int) -> void:
-    _fall_from = from
-    _fall_to = _landing_pos(from, index)
-    _fall_index = index
-    _fall_t = 0.0
+func _begin_place(from: Vector2, to: Vector2, index: int) -> void:
+    _place_from = from
+    _place_to = _place_target(to, index)
+    _chip_index = index
+    _place_t = 0.0
     _settle = 1.0
-    _token_mode = TokenMode.FALLING
+    _token_mode = TokenMode.PLACING
     _refresh_styles()
     queue_redraw()
 
 func _process(delta: float) -> void:
-    if _token_mode == TokenMode.FALLING:
-        _fall_t = minf(_fall_t + delta / FALL_SECONDS, 1.0)
-        var progress_x := minf(_fall_t * 2.2, 1.0)
-        var progress_y := pow(_fall_t, 1.4)
-        _chip_pos = Vector2(lerpf(_fall_from.x, _fall_to.x, progress_x), lerpf(_fall_from.y, _fall_to.y, progress_y))
-        if _fall_t >= 1.0:
-            _chip_pos = _fall_to
+    if _token_mode == TokenMode.PLACING:
+        _place_t = minf(_place_t + delta / PLACE_SECONDS, 1.0)
+        var ease := 1.0 - pow(1.0 - _place_t, 3.0)
+        _chip_pos = _place_from.lerp(_place_to, ease)
+        if _place_t >= 1.0:
+            _chip_pos = _place_to
             _token_mode = TokenMode.LANDED
             _settle = 0.0
         queue_redraw()
@@ -168,15 +176,16 @@ func _process(delta: float) -> void:
         queue_redraw()
 
 func _draw() -> void:
-    if _token_mode != TokenMode.FALLING and _token_mode != TokenMode.LANDED:
+    if _token_mode != TokenMode.PLACING and _token_mode != TokenMode.LANDED:
         return
     var squash := 1.0 - _settle
     draw_set_transform(_chip_pos, 0.0, Vector2(1.0 + 0.28 * squash, 1.0 - 0.28 * squash))
-    draw_circle(Vector2.ZERO, 22.0, Color("8a5a2b"))
-    draw_circle(Vector2.ZERO, 20.0, Color("e5ad69"))
-    var font := ThemeDB.fallback_font
-    var width := font.get_string_size("P1", HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
-    draw_string(font, Vector2(-width * 0.5, 6.0), "P1", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("284e50"))
+    if _tex_coin != null:
+        var half := Vector2(CHIP_PX, CHIP_PX) * 0.5
+        draw_texture_rect(_tex_coin, Rect2(-half, half * 2.0), false)
+        return
+    draw_circle(Vector2.ZERO, CHIP_PX * 0.5, Color("8a5a2b"))
+    draw_circle(Vector2.ZERO, CHIP_PX * 0.5 - 2.0, Color("e5ad69"))
 
 func _box(bg: Color, border: Color, width: int, radius := 10) -> StyleBoxFlat:
     var box := StyleBoxFlat.new()

@@ -31,21 +31,20 @@ const ATTRACT_RELEASE_DIST := 28.0
 
 # Texture poses (art in assets/ui; anchors = fingertip in texture space).
 const HAND_SCALE := 0.33
-const TIP_POINT := Vector2(16.0, 1.1)
-const TIP_OPEN := Vector2(58.9, 1.0)
-const TIP_GRAB := Vector2(50.7, 1.5)
+const TIP_POINT := Vector2(15.5, 1.0)
+const TIP_OPEN := Vector2(59.0, 1.0)
+const TIP_GRAB := Vector2(50.0, 1.0)
+const TIP_CARRY := Vector2(67.5, 32.0)
 
-# Carried chip: sits in the pinch gap of hand_grab (texture space, gap ~(40,62));
-# drawn BEHIND the hand texture so the fingers overlap its rim. Radius is in
-# texture units (screen radius = CHIP_RADIUS * HAND_SCALE ~= 22 px, matching
-# the token that lands on a card).
-const CHIP_TEX_POS := Vector2(-24.0, -28.0)
-const CHIP_RADIUS := 66.0
-const CHIP_RIM_WIDTH := 9.0
-const CHIP_FONT_SIZE := 48
-const CHIP_FACE := Color("e5ad69")
-const CHIP_RIM := Color("8a5a2b")
-const CHIP_TEXT := Color("284e50")
+# Carried chip: one of William's generated coins (assets/ui/coin_p1.png). The
+# carry pose (hand_carry.png) is William's pose 1 — its built-in placeholder
+# marks the exact chip spot; the placeholder is masked to transparent and the
+# live chip is drawn BEHIND the hand texture at that spot, so the finger pads
+# hold its rim. CHIP_TEX_SIZE = placeholder dia / coin content fraction.
+const CHIP_TEX_POS := Vector2(35.5, 34.0)
+const CHIP_TEX_SIZE := 61.5
+const CHIP_FALLBACK_FACE := Color("e5ad69")
+const CHIP_FALLBACK_RIM := Color("8a5a2b")
 
 var targets: Array[Control] = []
 var hovered: Control = null
@@ -63,8 +62,9 @@ var _mouse := Vector2.ZERO
 var _tex_point: Texture2D
 var _tex_open: Texture2D
 var _tex_grab: Texture2D
+var _tex_carry: Texture2D
+var _tex_coin: Texture2D
 var carrying := false
-var carry_label := "P1"
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -73,6 +73,8 @@ func _ready() -> void:
     _tex_point = load("res://assets/ui/hand_point.png")
     _tex_open = load("res://assets/ui/hand_open.png")
     _tex_grab = load("res://assets/ui/hand_grab.png")
+    _tex_carry = load("res://assets/ui/hand_carry.png")
+    _tex_coin = load("res://assets/ui/coin_p1.png")
 
 func add_target(target: Control) -> void:
     if target == null or targets.has(target):
@@ -91,9 +93,8 @@ func reset() -> void:
     _vel = Vector2.ZERO
     _started = true
 
-func set_carry(label: String = "P1") -> void:
+func set_carry() -> void:
     carrying = true
-    carry_label = label
     queue_redraw()
 
 func is_carrying() -> bool:
@@ -101,7 +102,8 @@ func is_carrying() -> bool:
 
 func chip_world_position() -> Vector2:
     # Center of the carried chip in this control's space (used as the fall origin).
-    return _pos + ((CHIP_TEX_POS - TIP_GRAB) * HAND_SCALE).rotated(_lean)
+    var tip := TIP_CARRY if carrying else TIP_GRAB
+    return _pos + ((CHIP_TEX_POS - tip) * HAND_SCALE).rotated(_lean)
 
 func release_carry() -> Vector2:
     var at := chip_world_position()
@@ -187,7 +189,10 @@ func _tex_ready() -> bool:
 func _draw_texture_pose() -> void:
     var tex: Texture2D = _tex_point
     var tip := TIP_POINT
-    if _press > 0.0 or carrying:
+    if carrying:
+        tex = _tex_carry
+        tip = TIP_CARRY
+    elif _press > 0.0:
         tex = _tex_grab
         tip = TIP_GRAB
     elif _pose == Pose.HOVER:
@@ -200,11 +205,12 @@ func _draw_texture_pose() -> void:
     draw_texture(tex, -tip)
 
 func _draw_chip(center: Vector2) -> void:
-    draw_circle(center, CHIP_RADIUS, CHIP_RIM)
-    draw_circle(center, CHIP_RADIUS - CHIP_RIM_WIDTH, CHIP_FACE)
-    var font := ThemeDB.fallback_font
-    var width := font.get_string_size(carry_label, HORIZONTAL_ALIGNMENT_LEFT, -1, CHIP_FONT_SIZE).x
-    draw_string(font, center + Vector2(-width * 0.5, CHIP_FONT_SIZE * 0.36), carry_label, HORIZONTAL_ALIGNMENT_LEFT, -1, CHIP_FONT_SIZE, CHIP_TEXT)
+    if _tex_coin != null:
+        var half := Vector2(CHIP_TEX_SIZE, CHIP_TEX_SIZE) * 0.5
+        draw_texture_rect(_tex_coin, Rect2(center - half, half * 2.0), false)
+        return
+    draw_circle(center, CHIP_TEX_SIZE * 0.5, CHIP_FALLBACK_RIM)
+    draw_circle(center, CHIP_TEX_SIZE * 0.44, CHIP_FALLBACK_FACE)
 
 func _draw_pointing_hand() -> void:
     draw_line(Vector2(0, 16), Vector2(0, 2), INK, 10.0, true)
