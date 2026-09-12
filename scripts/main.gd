@@ -5,6 +5,7 @@ const Config = preload("res://scripts/match_config.gd")
 const SetupScript = preload("res://scripts/match_setup.gd")
 const DemoStyle = preload("res://scripts/demo_style.gd")
 const StoryStageScript = preload("res://scripts/story_stage.gd")
+const StageSelectScript = preload("res://scripts/stage_select.gd")
 var ready_remaining := 0.0
 var go_remaining := 0.0
 var ready_label: Label
@@ -28,6 +29,8 @@ var story_back: Button
 var story_character: OptionButton
 var story_choice_row: HBoxContainer
 var story_stage: Control
+var stage_panel: Control
+var stage_select: Control
 var hud_title: Label
 var hud_controls: Label
 var freeplay_controls: String
@@ -65,8 +68,10 @@ func _ready() -> void:
     menu_layer.add_child(setup)
     setup.start_requested.connect(start_match)
     setup.story_requested.connect(open_story)
+    setup.stage_select_requested.connect(open_stage_select)
     setup.back_requested.connect(back_to_menu)
     _build_story_panel(menu_layer)
+    _build_stage_panel(menu_layer)
 
 func _process(_delta: float) -> void:
     for i in range(fighters.size()):
@@ -81,7 +86,9 @@ func _process(_delta: float) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
         if setup.visible and setup.close_help(): return
-        if setup.visible: back_to_menu()
+        if stage_panel != null and stage_panel.visible:
+            stage_select.request_back()
+        elif setup.visible: back_to_menu()
         else: _leave_story()
         get_viewport().set_input_as_handled()
     elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R and match_over:
@@ -99,6 +106,10 @@ func show_setup() -> void:
     result_panel.hide()
     story_state = ""
     story_panel.hide()
+    if stage_panel != null:
+        stage_panel.hide()
+    if stage_select != null:
+        stage_select.reset()
     bobo_health_bar.hide()
     for fighter in fighters:
         fighter.controls_enabled = false
@@ -129,6 +140,8 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false) -> bool:
         label.text = ""
     story_state = ""
     story_panel.hide()
+    if stage_panel != null:
+        stage_panel.hide()
     hud_title.text = "NRCU"
     hud_controls.text = freeplay_controls
     active_slots = slots.duplicate(true)
@@ -236,6 +249,45 @@ func _build_story_panel(layer: CanvasLayer) -> void:
     story_stage.cursor.add_target(story_back)
     story_stage.set_selected_id("turbofit")
     story_panel.hide()
+
+func _build_stage_panel(layer: CanvasLayer) -> void:
+    # Stage page (SSS grammar). It owns its own full-rect layer like the story
+    # panel; the setup screen is the hub it returns to.
+    stage_panel = Control.new()
+    stage_panel.name = "StagePanel"
+    stage_panel.theme = DemoStyle.make()
+    stage_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    layer.add_child(stage_panel)
+    var shade := ColorRect.new()
+    shade.color = Color("273a37")
+    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    stage_panel.add_child(shade)
+    stage_select = StageSelectScript.new()
+    stage_select.name = "StageSelect"
+    stage_panel.add_child(stage_select)
+    var slots: Array = []
+    for i in SetupScript.LEVEL_IDS.size():
+        var item_text: String = setup.level.get_item_text(i)
+        slots.append({
+            "id": SetupScript.LEVEL_IDS[i],
+            "name": item_text.split(" (")[0].to_upper(),
+            "tex": "res://assets/menu/stage_" + SetupScript.LEVEL_IDS[i] + ".png",
+        })
+    stage_select.build(slots)
+    stage_select.confirmed.connect(_on_stage_confirmed)
+    stage_select.exit_finished.connect(show_setup)
+    stage_panel.hide()
+
+func _on_stage_confirmed(id: String) -> void:
+    setup.select_level_by_id(id)
+
+func open_stage_select(focus_id: String) -> void:
+    var current: String = setup.selected_level()
+    show_setup()
+    setup.hide()
+    var focus: String = focus_id if focus_id in SetupScript.LEVEL_IDS else current
+    stage_panel.show()
+    stage_select.open_with(current, focus)
 
 func apply_level(id: String) -> void:
     if id not in SetupScript.LEVEL_IDS: id = "debug"

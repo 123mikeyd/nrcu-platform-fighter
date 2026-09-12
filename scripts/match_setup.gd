@@ -3,6 +3,7 @@ extends Control
 const Config = preload("res://scripts/match_config.gd")
 signal start_requested(slots: Array, teams: bool)
 signal story_requested
+signal stage_select_requested(focus_id: String)
 signal back_requested
 const Style = preload("res://scripts/demo_style.gd")
 const MenuOptions = preload("res://scripts/menu_options.gd")
@@ -89,7 +90,7 @@ func _ready() -> void:
         caption.add_theme_font_size_override("font_size",16)
         caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card.add_child(caption)
-        card.pressed.connect(_select_level.bind(i))
+        card.pressed.connect(_on_stage_card_pressed.bind(i))
     var defaults := Config.default_slots()
     var player_row_containers: Array = []
     for i in range(4):
@@ -187,6 +188,16 @@ func _select_level(index: int) -> void:
     _sync_menus()
     main_menu.set_focus(f)
 
+func _on_stage_card_pressed(index: int) -> void:
+    stage_select_requested.emit(LEVEL_IDS[index])
+
+func select_level_by_id(id: String) -> void:
+    # The stage page reports its choice here; the dropdown stays the model.
+    var index: int = LEVEL_IDS.find(id)
+    if index < 0:
+        return
+    _select_level(index)
+
 func _texts_of(choice: OptionButton) -> Array:
     var values: Array = []
     for i in choice.item_count:
@@ -194,9 +205,12 @@ func _texts_of(choice: OptionButton) -> Array:
     return values
 
 func _sync_menus() -> void:
+    # LEVEL opens the stage page (like the player rows open their subpages);
+    # the current stage rides in the label.
+    var stage_name: String = level.get_item_text(level.selected).split(" (")[0]
     var defs: Array = [
         {"label": "MATCH MODE", "kind": "value", "values": _texts_of(mode), "value": mode.selected, "enabled": true},
-        {"label": "LEVEL", "kind": "value", "values": _texts_of(level), "value": level.selected, "enabled": true},
+        {"label": "LEVEL   %s" % stage_name, "kind": "action", "enabled": true},
     ]
     for i in range(4):
         var model: Dictionary = rows[i]
@@ -225,7 +239,9 @@ func _on_main_changed(row: int, value: int) -> void:
     _refresh()
 
 func _on_main_confirmed(row: int) -> void:
-    if row >= 2:
+    if row == 1:
+        stage_select_requested.emit("")
+    elif row >= 2:
         _open_player(row - 2)
 
 func _open_player(index: int) -> void:
