@@ -75,6 +75,7 @@ func run():
     arena.show_setup()
     arena.setup.find_child("StoryModeButton", true, false).pressed.emit()
     arena.story_back.pressed.emit()
+    await create_timer(0.4).timeout
     check(arena.setup.visible and arena.story_state == "", "ready Back returns without starting")
     arena.open_story()
     arena.story_action.pressed.emit()

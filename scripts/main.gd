@@ -82,7 +82,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
         if setup.visible and setup.close_help(): return
         if setup.visible: back_to_menu()
-        else: show_setup()
+        else: _leave_story()
         get_viewport().set_input_as_handled()
     elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R and match_over:
         _reset_match()
@@ -224,13 +224,14 @@ func _build_story_panel(layer: CanvasLayer) -> void:
     story_back = Button.new()
     story_back.text = "BACK TO MATCH SETUP"
     story_back.custom_minimum_size.y = 48
-    story_back.pressed.connect(show_setup)
+    story_back.pressed.connect(_leave_story)
     column.add_child(story_back)
     story_stage = StoryStageScript.new()
     story_stage.name = "StoryStage"
     story_panel.add_child(story_stage)
     story_stage.build(playable_ids, cards_row)
     story_stage.chosen.connect(_on_story_card_chosen)
+    story_stage.exit_finished.connect(show_setup)
     story_stage.cursor.add_target(story_action)
     story_stage.cursor.add_target(story_back)
     story_stage.set_selected_id("turbofit")
@@ -606,6 +607,14 @@ func _physics_process(delta: float) -> void:
     elif go_remaining > 0:
         go_remaining = maxf(0,go_remaining-delta)
         if go_remaining == 0: ready_label.hide()
+
+func _leave_story() -> void:
+    # Animated leave (Melee EXIT_FROM); instant for states without the ready
+    # selection (e.g. mid-match).
+    if story_state == "ready":
+        story_stage.play_exit()
+    else:
+        show_setup()
 
 func _on_story_card_chosen(id: String) -> void:
     var index := _story_playable_ids().find(id)

@@ -14,6 +14,7 @@ extends Control
 #       └── HandCursor
 
 signal chosen(id: String)
+signal exit_finished
 
 const HandCursorScript = preload("res://scripts/hand_cursor.gd")
 const CARD_SIZE := Vector2(150, 172)
@@ -44,6 +45,7 @@ var _chip_pos := Vector2.ZERO
 var _settle := 1.0
 var _tex_coin: Texture2D
 var _row: Container
+var _exiting := false
 # Melee-style input hygiene (01 §2.2/§4.1): inputs are swallowed during a
 # short scene-start lock and a short cooldown after every pick.
 var _input_lock := 0.0
@@ -127,9 +129,28 @@ func get_input_lock() -> float:
 func lock_input(seconds: float) -> void:
     _input_lock = maxf(_input_lock, seconds)
 
+func is_exiting() -> bool:
+    return _exiting
+
+func play_exit() -> void:
+    # 20F one-shot exit (Melee EXIT_FROM): the card row eases out, then the
+    # screen closes (exit_finished). Inputs are swallowed meanwhile.
+    if _exiting:
+        return
+    _exiting = true
+    lock_input(0.5)
+    if _row == null:
+        exit_finished.emit()
+        return
+    var tween := create_tween().set_parallel()
+    tween.tween_property(_row, "modulate:a", 0.0, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+    tween.tween_property(_row, "scale", Vector2(0.96, 0.92), 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+    tween.chain().tween_callback(func() -> void: exit_finished.emit())
+
 func play_enter() -> void:
     # 20F one-shot enter (Melee ENTER_TO): the card row eases in from slightly
     # small + transparent. Containers own position, so we animate scale+fade.
+    _exiting = false
     if _row == null:
         return
     _row.pivot_offset = Vector2(_row.size.x * 0.5, 0.0)
