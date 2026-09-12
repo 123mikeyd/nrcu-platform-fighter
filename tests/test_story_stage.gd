@@ -43,6 +43,11 @@ func run():
             arena.story_action.pressed.emit()
             check(arena.player_one.character_id == playable[2], "encounter starts with card choice")
             check(arena.story_state == "playing", "story running")
+            hand._pressed_held = true
+            check(hand.active_texture() == hand._tex_press, "tap frame while the button is held")
+            hand._pressed_held = false
+            hand._press = 0.0
+            check(hand.active_texture() != hand._tex_press, "tap frame ends on release")
     arena.queue_free()
     await process_frame
     if failures == 0: print("PASS: story stage cards, hand cursor, model sync, encounter start")

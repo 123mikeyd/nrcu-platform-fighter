@@ -25,7 +25,7 @@ const DAMP := 26.0
 const LEAN_SCALE := 0.0016
 const LEAN_MAX := 0.38
 const BASE_TILT := -0.42
-const PRESS_SECONDS := 0.22
+const PRESS_SECONDS := 0.12  # minimum tap-frame flash (hold keeps it longer)
 const ATTRACT_SECONDS := 0.9
 const ATTRACT_RELEASE_DIST := 28.0
 
@@ -51,6 +51,7 @@ var _vel := Vector2.ZERO
 var _lean := BASE_TILT
 var _pose: Pose = Pose.POINT
 var _press := 0.0
+var _pressed_held := false
 var _attract: Control = null
 var _attract_timer := 0.0
 var _attract_anchor := Vector2.ZERO
@@ -172,8 +173,12 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
     if event is InputEventMouseMotion:
         _mouse = event.position
-    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-        _press = PRESS_SECONDS
+    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+        if event.pressed:
+            _pressed_held = true
+            _press = PRESS_SECONDS
+        else:
+            _pressed_held = false
         queue_redraw()
 
 func _draw() -> void:
@@ -193,10 +198,14 @@ func _draw() -> void:
 func _tex_ready() -> bool:
     return _tex_point != null and _tex_open != null and _tex_carry != null
 
+func is_pressing() -> bool:
+    # True while the button is held, plus a minimum flash so quick taps register.
+    return _pressed_held or _press > 0.0
+
 func active_texture() -> Texture2D:
     if carrying and _tex_carry != null:
         return _tex_carry
-    if _press > 0.0 and press_frame_enabled and _tex_press != null:
+    if is_pressing() and press_frame_enabled and _tex_press != null:
         return _tex_press
     if _pose == Pose.HOVER and _tex_open != null:
         return _tex_open
@@ -205,14 +214,14 @@ func active_texture() -> Texture2D:
 func active_tip() -> Vector2:
     if carrying:
         return TIP_CARRY
-    if _press > 0.0 and press_frame_enabled:
+    if is_pressing() and press_frame_enabled:
         return TIP_PRESS
     if _pose == Pose.HOVER:
         return TIP_OPEN
     return TIP_POINT
 
 func _draw_texture_pose() -> void:
-    var squash := 0.92 if (_press > 0.0 and carrying) else 1.0
+    var squash := 0.92 if (is_pressing() and carrying) else 1.0
     draw_set_transform(_pos, _lean, Vector2(HAND_SCALE, HAND_SCALE * squash))
     draw_texture(active_texture(), -active_tip())
 
