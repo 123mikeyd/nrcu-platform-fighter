@@ -31,9 +31,9 @@ const ATTRACT_RELEASE_DIST := 28.0
 
 # Texture poses (art in assets/ui; anchors = fingertip in texture space).
 const HAND_SCALE := 0.33
-const TIP_POINT := Vector2(18.5, 1.3)
-const TIP_OPEN := Vector2(65.5, 2.0)
-const TIP_GRAB := Vector2(50.8, 1.7)
+const TIP_POINT := Vector2(16.0, 1.1)
+const TIP_OPEN := Vector2(58.9, 1.0)
+const TIP_GRAB := Vector2(50.7, 1.5)
 
 var targets: Array[Control] = []
 var hovered: Control = null
