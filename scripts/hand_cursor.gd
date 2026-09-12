@@ -18,9 +18,10 @@ const CREAM := Color("fff0cb")
 const INK := Color("16292b")
 const GOLD := Color("e5ad69")
 
-# Feel tuning — vivid but calm; overshoot stays small.
-const SPRING := 42.0
-const DAMP := 13.0
+# Feel tuning — snappy mouse tracking with a hint of life.
+# The hand is a cursor, not a vehicle: perceptible lag reads as broken input.
+const SPRING := 600.0
+const DAMP := 26.0
 const LEAN_SCALE := 0.0016
 const LEAN_MAX := 0.38
 const BASE_TILT := -0.42
