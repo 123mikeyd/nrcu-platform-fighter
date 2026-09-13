@@ -46,7 +46,12 @@ const TIP_GRAB := Vector2(50.0, 1.0)
 const TIP_PRESS := Vector2(49.0, 22.0)
 # Where a carried token sits relative to the fingertip (texture space), so it
 # reads as held between the fingers of the grab pose.
-const CARRY_OFFSET := Vector2(4.0, 14.0)
+# Carried token CENTER relative to the hotspot. Derived from the retired baked
+# carry pose ((CHIP_TEX_POS 35.5,34.0 - TIP_CARRY 67.5,32.0) * 0.33) and then
+# The token slot renders BELOW the hand, so the fingers overlap the token
+# exactly like the artist's reference composition (fingers in front of the
+# coin).
+const CARRY_CENTER := Vector2(-10.6, 0.7)
 
 var targets: Array[Control] = []
 var hovered: Control = null
@@ -83,11 +88,11 @@ func _ready() -> void:
     _hand.name = "HandVisual"
     _hand.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _hand.draw.connect(_draw_hand)
-    add_child(_hand)
     _token_slot = Control.new()
     _token_slot.name = "CarriedToken"
     _token_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(_token_slot)
+    add_child(_token_slot)   # below the hand: fingers overlap the carried token
+    add_child(_hand)
     _tex_point = load("res://assets/ui/hand_point.png")
     _tex_grab = load("res://assets/ui/hand_grab.png")
     _tex_press = load("res://assets/ui/hand_press.png")
@@ -155,7 +160,10 @@ func set_carry(token: Control = null) -> void:
     if token != null:
         if token.get_parent() != _token_slot:
             token.reparent(_token_slot)
-        token.position = CARRY_OFFSET
+        var ts := token.size
+        if ts.x <= 0.0:
+            ts = Vector2(26.0, 26.0)
+        token.position = CARRY_CENTER - ts * 0.5
         token.visible = true
     set_visual_mode(Visual.CARRY)
 
@@ -290,7 +298,7 @@ func release_carry() -> Vector2:
     return at
 
 func chip_world_position() -> Vector2:
-    return hotspot + CARRY_OFFSET
+    return hotspot + CARRY_CENTER
 
 func attract_to(_target: Control) -> void:
     pass
