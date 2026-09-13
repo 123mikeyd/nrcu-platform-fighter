@@ -29,27 +29,25 @@ func run():
             cards[2].pressed.emit()
             check(stage.get_selected_id() != playable[2], "pick ignored during the scene-start lock")
             await create_timer(0.45).timeout
-            check(hand.is_carrying(), "hand carries the chip before a pick")
-            check(hand.active_texture() == hand._tex_carry, "carry pose while carrying")
-            check(not hand.press_frame_enabled, "no tap frame during the selection")
-            hand._press = 0.2
-            check(hand.active_texture() == hand._tex_carry, "carry pose wins over the tap frame")
-            hand._press = 0.0
+            check(hand.is_carrying(), "hand carries the token before a pick")
+            check(hand.visual == 1, "carry presentation while carrying (token, not a baked chip)")
             cards[2].pressed.emit()
             check(stage.get_selected_id() == playable[2], "card press selects id")
             check(arena.story_character.get_selected_metadata() == playable[2], "selection model synced")
-            check(not hand.is_carrying(), "chip released on pick")
+            check(not hand.is_carrying(), "token released on pick")
             await create_timer(0.7).timeout
-            check(stage.is_chip_landed(), "chip placed")
+            check(stage.is_chip_landed(), "token placed")
+            check(stage.get_node_or_null("StoryToken") != null, "the token is a separate screen-owned object")
             var chip_pos: Vector2 = stage.get_chip_position()
             check(cards[2].get_global_rect().grow(12.0).has_point(chip_pos), "chip set down on the picked card")
             check(not cards[1].get_global_rect().has_point(chip_pos), "chip not on another card")
             arena.story_action.pressed.emit()
             check(arena.player_one.character_id == playable[2], "encounter starts with card choice")
             check(arena.story_state == "playing", "story running")
-            hand._pressed_held = true
+            hand._press_held = true
+            check(hand.is_pressing(), "press state while the button is held")
             check(hand.active_texture() == hand._tex_press, "tap frame while the button is held")
-            hand._pressed_held = false
+            hand._press_held = false
             hand._press = 0.0
             check(hand.active_texture() != hand._tex_press, "tap frame ends on release")
     arena.queue_free()

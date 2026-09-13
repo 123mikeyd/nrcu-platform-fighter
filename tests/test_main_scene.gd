@@ -1,6 +1,13 @@
 extends SceneTree
+# Arena scene contract: a fresh main.tscn can start a two-player match.
+#
+# Scenes are loaded inside run() (deferred by one frame), never at _init —
+# autoload identifiers only compile once the main loop registered them.
 
-func _init() -> void:
+func _initialize() -> void:
+    call_deferred("run")
+
+func run() -> void:
     var packed := load("res://scenes/main.tscn") as PackedScene
     if packed == null:
         push_error("RED: main arena scene is missing")

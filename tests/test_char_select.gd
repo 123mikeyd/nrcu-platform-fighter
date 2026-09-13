@@ -85,6 +85,26 @@ func run():
     # field, which returns the token (mouse path).
     css._leave_field()
     check(not hand.is_carrying(), "moving out of the roster clears the carry")
+    # --- keyboard parity: focus graph + activation ------------------------
+    var kb_tiles: Array = css.get_tiles()
+    kb_tiles[0].grab_focus()
+    check(root.gui_get_focus_owner() == kb_tiles[0], "tiles can take keyboard focus")
+    var tab := InputEventKey.new()
+    tab.keycode = KEY_TAB
+    tab.pressed = true
+    root.push_input(tab)
+    await process_frame
+    check(root.gui_get_focus_owner() == kb_tiles[1], "Tab moves focus to the next tile")
+    var kb_enter := InputEventKey.new()
+    kb_enter.keycode = KEY_ENTER
+    kb_enter.pressed = true
+    root.push_input(kb_enter)
+    await process_frame
+    check(str(state.slots[css.get_active()].character) == str(kb_tiles[1].fighter_id), "Enter commits the keyboard-focused tile")
+    css._on_tile_pressed("ggb")  # restore the scenario state for the route below
+    check(css.get_carried_by() == -1, "no carry after the restore commit (carried_by %d)" % css.get_carried_by())
+    check(not hand.is_carrying(), "no carried token after the restore commit")
+
     # --- ready gating -----------------------------------------------------
     # P1 ggb (human) + P2 committed ggb + P3/P4 CPUs: four active players.
     check(state.can_ready(), "four active players can ready")
@@ -136,7 +156,7 @@ func run():
     check(arena.char_panel.visible, "Change Fighters returns to the CSS")
     var css2 = arena.char_panel.find_child("CharSelect", true, false)
     check(str(arena.selection_state.slots[0].character) == "ggb", "fighters preserved through the results round trip")
-    check(not hand.is_carrying(), "no token state survives the results round trip")
+    check(not hand.is_carrying(), "no token state survives the results round trip (carried_by %d, token %s)" % [css.get_carried_by(), str(hand.carried_token())])
     arena.queue_free()
     await process_frame
     # --- Back cancels a carried token (fresh arena: the route itself is a
@@ -152,8 +172,12 @@ func run():
     motion3.position = Vector2(640.0, 200.0)
     motion3.relative = Vector2(25.0, 0.0)
     hand._input(motion3)
-    css3._on_tile_entered(css3._tile_index_of("mephisto"))
-    check(hand.is_carrying(), "token carried before back")
+    var idx3: int = css3._tile_index_of("mephisto")
+    check(idx3 >= 0, "tail: mephisto is in the roster (idx %d)" % idx3)
+    check(hand.is_mouse_active(), "tail: mouse modality armed (mode %d)" % hand.mode)
+    check(css3.get_phase() == 1, "tail: css idle (phase %d)" % css3.get_phase())
+    css3._on_tile_entered(idx3)
+    check(hand.is_carrying(), "token carried before back (carried_by %d)" % css3.get_carried_by())
     css3._on_back_pressed()
     check(not hand.is_carrying(), "back cancels the carried token before the route")
     arena3.queue_free()

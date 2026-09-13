@@ -17,18 +17,20 @@ signal chosen(id: String)
 signal exit_finished
 
 const HandCursorScript = preload("res://scripts/hand_cursor.gd")
+const TokenScene = preload("res://scenes/components/PlayerTokenView.tscn")
+const TokenViewScript = preload("res://scripts/frontend/player_token_view.gd")
 const CARD_SIZE := Vector2(150, 172)
 
-# Chip flow (Melee CSS grammar): the hand carries the P1 chip until the first
-# pick; the chip then falls out of the pinch onto the chosen card. Later picks
-# hop the landed chip to the new card.
+# Chip flow (Melee CSS grammar): the hand carries the P1 token until the first
+# pick; the token is then SET DOWN on the chosen card. The token is its own
+# runtime object (PlayerTokenView) — the hand only carries it, never bakes it
+# into its own art (Step 0 §13).
 enum TokenMode { NONE, CARRY, PLACING, LANDED }
 # Melee grammar: the chip is SET DOWN, not dropped — a short settle from the
 # carried spot (with a small downward nudge), no vertical travel to a slot.
 const PLACE_SECONDS := 0.14
 const PLACE_NUDGE := 10.0
 const CHIP_INSET := 14.1
-const CHIP_PX := 20.3
 
 var cursor: Control
 var ids: Array[String] = []
@@ -42,8 +44,8 @@ var _place_to := Vector2.ZERO
 var _place_t := 0.0
 var _chip_index := -1
 var _chip_pos := Vector2.ZERO
+var _chip: Control = null
 var _settle := 1.0
-var _tex_coin: Texture2D
 var _row: Container
 var _exiting := false
 # Melee-style input hygiene (01 §2.2/§4.1): inputs are swallowed during a
@@ -53,7 +55,6 @@ var _input_lock := 0.0
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    _tex_coin = load("res://assets/ui/coin_p1.png")
     # Prefer the global hand cursor (autoload) so the same glove appears on
     # every screen; fall back to a local instance when it is unavailable.
     var global_cursor := get_node_or_null("/root/Cursor")
@@ -118,10 +119,27 @@ func begin_pick() -> void:
     _chip_index = -1
     _place_t = 0.0
     _settle = 1.0
-    cursor.set_carry()
-    cursor.press_frame_enabled = false
+    var chip := _ensure_chip()
+    if chip != null:
+        chip.set_state(TokenViewScript.State.CARRIED)
+    cursor.set_carry(chip)
     lock_input(0.33)
     _refresh_styles()
+
+func _ensure_chip() -> Control:
+    if _chip == null or not is_instance_valid(_chip):
+        _chip = TokenScene.instantiate()
+        _chip.name = "StoryToken"
+        add_child(_chip)
+        _chip.set_player(0)
+    return _chip
+
+func _attach_chip_to_screen() -> void:
+    var chip := _ensure_chip()
+    if chip.get_parent() != self:
+        chip.reparent(self)
+    chip.set_state(TokenViewScript.State.PLACED)
+    chip.visible = true
 
 func get_input_lock() -> float:
     return _input_lock
@@ -167,12 +185,15 @@ func is_chip_visible() -> bool:
     return _token_mode == TokenMode.PLACING or _token_mode == TokenMode.LANDED
 
 func clear_chip() -> void:
-    # Drop the selection chip entirely (the selection is over, e.g. the
+    # Drop the selection token entirely (the selection is over, e.g. the
     # encounter started and the results screen reuses this panel).
     _token_mode = TokenMode.NONE
     _chip_index = -1
     _settle = 1.0
-    queue_redraw()
+    if cursor != null and cursor.is_carrying():
+        cursor.clear_carry()
+    if _chip != null and is_instance_valid(_chip):
+        _chip.visible = false
 
 func is_chip_landed() -> bool:
     return _token_mode == TokenMode.LANDED
@@ -186,6 +207,7 @@ func _on_card_pressed(index: int) -> void:
     _selected_id = ids[index]
     if first_pick:
         var from: Vector2 = cursor.release_carry() if cursor.is_carrying() else _chip_pos
+        _attach_chip_to_screen()
         _begin_place(from, from + Vector2(0.0, PLACE_NUDGE), index)
     elif _token_mode == TokenMode.PLACING:
         # Re-pick while the chip is moving: retarget the placement.
@@ -219,8 +241,8 @@ func _begin_place(from: Vector2, to: Vector2, index: int) -> void:
     _place_t = 0.0
     _settle = 1.0
     _token_mode = TokenMode.PLACING
+    _attach_chip_to_screen()
     _refresh_styles()
-    queue_redraw()
 
 func _process(delta: float) -> void:
     if _input_lock > 0.0:
@@ -233,22 +255,18 @@ func _process(delta: float) -> void:
             _chip_pos = _place_to
             _token_mode = TokenMode.LANDED
             _settle = 0.0
-        queue_redraw()
     elif _token_mode == TokenMode.LANDED and _settle < 1.0:
         _settle = minf(_settle + delta / 0.16, 1.0)
-        queue_redraw()
+    _sync_chip()
 
-func _draw() -> void:
-    if _token_mode != TokenMode.PLACING and _token_mode != TokenMode.LANDED:
+func _sync_chip() -> void:
+    # The token is a screen-owned Control; the FSM owns where it is.
+    if _chip == null or not is_instance_valid(_chip):
         return
-    var squash := 1.0 - _settle
-    draw_set_transform(_chip_pos, 0.0, Vector2(1.0 + 0.28 * squash, 1.0 - 0.28 * squash))
-    if _tex_coin != null:
-        var half := Vector2(CHIP_PX, CHIP_PX) * 0.5
-        draw_texture_rect(_tex_coin, Rect2(-half, half * 2.0), false)
-        return
-    draw_circle(Vector2.ZERO, CHIP_PX * 0.5, Color("8a5a2b"))
-    draw_circle(Vector2.ZERO, CHIP_PX * 0.5 - 2.0, Color("e5ad69"))
+    var placed := _token_mode == TokenMode.PLACING or _token_mode == TokenMode.LANDED
+    _chip.visible = placed
+    if placed:
+        _chip.position = _chip_pos - _chip.size * 0.5
 
 func _box(bg: Color, border: Color, width: int, radius := 10) -> StyleBoxFlat:
     var box := StyleBoxFlat.new()

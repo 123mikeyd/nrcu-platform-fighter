@@ -56,6 +56,7 @@ var _active := 0                  # active player index
 var _candidate := -1              # hovered/focused tile index
 var _token_state: Array = []      # TokenView.State per player
 var _carried_by := -1
+var _seeding_focus := false
 var _phase: Phase = Phase.ENTERING
 var _guard := 0.0
 
@@ -88,6 +89,8 @@ func _ready() -> void:
     _back.pressed.connect(_on_back_pressed)
     _mode_free.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _set_mode(0))
     _mode_teams.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _set_mode(1))
+    _mode_free.focus_mode = Control.FOCUS_ALL
+    _mode_teams.focus_mode = Control.FOCUS_ALL
     _field.mouse_entered.connect(func(): pass)
     _field.mouse_exited.connect(_leave_field)
     # Token layer: tokens live here while placed on tiles; the cursor layer
@@ -108,6 +111,8 @@ func _ready() -> void:
     for i in 4:
         var bay = _stations.get_node("PlayerBay" + str(i))
         bay.setup(i)
+        bay.focus_mode = Control.FOCUS_ALL
+        bay.focus_entered.connect(_on_bay_focused.bind(i))
         bay.bay_activated.connect(_on_bay_activated)
         bay.kind_clicked.connect(_on_kind_clicked)
         bay.difficulty_clicked.connect(_on_difficulty_clicked)
@@ -164,6 +169,10 @@ func build(cards: Array = []) -> void:
         # Components resolve their child nodes on tree entry: configure after.
         tile.set_tile_size(Vector2(TILE_W, TILE_H))
         tile.setup(str(entry["id"]), str(entry["name"]), entry.get("texture"))
+        # Keyboard/controller parity: the tile root is focusable and reports
+        # focus so the focus hand settles on its authored anchor (Step 0 §12).
+        tile.focus_mode = Control.FOCUS_ALL
+        tile.focus_entered.connect(_on_tile_focused.bind(i))
         _tiles.append(tile)
         if cursor != null:
             cursor.add_target(tile)
@@ -249,7 +258,9 @@ func _seed_focus() -> void:
     if _tiles.is_empty():
         return
     var idx: int = _candidate if _candidate >= 0 else 0
+    _seeding_focus = true
     _tiles[idx].grab_focus()
+    _seeding_focus = false
     if cursor.mode == 1:
         cursor.set_focus_target(_tiles[idx].anchor())
 
@@ -337,6 +348,26 @@ func _on_tile_entered(index: int) -> void:
         return
     _set_candidate(index)
     _begin_carry(_active)
+
+func _on_tile_focused(index: int) -> void:
+    # Keyboard/controller parity: focus on a tile means candidate + focus hand
+    # at the authored anchor + the active player's token in carry presentation.
+    if cursor == null or cursor.mode != 1:
+        return  # mouse clicks may focus too; that path is _on_tile_entered
+    if _phase != Phase.IDLE or _state == null:
+        return
+    _set_candidate(index)
+    if index < _tiles.size():
+        cursor.set_focus_target(_tiles[index].anchor())
+    if _seeding_focus:
+        return  # programmatic entry seed: candidate + hand only, no carry
+    _begin_carry(_active)
+
+func _on_bay_focused(index: int) -> void:
+    if cursor == null or cursor.mode != 1:
+        return
+    if index < _bays.size():
+        cursor.set_focus_target(_bays[index].anchor())
 
 func _begin_carry(player: int) -> void:
     if _carried_by == player:
@@ -484,21 +515,50 @@ func _wire_focus_graph() -> void:
         bay.focus_neighbor_right = bay.get_path_to(_bays[(i + 1) % 4])
         bay.focus_neighbor_top = bay.get_path_to(_tiles[mini(i, n - 1)])
     _back.focus_neighbor_bottom = _back.get_path_to(_tiles[n - 1])
+    _back.focus_neighbor_left = _back.get_path_to(_mode_teams)
+    _mode_free.focus_neighbor_right = _mode_free.get_path_to(_mode_teams)
+    _mode_teams.focus_neighbor_left = _mode_teams.get_path_to(_mode_free)
+    _mode_teams.focus_neighbor_right = _mode_teams.get_path_to(_back)
+    _mode_free.focus_neighbor_bottom = _mode_free.get_path_to(_tiles[n - 1])
+    _mode_teams.focus_neighbor_bottom = _mode_teams.get_path_to(_tiles[n - 1])
 
 func _unhandled_key_input(event: InputEvent) -> void:
     if not is_visible_in_tree():
         return
+    var confirm := false
     if event is InputEventKey and event.pressed and not event.echo:
-        if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
-            # Controller Start / keyboard confirm activates the screen-level
-            # ready state (Doc 04 §19).
-            if ready_allowed() and _phase != Phase.EXITING:
-                ready_requested.emit()
-                get_viewport().set_input_as_handled()
+        confirm = event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER or event.keycode == KEY_SPACE
+    elif event is InputEventJoypadButton and event.pressed:
+        confirm = event.button_index == JOY_BUTTON_A
+    if not confirm:
+        return
+    # Focused control wins over the screen-level READY (Doc 04 §19/§20A).
+    var focused := get_viewport().gui_get_focus_owner()
+    if focused != null:
+        var t: int = _tiles.find(focused)
+        if t >= 0 and _phase == Phase.IDLE:
+            _on_tile_pressed(str(_tiles[t].fighter_id))
+            get_viewport().set_input_as_handled()
+            return
+        var b: int = _bays.find(focused)
+        if b >= 0 and _phase == Phase.IDLE:
+            _on_bay_activated(b)
+            get_viewport().set_input_as_handled()
+            return
+        if focused == _mode_free or focused == _mode_teams:
+            _set_mode(1 if focused == _mode_teams else 0)
+            get_viewport().set_input_as_handled()
+            return
+    if ready_allowed() and _phase != Phase.EXITING:
+        ready_requested.emit()
+        get_viewport().set_input_as_handled()
 
 # --- test surface --------------------------------------------------------
 func get_tiles() -> Array:
     return _tiles
+
+func get_carried_by() -> int:
+    return _carried_by
 
 func get_bays() -> Array:
     return _bays
@@ -508,6 +568,9 @@ func get_active() -> int:
 
 func get_candidate() -> int:
     return _candidate
+
+func get_phase() -> int:
+    return _phase
 
 func token_state(player: int) -> int:
     return int(_token_state[player]) if player >= 0 and player < _token_state.size() else -1
