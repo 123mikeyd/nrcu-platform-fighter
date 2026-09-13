@@ -23,6 +23,7 @@ window/size/viewport_height=720
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 
 [physics]
 
@@ -37,3 +38,6 @@ environment/defaults/default_clear_color=Color(0.018, 0.024, 0.04, 1)
 [autoload]
 
 Cursor="*res://scripts/cursor_layer.gd"
+FrontendClock="*res://scripts/frontend/frontend_clock.gd"
+FrontendEvents="*res://scripts/frontend/frontend_events.gd"
+Frontend="*res://scripts/frontend/frontend_shell.gd"

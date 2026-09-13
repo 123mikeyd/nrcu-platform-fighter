@@ -1,12 +1,126 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
-[ext_resource type="Script" path="res://scripts/title_screen.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/title_screen.gd" id="1_title"]
+[ext_resource type="Texture2D" path="res://assets/menu/shelf_background.png" id="2_shelf"]
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="3_anchor"]
 
-[node name="Title" type="Control"]
+[node name="TitleScreen" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1")
+mouse_filter = 2
+script = ExtResource("1_title")
+
+[node name="BackgroundFrame" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ShelfBackground" type="TextureRect" parent="BackgroundFrame"]
+layout_mode = 0
+offset_right = 1360.0
+offset_bottom = 800.0
+texture = ExtResource("2_shelf")
+expand_mode = 1
+stretch_mode = 6
+mouse_filter = 2
+
+[node name="ReferenceFrame" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -640.0
+offset_top = -360.0
+offset_right = 640.0
+offset_bottom = 360.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TitleGroup" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 64.0
+offset_top = 196.0
+offset_right = 400.0
+offset_bottom = 330.0
+mouse_filter = 2
+
+[node name="NRCUTitle" type="Label" parent="ReferenceFrame/TitleGroup"]
+layout_mode = 0
+offset_right = 340.0
+offset_bottom = 96.0
+theme_override_font_sizes/font_size = 88
+text = "NRCU"
+
+[node name="AccentRule" type="Panel" parent="ReferenceFrame/TitleGroup"]
+layout_mode = 0
+offset_top = 104.0
+offset_right = 268.0
+offset_bottom = 108.0
+mouse_filter = 2
+
+[node name="Subtitle" type="Label" parent="ReferenceFrame/TitleGroup"]
+layout_mode = 0
+offset_left = 2.0
+offset_top = 124.0
+offset_right = 340.0
+offset_bottom = 146.0
+theme_override_font_sizes/font_size = 14
+text = "PLATFORM FIGHTER — FRIEND DEMO"
+
+[node name="StartRegion" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 64.0
+offset_top = 470.0
+offset_right = 420.0
+offset_bottom = 510.0
+mouse_filter = 2
+
+[node name="LeftRule" type="Panel" parent="ReferenceFrame/StartRegion"]
+layout_mode = 0
+offset_top = 19.0
+offset_right = 44.0
+offset_bottom = 22.0
+mouse_filter = 2
+
+[node name="Prompt" type="Label" parent="ReferenceFrame/StartRegion"]
+layout_mode = 0
+offset_left = 56.0
+offset_right = 356.0
+offset_bottom = 40.0
+theme_override_font_sizes/font_size = 16
+text = "CLICK OR PRESS ANY KEY"
+
+[node name="RightRule" type="Panel" parent="ReferenceFrame/StartRegion"]
+layout_mode = 0
+offset_top = 19.0
+offset_right = 44.0
+offset_bottom = 22.0
+mouse_filter = 2
+
+[node name="CursorAnchor" type="Control" parent="ReferenceFrame/StartRegion"]
+layout_mode = 0
+offset_right = 0.0
+offset_bottom = 0.0
+mouse_filter = 2
+script = ExtResource("3_anchor")
+
+[node name="BuildMarker" type="Label" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 900.0
+offset_top = 668.0
+offset_right = 1224.0
+offset_bottom = 690.0
+theme_override_font_sizes/font_size = 12
+text = "BUILD 0.1 — SHELF"
+horizontal_alignment = 2
