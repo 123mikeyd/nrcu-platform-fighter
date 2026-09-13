@@ -1,4 +1,11 @@
 extends SceneTree
+# Story suite migration (Doc 07 §11-16): the legacy StoryStage card row is gone
+# by design — Story selection is now the briefing's compact roster strip.
+# Asserted against the new structure: the briefing owns the story panel, the
+# roster strip lists the playable fighters (prototype Ice Mage excluded),
+# select_fighter() selects and the selection is visible on the strip, the
+# legacy card/chip nodes are gone, and the Story route still opens from Main,
+# launches the encounter and returns to Main.
 var failures := 0
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
@@ -11,46 +18,41 @@ func run():
     for i in 5: await process_frame
     arena.setup.story_requested.emit()
     for i in 2: await process_frame
-    var stage = arena.story_panel.find_child("StoryStage", true, false)
-    check(stage != null, "story stage exists")
-    if stage != null:
-        var roster = load("res://scripts/roster.gd")
-        var playable: Array = roster.ids()
-        playable.erase("ice_mage")
-        var cards: Array = stage.get_cards()
-        check(cards.size() == 6, "six fighter cards")
-        var hand = stage.cursor
-        check(hand != null and hand.targets.size() >= 6, "hand cursor registered on cards")
-        check(cards[0].name == "FighterCard0", "card naming")
-        if cards.size() == 6:
-            var label := cards[2].get_child(1) as Label
-            check(label != null and label.text == roster.display_name(playable[2]).to_upper(), "card label matches roster")
-            check(stage.get_input_lock() > 0.0, "scene-start input lock is active")
-            cards[2].pressed.emit()
-            check(stage.get_selected_id() != playable[2], "pick ignored during the scene-start lock")
-            await create_timer(0.45).timeout
-            check(hand.is_carrying(), "hand carries the token before a pick")
-            check(hand.visual == 1, "carry presentation while carrying (token, not a baked chip)")
-            cards[2].pressed.emit()
-            check(stage.get_selected_id() == playable[2], "card press selects id")
-            check(arena.story_character.get_selected_metadata() == playable[2], "selection model synced")
-            check(not hand.is_carrying(), "token released on pick")
-            await create_timer(0.7).timeout
-            check(stage.is_chip_landed(), "token placed")
-            check(stage.get_node_or_null("StoryToken") != null, "the token is a separate screen-owned object")
-            var chip_pos: Vector2 = stage.get_chip_position()
-            check(cards[2].get_global_rect().grow(12.0).has_point(chip_pos), "chip set down on the picked card")
-            check(not cards[1].get_global_rect().has_point(chip_pos), "chip not on another card")
-            arena.story_action.pressed.emit()
-            check(arena.player_one.character_id == playable[2], "encounter starts with card choice")
-            check(arena.story_state == "playing", "story running")
-            hand._press_held = true
-            check(hand.is_pressing(), "press state while the button is held")
-            check(hand.active_texture() == hand._tex_press, "tap frame while the button is held")
-            hand._press_held = false
-            hand._press = 0.0
-            check(hand.active_texture() != hand._tex_press, "tap frame ends on release")
+    check(arena.story_state == "ready" and arena.story_panel.visible, "story opens from Main into the ready briefing")
+    var briefing = arena.find_child("StoryBriefing", true, false)
+    check(briefing != null and briefing == arena.story_panel, "the briefing scene owns the story panel")
+    var roster = load("res://scripts/roster.gd")
+    var playable: Array = roster.ids()
+    playable.erase("ice_mage")
+    if briefing != null:
+        check(briefing.roster_ids() == playable, "the roster strip lists the playable fighters (Ice Mage excluded)")
+        var tiles: Array = briefing.roster_tiles()
+        check(tiles.size() == playable.size(), "one roster tile per playable fighter")
+        check(briefing.selected_fighter_id() == "turbofit", "the briefing opens on the story default fighter")
+        briefing.select_fighter(playable[2])
+        check(briefing.selected_fighter_id() == playable[2], "select_fighter selects the id")
+        if tiles.size() == playable.size():
+            check(tiles[2].is_candidate(), "the selection is visible on the roster strip")
+        var zone_name := briefing.get_node_or_null("ReferenceFrame/BriefingBody/FighterZone/FighterName") as Label
+        check(zone_name != null and zone_name.text == roster.display_name(playable[2]).to_upper(), "the selection is named on the briefing")
+        check(arena.story_character.get_selected_metadata() == playable[2], "the story selection model follows the briefing")
+    var cursor_layer = root.get_node_or_null("Cursor")
+    check(cursor_layer != null and cursor_layer.hand != null and not cursor_layer.hand.is_carrying(),
+        "the briefing never carries the legacy selection chip")
+    check(arena.story_panel.find_child("StoryStage", true, false) == null, "the legacy StoryStage card overlay is gone")
+    check(arena.story_panel.find_child("FighterCard0", true, false) == null, "the legacy fighter cards are gone")
+    check(arena.story_panel.find_child("StoryToken", true, false) == null, "the legacy selection chip is gone")
+    arena.story_back.pressed.emit()
+    await create_timer(0.4).timeout
+    check(arena.setup.visible and arena.story_state == "" and not arena.story_panel.visible, "Back returns to Main without starting")
+    arena.setup.story_requested.emit()
+    for i in 2: await process_frame
+    check(arena.story_state == "ready" and arena.story_panel.visible, "story reopens from Main")
+    check(briefing.selected_fighter_id() == playable[2], "reentry keeps the roster choice")
+    arena.story_action.pressed.emit()
+    check(arena.story_state == "playing" and arena.player_one.character_id == playable[2],
+        "START ENCOUNTER launches the encounter with the roster choice")
     arena.queue_free()
     await process_frame
-    if failures == 0: print("PASS: story stage cards, hand cursor, model sync, encounter start")
+    if failures == 0: print("PASS: story briefing roster strip, selection sync, legacy nodes gone, route open/launch/back")
     quit(1 if failures else 0)

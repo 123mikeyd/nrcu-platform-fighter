@@ -26,10 +26,20 @@ func run():
     arena.add_child(bolt)
     mage.receive_hit(150, Vector3.RIGHT, 4)
     check(arena.match_over and arena.story_state == "complete", "Ice Mage final elimination completes one-stage story")
-    var stage = arena.story_panel.find_child("StoryStage", true, false)
-    check(stage != null and not stage.is_chip_visible(), "no placed chip on the results screen")
-    if stage != null:
-        check(not stage.cursor.is_carrying(), "hand no longer carries into the results")
+    # Doc 07 §11-16: the chip flow is gone with the StoryStage overlay. The
+    # results screen must carry no token state: the cursor is not carrying and
+    # no StoryToken/PlayerToken node is visible inside the story panel.
+    var cursor_layer = root.get_node_or_null("Cursor")
+    check(cursor_layer != null and cursor_layer.hand != null and not cursor_layer.hand.is_carrying(),
+        "results cursor does not carry a token")
+    var token_leak := false
+    for node in arena.story_panel.find_children("*", "", true, false):
+        if not (node is CanvasItem):
+            continue
+        var named := str(node.name)
+        if (named == "StoryToken" or named.begins_with("PlayerToken")) and (node as CanvasItem).is_visible_in_tree():
+            token_leak = true
+    check(not token_leak, "no StoryToken/PlayerToken state leaks into the story panel")
     check(arena.story_panel.visible and arena.story_title.text == "your pretty cool", "victory title is exact requested lowercase string")
     check(arena.story_action.text == "REPLAY" and arena.story_back.visible, "victory offers replay and back")
     check(not arena.winner_label.visible, "generic freeplay winner text does not leak")

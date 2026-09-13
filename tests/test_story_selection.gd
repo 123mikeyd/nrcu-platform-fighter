@@ -34,11 +34,15 @@ func run():
             arena.player_one.stocks = 0
             arena._on_fighter_eliminated(arena.player_one)
             check(arena.story_title.text == "TRY AGAIN" and not choice.is_visible_in_tree(), "loss wording and locked selection")
+            check(not arena.story_panel.find_child("RosterStrip", true, false).is_visible_in_tree(),
+                "the loss result locks the briefing selection away")
             arena.story_action.pressed.emit()
             check(arena.player_one.character_id == playable[index], "Retry preserves selection")
             arena.player_two.stocks = 0
             arena._on_fighter_eliminated(arena.player_two)
             check(arena.story_title.text == "your pretty cool", "literal victory wording")
+            check(not arena.story_panel.find_child("RosterStrip", true, false).is_visible_in_tree(),
+                "the victory result locks the briefing selection away")
             arena._reset_match()
             check(arena.player_one.character_id == playable[index], "Replay preserves selection")
             arena.story_back.pressed.emit()
