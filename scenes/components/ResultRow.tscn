@@ -1,0 +1,59 @@
+[gd_scene format=3]
+
+[node name="ResultRow" type="Control"]
+offset_right = 680.0
+offset_bottom = 78.0
+mouse_filter = 2
+
+[node name="Plate" type="Panel" parent="."]
+offset_right = 680.0
+offset_bottom = 78.0
+mouse_filter = 2
+
+[node name="Side" type="Panel" parent="."]
+offset_top = 10.0
+offset_right = 4.0
+offset_bottom = 68.0
+mouse_filter = 2
+
+[node name="Rank" type="Label" parent="."]
+offset_left = 24.0
+offset_top = 12.0
+offset_right = 108.0
+offset_bottom = 42.0
+mouse_filter = 2
+vertical_alignment = 1
+
+[node name="Port" type="Label" parent="."]
+offset_left = 24.0
+offset_top = 44.0
+offset_right = 108.0
+offset_bottom = 64.0
+mouse_filter = 2
+vertical_alignment = 1
+
+[node name="Name" type="Label" parent="."]
+offset_left = 120.0
+offset_top = 12.0
+offset_right = 430.0
+offset_bottom = 66.0
+mouse_filter = 2
+vertical_alignment = 1
+
+[node name="Stocks" type="Label" parent="."]
+offset_left = 434.0
+offset_top = 10.0
+offset_right = 656.0
+offset_bottom = 34.0
+mouse_filter = 2
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Damage" type="Label" parent="."]
+offset_left = 434.0
+offset_top = 44.0
+offset_right = 656.0
+offset_bottom = 68.0
+mouse_filter = 2
+horizontal_alignment = 2
+vertical_alignment = 1

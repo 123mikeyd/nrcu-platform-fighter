@@ -1,0 +1,67 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="1_anchor"]
+
+[node name="MenuRow" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 600.0
+offset_bottom = 68.0
+mouse_filter = 2
+
+[node name="HitArea" type="Button" parent="."]
+layout_mode = 0
+offset_right = 600.0
+offset_bottom = 68.0
+text = ""
+
+[node name="ActivePlate" type="Panel" parent="."]
+visible = false
+layout_mode = 0
+offset_left = 48.0
+offset_top = 5.0
+offset_right = 392.0
+offset_bottom = 63.0
+mouse_filter = 2
+
+[node name="TopRule" type="Panel" parent="ActivePlate"]
+layout_mode = 0
+offset_right = 344.0
+offset_bottom = 1.0
+mouse_filter = 2
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 0
+offset_left = 60.0
+offset_top = 8.0
+offset_right = 460.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 26
+text = "ROW"
+vertical_alignment = 1
+
+[node name="QuietRail" type="Panel" parent="."]
+layout_mode = 0
+offset_left = 142.0
+offset_top = 42.0
+offset_right = 270.0
+offset_bottom = 44.0
+mouse_filter = 2
+
+[node name="ActiveRail" type="Panel" parent="."]
+visible = false
+layout_mode = 0
+offset_left = 48.0
+offset_top = 64.0
+offset_right = 880.0
+offset_bottom = 67.0
+mouse_filter = 2
+
+[node name="CursorAnchor" type="Control" parent="."]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 40.0
+offset_right = 8.0
+offset_bottom = 40.0
+mouse_filter = 2
+script = ExtResource("1_anchor")

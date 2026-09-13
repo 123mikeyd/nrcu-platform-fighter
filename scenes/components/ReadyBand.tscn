@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/frontend/ready_band.gd" id="1_band"]
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="2_anchor"]
+
+[node name="ReadyBand" type="Control"]
+offset_right = 1100.8
+offset_bottom = 96.0
+script = ExtResource("1_band")
+
+[node name="ReadyText" type="Label" parent="."]
+text = "READY TO FIGHT"
+
+[node name="CursorAnchor" type="Control" parent="."]
+script = ExtResource("2_anchor")

@@ -1,14 +1,22 @@
 extends Control
-# Result screen — the payoff frame (Melee result grammar, Doc 03 §5, recomposed):
-#   - the winner payoff resolves first: the 3D hero rig (visual spec §10) plus
-#     the winner wording (WinnerBanner, authored by main) pops in immediately
-#   - standings panes, the detail inspector and the actions row phase in after
-#     160 ticks of waiting OR on the first input (gmresult x1==0)
-#   - one page per player; LEFT/RIGHT walk the pages with wraparound
-#     (retail: A = next page, B = prev page; here one page per player)
-#   - ranking: stocks desc, then damage asc; pane i shows its placement
-#   - sounds and the stick-scroll stat tables stay out of scope until audio
-#     assets exist (same reason Stufe 1.3 is still open)
+# NRCU Results — winner-first payoff screen (Doc 06, WP-E).
+#
+# Pure presentation/navigation over an explicit MatchResult snapshot: the
+# screen sorts by `placement`, resolves the winner model from `fighter_id`,
+# and never infers rank from stats (Doc 06 §3/§21).
+#
+# Composition at 1280x720 inside a centered ReferenceFrame (Doc 06 §6):
+#   Top outcome header  y ~26-112   WINNER / P2 DOGE MAN / rule
+#   Main payoff         y ~110-510  winner hero | final standings
+#   Action bar          y ~585-670  Rematch / Change Fighters / [Stage] / Main Menu
+# No StatPanel, no page navigation, no duplicate player inspector.
+#
+# Reveal (Doc 06 §16, tick-driven on FrontendClock):
+#   0-6f field, 4-18f outcome+hero, 12-30f standings with a 3-tick row
+#   stagger, 26-40f action bar -> full useful screen by ~0.65 s. A fresh
+#   confirm after the safety window finishes the reveal immediately and is
+#   consumed in `_input`, before the GUI stage, so one event can never both
+#   finish the reveal and activate an action (RESULT_REVEAL_GUARD).
 
 signal rematch_requested
 signal setup_requested
@@ -16,225 +24,620 @@ signal menu_requested
 signal stage_requested
 
 const Tokens = preload("res://scripts/ui_tokens.gd")
+const MatchResultScript = preload("res://scripts/match_result.gd")
+const FighterRenderViewScript = preload("res://scripts/frontend/fighter_render_view.gd")
 const Roster = preload("res://scripts/roster.gd")
-const HeroRigScript = preload("res://scripts/hero_rig.gd")
+const ResultRowScene = preload("res://scenes/components/ResultRow.tscn")
+const ActionBarScene = preload("res://scenes/components/ActionBar.tscn")
 
 const FPS := 60.0
-const WAIT_TICKS := 160.0
 
-# --- composition (1280x720 canvas, Tokens.DESIGN) -------------------------
-const LEAD_X := 64.0          # left margin (Tokens.MARGIN)
-const RIGHT_X := 544.0        # right column: standings + detail inspector
-const MAIN_Y := 100.0         # top of the content area
-const HERO_W := 448.0         # winner column width
-const HERO_VIEW_H := 330.0    # 3D hero frame height
-const CAPTION_H := 122.0      # winner wording plate height
-const PANE_H := 72.0
-const PANE_STRIDE := 80.0     # pane height + Tokens.S8
-const PANE_Y0 := 132.0
-const INSPECT_Y := 456.0
-const INSPECT_H := 108.0
-const FOOT_RULE_Y := 588.0
-const HINT_Y := 600.0
-const ACTIONS_Y := 604.0
-const ACTIONS_H := 48.0
+# --- layout (1280x720 reference frame) ------------------------------------
+const LEAD_X := 64.0
+const EYEBROW_Y := 26.0
+const OUTCOME_Y := 44.0
+const RULE_Y := 108.0
+const HERO_X := 64.0
+const HERO_Y := 125.0
+const HERO_W := 436.0
+const HERO_H := 395.0
+const FIELD_PAD_X := 16.0
+const FIELD_PAD_Y := 8.0
+const STAND_X := 544.0
+const STAND_W := 680.0
+const STAND_HEAD_Y := 130.0
+const STAND_RULE_Y := 152.0
+const ROW_Y0 := 170.0
+const ROW_STRIDE := 86.0
+const MAX_ROWS := 4
+const ACTION_Y := 585.0
+const MENU_X := 680.0
+const MENU_X_TIGHT := 456.0   # Main Menu slides up when Change Stage is absent
 
-# Authored motion (doc bands: micro 6-10f, state 16-24f, screen 240-400 ms).
-const HERO_POP_SECONDS := 0.30
-const PANE_REVEAL_SECONDS := 0.16   # ~10 frames: micro band
-const PANE_REVEAL_STEP := 0.055   # per placement: 1ST lands first
-const FADE_SECONDS := 0.24
-const PANE_DIM := 0.62            # unselected panes recede
+# --- reveal timeline (ticks at 60 Hz, Doc 06 §16) --------------------------
+const SAFETY_TICKS := 6       # carry-over window before input may finish the reveal
+const TL_FIELD := 2           # 0-6f: result field tint resolves
+const TL_OUTCOME := 4         # 4-18f: outcome + winner hero resolve
+const TL_ROWS := 12           # 12-30f: standings enter, 3-tick stagger
+const TL_ROW_STAGGER := 3
+const TL_ACTIONS := 26        # 26-40f: action bar resolves
+const TL_DONE := 40           # full useful screen; actions interactive
+const OUTCOME_POP := 14.0 / FPS
+const HERO_SETTLE := 16.0 / FPS
+const ROW_REVEAL := 10.0 / FPS
+const BAR_REVEAL := 12.0 / FPS
+const FIELD_REVEAL := 8.0 / FPS
 
-var banner: Label  # WinnerBanner — main.gd writes the winner wording before show
+const ACTIONS := [
+    {"node": "Rematch", "id": "rematch", "primary": true},
+    {"node": "ChangeFighters", "id": "setup", "primary": false},
+    {"node": "ChangeStage", "id": "stage", "primary": false},
+    {"node": "MainMenu", "id": "menu", "primary": false},
+]
 
-var _phase := 0    # 0 = wait (gmresult x1==0), 1 = interactive (x1==3)
-var _wait := 0.0
-var _pages: Array = []
-var _page := 0
-var _ranks: Dictionary = {}
-var _panes: Array = []            # {box, plate, rank, who, name, stocks, damage, home}
-var _reveal_done := false
-var _reveal_pending := 0
-var _reveal_tweens: Array = []
-var _hero                        # hero rig (SubViewportContainer subclass)
-var _hero_col: Control
-var _hero_id := ""
+# Winner heading label for main.gd's HUD wiring (read-only for callers).
+var outcome_label: Label = null
+
+var _result = null                 # MatchResult snapshot; null before first show
+var _cursor: Control = null
+var _clock: Node = null
+
+var _eyebrow: Label
+var _screen_label: Label
+var _outcome_rule: Panel
+var _rule_w := 360.0
+var _accent := Tokens.CREAM_DIM
+var _hero_field: Panel
+var _hero_tint: Panel
+var _hero_accent: Panel
+var _hero_group: Control
 var _hero_text: Label
-var _caption_bar: Panel
-var _winner_tag: Label
-var _winner_who: Label
-var _standings_head: Label
+var _hero_views: Array = []
+var _hero_ids: Array = []
+var _standings_label: Label
 var _standings_rule: Panel
-var _hint: Label
-var _inspector: Panel
-var _insp_plate: Panel
-var _name_label: Label
-var _stocks_label: Label
-var _damage_label: Label
-var _page_label: Label
-var _prev: Button
-var _next: Button
-var _actions: HBoxContainer
-var _actions_home_y := ACTIONS_Y
-var _rematch: Button
-var _setup: Button
-var _stage_button: Button
-var _menu_button: Button
-var _cursor: Control
+var _standings_list: Control
+var _rows: Array = []
+var _action_bar: Control
+var _actions: Dictionary = {}
+var _row_entries: Array = []
+var _row_count := 0
+
+var _reveal_active := false
+var _reveal_tick := 0
+var _reveal_events := 0
+var _field_shown := false
+var _outcome_shown := false
+var _rows_shown := 0
+var _actions_shown := false
+var _interactive := false
+var _tweens: Array = []
+var _focus_action := ""
+var _hover_action := ""
+var _stage_supported := false
+var _reveal_acc := 0.0
 
 func _ready() -> void:
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    theme = Tokens.make_theme()
     var root = get_node_or_null("/root/Cursor")
     if root != null:
         _cursor = root.hand
-    _build()
+    if _cursor != null and _cursor.has_signal("modality_changed") and not _cursor.modality_changed.is_connected(_on_cursor_modality):
+        _cursor.modality_changed.connect(_on_cursor_modality)
+    _clock = get_node_or_null("/root/FrontendClock")
+    if _clock != null and _clock.has_signal("tick"):
+        _clock.tick.connect(_on_tick)
+        set_process(false)
+    else:
+        set_process(true)   # defensive: run the timeline off _process at 60 Hz
+    var frame := Tokens.make_reference_frame(self)
+    _build_header(frame)
+    _build_hero(frame)
+    _build_standings(frame)
+    _build_actions(frame)
+    _reset_for_show()
 
-func _build() -> void:
-    var view: Vector2 = get_viewport_rect().size
-    var right_edge: float = view.x - Tokens.MARGIN_RIGHT
-    var pane_w: float = maxf(right_edge - RIGHT_X, 360.0)
-    _build_header(right_edge)
-    _build_hero_column()
-    _build_standings(right_edge, pane_w)
-    _build_footer(view, right_edge)
+# --- construction ----------------------------------------------------------
 
-func _build_header(right_edge: float) -> void:
-    var title := _make_label(self, "RESULTS", Tokens.T_SCREEN, Tokens.CREAM, Rect2(LEAD_X, 24.0, 320.0, 40.0))
-    title.name = "Title"
-    var meta := _make_label(self, "FINAL STANDINGS", Tokens.T_META, Tokens.CREAM_DIM, Rect2(right_edge - 280.0, 30.0, 280.0, 26.0), HORIZONTAL_ALIGNMENT_RIGHT)
-    meta.name = "HeaderMeta"
-    var rule := Tokens.band(Tokens.RULE, 1.0)
-    rule.name = "TitleRule"
-    rule.position = Vector2(LEAD_X, 74.0)
-    rule.size = Vector2(right_edge - LEAD_X, 1.0)
-    add_child(rule)
-    var accent := Tokens.band(Tokens.ACCENT, 2.0)
-    accent.name = "TitleAccent"
-    accent.position = Vector2(LEAD_X, 73.0)
-    accent.size = Vector2(112.0, 2.0)
-    add_child(accent)
+func _build_header(frame: Control) -> void:
+    var header := Control.new()
+    header.name = "OutcomeHeader"
+    header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    frame.add_child(header)
+    _eyebrow = _label(header, "WINNER", Tokens.T_META, Tokens.ACCENT, Rect2(LEAD_X, EYEBROW_Y, 220.0, 18.0))
+    _eyebrow.name = "OutcomeEyebrow"
+    outcome_label = _label(header, "", Tokens.T_DISPLAY, Tokens.CREAM, Rect2(LEAD_X, OUTCOME_Y, 900.0, 62.0))
+    outcome_label.name = "OutcomeText"
+    _screen_label = _label(header, "RESULTS", Tokens.T_META, Tokens.CREAM_DIM,
+        Rect2(Tokens.DESIGN.x - Tokens.MARGIN_RIGHT - 160.0, 30.0, 160.0, 18.0), HORIZONTAL_ALIGNMENT_RIGHT)
+    _screen_label.name = "ScreenLabel"
+    _outcome_rule = Tokens.band(_accent, 3.0)
+    _outcome_rule.name = "OutcomeRule"
+    _outcome_rule.position = Vector2(LEAD_X, RULE_Y)
+    _outcome_rule.size = Vector2(_rule_w, 3.0)
+    header.add_child(_outcome_rule)
 
-func _build_hero_column() -> void:
-    _hero_col = Control.new()
-    _hero_col.name = "WinnerHero"
-    _hero_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    _hero_col.position = Vector2(LEAD_X, MAIN_Y)
-    _hero_col.size = Vector2(HERO_W, HERO_VIEW_H + Tokens.S12 + CAPTION_H)
-    _hero_col.pivot_offset = _hero_col.size * 0.5
-    add_child(_hero_col)
-    # Stage plate under the model: quiet surface, thin frame (hard edges).
-    var stage := _make_plate(_hero_col, Rect2(0.0, 0.0, HERO_W, HERO_VIEW_H), Tokens.SURFACE_1, Tokens.RULE, Tokens.STROKE, Tokens.RADIUS_FRAME)
-    stage.name = "HeroPlate"
-    # Text hero: kept when no model can be resolved — never a blank frame.
-    _hero_text = _make_label(_hero_col, "", Tokens.T_HERO, Tokens.CREAM, Rect2(Tokens.S24, 105.0, HERO_W - Tokens.S48, 120.0), HORIZONTAL_ALIGNMENT_CENTER)
+func _build_hero(frame: Control) -> void:
+    var main_result := Control.new()
+    main_result.name = "MainResult"
+    main_result.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    frame.add_child(main_result)
+    var area := Control.new()
+    area.name = "WinnerHeroArea"
+    area.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    main_result.add_child(area)
+    var field_rect := Rect2(HERO_X - FIELD_PAD_X, HERO_Y - FIELD_PAD_Y, HERO_W + FIELD_PAD_X * 2.0, HERO_H + FIELD_PAD_Y * 2.0)
+    _hero_field = _plate(area, field_rect, Tokens.SURFACE_1, Tokens.RADIUS_FLAT)
+    _hero_field.name = "HeroField"
+    _hero_tint = _plate(area, field_rect, Color(0, 0, 0, 0), Tokens.RADIUS_FLAT)
+    _hero_tint.name = "WinnerTint"
+    _hero_accent = _plate(area, Rect2(HERO_X + 8.0, field_rect.position.y + field_rect.size.y - 26.0, 120.0, 3.0), _accent, Tokens.RADIUS_FLAT)
+    _hero_accent.name = "PlayerAccent"
+    _hero_text = _label(area, "", Tokens.T_HERO, Tokens.CREAM, Rect2(HERO_X, HERO_Y + 130.0, HERO_W, 90.0), HORIZONTAL_ALIGNMENT_CENTER)
     _hero_text.name = "HeroText"
     _hero_text.hide()
-    # Wording plate: player color as structure, one accent, WinnerBanner inside.
-    var caption := _make_plate(_hero_col, Rect2(0.0, HERO_VIEW_H + Tokens.S12, HERO_W, CAPTION_H), Tokens.SURFACE_1, Tokens.RULE, Tokens.STROKE, Tokens.RADIUS_PLATE)
-    caption.name = "WinnerPlate"
-    _caption_bar = _make_plate(caption, Rect2(0.0, 0.0, 6.0, CAPTION_H), Tokens.SURFACE_3, Color(0, 0, 0, 0), 0, Tokens.RADIUS_FLAT)
-    _caption_bar.name = "WinnerColor"
-    _winner_tag = _make_label(caption, "WINNER", Tokens.T_META, Tokens.ACCENT, Rect2(Tokens.S24, 12.0, 220.0, 18.0))
-    _winner_tag.name = "WinnerTag"
-    _winner_who = _make_label(caption, "", Tokens.T_META, Tokens.CREAM, Rect2(HERO_W - Tokens.S24 - 96.0, 12.0, 96.0, 18.0), HORIZONTAL_ALIGNMENT_RIGHT)
-    _winner_who.name = "WinnerWho"
-    banner = Label.new()
-    banner.name = "WinnerBanner"
-    banner.text = ""
-    banner.position = Vector2(Tokens.S24, 34.0)
-    banner.size = Vector2(HERO_W - Tokens.S48, 76.0)
-    banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-    banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    banner.add_theme_font_size_override("font_size", Tokens.T_IDENTITY)
-    banner.add_theme_color_override("font_color", Tokens.CREAM)
-    caption.add_child(banner)
+    _hero_group = Control.new()
+    _hero_group.name = "WinnerHeroGroup"
+    _hero_group.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _hero_group.position = Vector2(HERO_X, HERO_Y)
+    _hero_group.size = Vector2(HERO_W, HERO_H)
+    _hero_group.pivot_offset = Vector2(HERO_W * 0.5, HERO_H)
+    area.add_child(_hero_group)
 
-func _build_standings(right_edge: float, pane_w: float) -> void:
-    _standings_head = _make_label(self, "STANDINGS", Tokens.T_META, Tokens.CREAM_DIM, Rect2(RIGHT_X, MAIN_Y + 4.0, 320.0, 20.0))
-    _standings_head.name = "StandingsHead"
+func _build_standings(frame: Control) -> void:
+    var main_result := frame.get_node("MainResult")
+    var standings := Control.new()
+    standings.name = "Standings"
+    standings.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    main_result.add_child(standings)
+    _standings_label = _label(standings, "FINAL STANDINGS", Tokens.T_META, Tokens.CREAM_DIM, Rect2(STAND_X, STAND_HEAD_Y, 320.0, 18.0))
+    _standings_label.name = "StandingsLabel"
     _standings_rule = Tokens.band(Tokens.RULE, 1.0)
     _standings_rule.name = "StandingsRule"
-    _standings_rule.position = Vector2(RIGHT_X, MAIN_Y + 26.0)
-    _standings_rule.size = Vector2(right_edge - RIGHT_X, 1.0)
-    add_child(_standings_rule)
-    for i in 4:
-        _build_pane(i, pane_w)
-    _build_inspector(pane_w)
+    _standings_rule.position = Vector2(STAND_X, STAND_RULE_Y)
+    _standings_rule.size = Vector2(STAND_W, 1.0)
+    standings.add_child(_standings_rule)
+    _standings_list = Control.new()
+    _standings_list.name = "StandingsList"
+    _standings_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _standings_list.position = Vector2(STAND_X, ROW_Y0)
+    _standings_list.size = Vector2(STAND_W, ROW_STRIDE * MAX_ROWS)
+    standings.add_child(_standings_list)
+    for i in MAX_ROWS:
+        # Rows are Controls, not Buttons: nothing here performs an action
+        # (Doc 06 §11).
+        var row: Control = ResultRowScene.instantiate()
+        row.name = "ResultRow%d" % i
+        row.position = Vector2(0.0, i * ROW_STRIDE)
+        row.visible = false
+        _standings_list.add_child(row)
+        _rows.append(row)
 
-func _build_pane(index: int, pane_w: float) -> void:
-    # Ranking row: player color plate + rank header + name/P tag + stats.
-    var pane := Button.new()
-    pane.name = "ResultPane" + str(index)
-    pane.text = ""
-    pane.position = Vector2(RIGHT_X, PANE_Y0 + index * PANE_STRIDE)
-    pane.size = Vector2(pane_w, PANE_H)
-    pane.focus_mode = Control.FOCUS_ALL
-    Tokens.apply_styles(pane, Tokens.row_styles())
-    pane.pressed.connect(_select_page.bind(index))
-    add_child(pane)
-    var plate := _make_plate(pane, Rect2(0.0, 0.0, 6.0, PANE_H), Tokens.SURFACE_3, Color(0, 0, 0, 0), 0, Tokens.RADIUS_FLAT)
-    plate.name = "Color"
-    var rank := _make_label(pane, "", Tokens.T_NAV, Tokens.CREAM, Rect2(Tokens.S24, 21.0, 76.0, 30.0))
-    rank.name = "Rank"
-    var who := _make_label(pane, "", Tokens.T_META, Tokens.CREAM, Rect2(108.0, 44.0, 150.0, 18.0))
-    who.name = "Who"
-    var pname := _make_label(pane, "", Tokens.T_NAV, Tokens.CREAM, Rect2(108.0, 12.0, pane_w - 108.0 - 220.0, 30.0))
-    pname.name = "Name"
-    var stocks := _make_label(pane, "", Tokens.T_META, Tokens.CREAM_DIM, Rect2(pane_w - Tokens.S24 - 170.0, 14.0, 170.0, 20.0), HORIZONTAL_ALIGNMENT_RIGHT)
-    stocks.name = "Stocks"
-    var damage := _make_label(pane, "", Tokens.T_META, Tokens.CREAM_DIM, Rect2(pane_w - Tokens.S24 - 170.0, 42.0, 170.0, 20.0), HORIZONTAL_ALIGNMENT_RIGHT)
-    damage.name = "Damage"
-    _panes.append({
-        "box": pane, "plate": plate, "rank": rank, "who": who,
-        "name": pname, "stocks": stocks, "damage": damage,
-        "home": pane.position,
-    })
+func _build_actions(frame: Control) -> void:
+    _action_bar = ActionBarScene.instantiate()
+    _action_bar.position = Vector2(Tokens.MARGIN, ACTION_Y)
+    frame.add_child(_action_bar)
+    for spec in ACTIONS:
+        var button: Button = _action_bar.get_node(str(spec["node"]))
+        var underline: Panel = button.get_node("Underline")
+        var anchor: Control = button.get_node("CursorAnchor")
+        Tokens.apply_styles(button, {
+            "normal": Tokens.flat(Color(0, 0, 0, 0)),
+            "hover": Tokens.flat(Color(1, 1, 1, 0.05)),
+            "pressed": Tokens.flat(Color(1, 1, 1, 0.09)),
+            "disabled": Tokens.flat(Color(0, 0, 0, 0)),
+            "focus": Tokens.flat(Color(0, 0, 0, 0)),
+        })
+        button.add_theme_font_size_override("font_size", Tokens.T_ACTION)
+        var id := str(spec["id"])
+        button.focus_entered.connect(_on_action_focus.bind(id, true))
+        button.focus_exited.connect(_on_action_focus.bind(id, false))
+        button.mouse_entered.connect(_on_action_hover.bind(id, true))
+        button.mouse_exited.connect(_on_action_hover.bind(id, false))
+        button.pressed.connect(_on_action_pressed.bind(id))
+        _actions[id] = {"button": button, "underline": underline, "anchor": anchor, "primary": bool(spec["primary"])}
 
-func _build_inspector(pane_w: float) -> void:
-    # Detail inspector: page nav + page label + the selected player's stats.
-    _inspector = _make_plate(self, Rect2(RIGHT_X, INSPECT_Y, pane_w, INSPECT_H), Tokens.SURFACE_1, Tokens.RULE, Tokens.STROKE, Tokens.RADIUS_FRAME)
-    _inspector.name = "StatPanel"
-    _insp_plate = _make_plate(_inspector, Rect2(0.0, 0.0, 6.0, INSPECT_H), Tokens.SURFACE_3, Color(0, 0, 0, 0), 0, Tokens.RADIUS_FLAT)
-    _insp_plate.name = "Color"
-    _name_label = _make_label(_inspector, "", Tokens.T_IDENTITY, Tokens.CREAM, Rect2(Tokens.S24, 18.0, pane_w - 24.0 - 200.0, 44.0))
-    _name_label.name = "Name"
-    _stocks_label = _make_label(_inspector, "", Tokens.T_META, Tokens.CREAM_DIM, Rect2(Tokens.S24, 70.0, 168.0, 20.0))
-    _stocks_label.name = "Stocks"
-    _damage_label = _make_label(_inspector, "", Tokens.T_META, Tokens.CREAM_DIM, Rect2(204.0, 70.0, 168.0, 20.0))
-    _damage_label.name = "Damage"
-    var nav_x: float = pane_w - Tokens.S24 - 188.0
-    _prev = _nav_button("PrevPage", "<", Vector2(nav_x, 32.0), prev_page)
-    _page_label = _make_label(_inspector, "- / -", Tokens.T_NAV, Tokens.CREAM, Rect2(nav_x + 52.0, 32.0, 84.0, 44.0), HORIZONTAL_ALIGNMENT_CENTER)
-    _page_label.name = "PageLabel"
-    _next = _nav_button("NextPage", ">", Vector2(nav_x + 144.0, 32.0), next_page)
+# --- presentation application ---------------------------------------------
 
-func _build_footer(view: Vector2, right_edge: float) -> void:
-    var rule := Tokens.band(Tokens.RULE, 1.0)
-    rule.name = "FootRule"
-    rule.position = Vector2(LEAD_X, FOOT_RULE_Y)
-    rule.size = Vector2(right_edge - LEAD_X, 1.0)
-    add_child(rule)
-    _hint = _make_label(self, "PRESS ANY KEY", Tokens.T_META, Tokens.CREAM_DIM, Rect2(0.0, HINT_Y, view.x, 24.0), HORIZONTAL_ALIGNMENT_CENTER)
-    _hint.name = "WaitHint"
-    _hint.hide()
-    _actions = HBoxContainer.new()
-    _actions.name = "ActionsRow"
-    _actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    _actions.position = Vector2(LEAD_X, ACTIONS_Y)
-    _actions.custom_minimum_size = Vector2(0.0, ACTIONS_H)
-    _actions.size = Vector2(760.0, ACTIONS_H)
-    _actions.add_theme_constant_override("separation", int(Tokens.S12))
-    add_child(_actions)
-    _rematch = _action_button("Rematch", "Rematch", 168.0, true, func(): rematch_requested.emit())
-    _setup = _action_button("ChangeFighters", "Change Fighters", 196.0, false, func(): setup_requested.emit())
-    _stage_button = _action_button("ChangeStage", "Change Stage", 176.0, false, func(): stage_requested.emit())
-    _menu_button = _action_button("MainMenu", "Main Menu", 160.0, false, func(): menu_requested.emit())
+func show_result(result, allow_stage_change := false) -> void:
+    _result = result
+    _stage_supported = allow_stage_change
+    _reveal_active = true
+    _reveal_tick = 0
+    _reveal_events = 0
+    _field_shown = false
+    _outcome_shown = false
+    _rows_shown = 0
+    _actions_shown = false
+    _interactive = false
+    _focus_action = ""
+    _hover_action = ""
+    _apply_outcome()
+    _apply_rows()
+    _apply_actions()
+    _apply_hero()
+    _cursor_entry()
+    _reset_for_show()
 
-# --- builders -------------------------------------------------------------
+func _apply_outcome() -> void:
+    var heading := "DRAW"
+    var eyebrow := ""
+    _accent = Tokens.CREAM_DIM
+    var rule_len := 148.0
+    if _result != null and str(_result.outcome) == MatchResultScript.OUTCOME_WIN:
+        eyebrow = "WINNER"
+        if bool(_result.team_mode) and int(_result.winning_team) >= 0:
+            var team := int(_result.winning_team)
+            heading = "TEAM %s WINS!" % ("A" if team == 0 else "B")
+            _accent = Tokens.TEAM_A if team == 0 else Tokens.TEAM_B
+        else:
+            var winner: Dictionary = _result.winner_entry()
+            if not winner.is_empty():
+                heading = "P%d %s" % [int(winner["player_index"]), str(winner["fighter_name"])]
+                _accent = _player_color(int(winner["player_index"]))
+            else:
+                # Malformed payload (WIN without a winner entry): state the
+                # outcome, never invent an identity or a fake placement.
+                heading = "WIN"
+                eyebrow = ""
+    outcome_label.text = heading
+    outcome_label.visible = true
+    _eyebrow.text = eyebrow
+    _eyebrow.visible = eyebrow != ""
+    _eyebrow.add_theme_color_override("font_color", Tokens.ACCENT)
+    _outcome_rule.add_theme_stylebox_override("panel", Tokens.flat(_accent))
+    _hero_tint.add_theme_stylebox_override("panel", Tokens.flat(Color(_accent.r, _accent.g, _accent.b, 0.10)))
+    _hero_accent.add_theme_stylebox_override("panel", Tokens.flat(_accent))
+    _rule_w = clampf(_measure(outcome_label), 96.0, 640.0) if eyebrow != "" else rule_len
+    _outcome_rule.size = Vector2(_rule_w, 3.0)
 
-func _make_label(parent: Node, text: String, font_size: int, color: Color, rect: Rect2, align := HORIZONTAL_ALIGNMENT_LEFT) -> Label:
+func _apply_rows() -> void:
+    var ordered: Array = []
+    if _result != null:
+        ordered = _result.entries.duplicate()
+        ordered.sort_custom(func(a, b): return int(a["placement"]) < int(b["placement"]))
+    _row_entries = ordered
+    _row_count = mini(_row_entries.size(), MAX_ROWS)
+    for i in _rows.size():
+        var row: Control = _rows[i]
+        if i >= _row_count:
+            row.visible = false
+            continue
+        _fill_row(row, _row_entries[i])
+
+func _fill_row(row: Control, entry: Dictionary) -> void:
+    var place := int(entry.get("placement", 0))
+    var stocks := int(entry.get("stocks_remaining", 0))
+    var eliminated: bool = stocks <= 0
+    var player_index := int(entry.get("player_index", 0))
+    var color := _player_color(player_index)
+    var plate: Panel = row.get_node("Plate")
+    plate.add_theme_stylebox_override("panel", Tokens.flat(Tokens.SURFACE_1 if eliminated else Tokens.SURFACE_HI, Tokens.RULE, Tokens.STROKE))
+    var side: Panel = row.get_node("Side")
+    side.add_theme_stylebox_override("panel", Tokens.flat(color))
+    var rank: Label = row.get_node("Rank")
+    rank.text = _placement_text(place)
+    rank.add_theme_color_override("font_color", Tokens.CREAM_DIM if eliminated else Tokens.CREAM)
+    rank.add_theme_font_size_override("font_size", Tokens.T_NAV)
+    var port: Label = row.get_node("Port")
+    port.text = "P%d" % player_index
+    port.add_theme_color_override("font_color", color)
+    port.add_theme_font_size_override("font_size", Tokens.T_META)
+    var name_label: Label = row.get_node("Name")
+    name_label.text = str(entry.get("fighter_name", ""))
+    name_label.add_theme_color_override("font_color", Tokens.CREAM)
+    name_label.add_theme_font_size_override("font_size", Tokens.T_NAV)
+    var stocks_label: Label = row.get_node("Stocks")
+    stocks_label.text = "OUT" if eliminated else "STOCKS %d" % stocks
+    stocks_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
+    stocks_label.add_theme_font_size_override("font_size", Tokens.T_META)
+    stocks_label.position.y = 28.0 if eliminated else 10.0
+    var damage_label: Label = row.get_node("Damage")
+    # Eliminated players show OUT and NO damage: lose_stock() resets
+    # damage_percent to 0, so the value is not match information (Doc 06 §19).
+    damage_label.visible = not eliminated
+    damage_label.text = "" if eliminated else "%d%%" % int(entry.get("damage_percent", 0))
+    damage_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
+    damage_label.add_theme_font_size_override("font_size", Tokens.T_META)
+
+func _apply_actions() -> void:
+    _actions["stage"]["button"].visible = _stage_supported
+    _actions["menu"]["button"].position.x = MENU_X if _stage_supported else MENU_X_TIGHT
+    for id in _actions:
+        var spec: Dictionary = _actions[id]
+        spec["underline"].visible = false
+        var button: Button = spec["button"]
+        button.add_theme_color_override("font_color", Tokens.CREAM if bool(spec["primary"]) else Tokens.CREAM_DIM)
+
+func _apply_hero() -> void:
+    for view in _hero_views:
+        if is_instance_valid(view):
+            # Detach now so a re-show never leaves two render views in the
+            # tree for a frame (counts and hit-free overlays stay exact).
+            _hero_group.remove_child(view)
+            view.queue_free()
+    _hero_views.clear()
+    _hero_ids = []
+    _hero_text.hide()
+    if _hero_group == null or _result == null:
+        return
+    if str(_result.outcome) != MatchResultScript.OUTCOME_WIN:
+        return
+    var ids: Array = []
+    if bool(_result.team_mode):
+        for entry in _result.winning_entries():
+            var id := str(entry.get("fighter_id", ""))
+            if Roster.ids().has(id):
+                ids.append(id)
+    else:
+        var winner: Dictionary = _result.winner_entry()
+        if winner.is_empty():
+            return
+        var id := str(winner.get("fighter_id", ""))
+        if Roster.ids().has(id):
+            ids.append(id)
+        else:
+            # Unknown id: keep a text hero, never a blank frame and never a
+            # display-name reverse lookup (Doc 06 §3).
+            _hero_text.text = str(winner.get("fighter_name", ""))
+            _hero_text.show()
+    if ids.is_empty():
+        return
+    _hero_ids = ids
+    # One FighterRenderView per result: RESULTS_HERO for the FFA winner,
+    # RESULTS_TEAM for the coordinated winning-team group (Doc 06 §9).
+    var view = FighterRenderViewScript.new()
+    view.set_profile("RESULTS_TEAM" if bool(_result.team_mode) else "RESULTS_HERO")
+    view.position = Vector2.ZERO
+    view.size = Vector2(HERO_W, HERO_H)
+    _hero_group.add_child(view)
+    view.set_subjects(ids)
+    _hero_views.append(view)
+
+func _cursor_entry() -> void:
+    # Always the regular NRCU cursor: pointer position untouched, stale hover
+    # cleared, any carried token dropped (Doc 06 §15).
+    if _cursor == null:
+        return
+    _cursor.visible = true
+    _cursor.begin_screen("results")
+    _cursor.clear_hover()
+    if _cursor.is_carrying():
+        _cursor.clear_carry()
+
+# --- reveal timeline -------------------------------------------------------
+
+func _on_tick(_index: int) -> void:
+    if not _reveal_active:
+        return
+    _reveal_tick += 1
+    if _reveal_tick >= TL_DONE:
+        _complete_reveal()
+        return
+    if not _field_shown and _reveal_tick >= TL_FIELD:
+        _field_shown = true
+        _start(_hero_field, "modulate:a", 0.55, FIELD_REVEAL)
+        _start(_hero_tint, "modulate:a", 1.0, FIELD_REVEAL)
+    if not _outcome_shown and _reveal_tick >= TL_OUTCOME:
+        _outcome_shown = true
+        _start_outcome()
+    while _rows_shown < _row_count and _reveal_tick >= TL_ROWS + TL_ROW_STAGGER * _rows_shown:
+        _start_row(_rows_shown)
+        _rows_shown += 1
+    if not _actions_shown and _reveal_tick >= TL_ACTIONS:
+        _actions_shown = true
+        _start_actions()
+
+func _process(delta: float) -> void:
+    # Only used when the FrontendClock autoload is unavailable.
+    if not _reveal_active:
+        return
+    _reveal_acc += delta
+    while _reveal_acc >= 1.0 / FPS:
+        _reveal_acc -= 1.0 / FPS
+        _on_tick(0)
+
+func _start_outcome() -> void:
+    _start(_eyebrow, "modulate:a", 1.0, OUTCOME_POP)
+    outcome_label.position.y = OUTCOME_Y + 8.0
+    _start(outcome_label, "modulate:a", 1.0, OUTCOME_POP)
+    _start(outcome_label, "position:y", OUTCOME_Y, OUTCOME_POP)
+    _start(_outcome_rule, "modulate:a", 1.0, OUTCOME_POP)
+    _start(_outcome_rule, "size:x", _rule_w, OUTCOME_POP)
+    _start(_hero_accent, "modulate:a", 1.0, OUTCOME_POP)
+    _hero_group.position.y = HERO_Y + 10.0
+    _hero_group.scale = Vector2(0.97, 0.97)
+    _start(_hero_group, "modulate:a", 1.0, HERO_SETTLE)
+    _start(_hero_group, "position:y", HERO_Y, HERO_SETTLE)
+    _start(_hero_group, "scale", Vector2.ONE, HERO_SETTLE)
+
+func _start_row(index: int) -> void:
+    var row: Control = _rows[index]
+    row.visible = true
+    row.position.x = -14.0
+    _start(row, "modulate:a", 1.0, ROW_REVEAL)
+    _start(row, "position:x", 0.0, ROW_REVEAL)
+
+func _start_actions() -> void:
+    _action_bar.position.y = ACTION_Y + 8.0
+    _start(_action_bar, "modulate:a", 1.0, BAR_REVEAL)
+    _start(_action_bar, "position:y", ACTION_Y, BAR_REVEAL)
+
+func _complete_reveal() -> void:
+    if not _reveal_active and _interactive:
+        return
+    _reveal_active = false
+    _field_shown = true
+    _outcome_shown = true
+    _rows_shown = _row_count
+    _actions_shown = true
+    _kill_tweens()
+    _apply_final_states()
+    if _interactive:
+        return
+    _interactive = true
+    _enable_actions()
+    _seed_focus()
+    if _reveal_events == 0:
+        _reveal_events += 1
+        FrontendEvents.emit_results_reveal()
+
+func finish_reveal() -> void:
+    # A fresh confirm after the safety window finishes the reveal now; the
+    # action bar becomes interactive, but the finishing event itself was
+    # consumed before the GUI stage (see _input).
+    _complete_reveal()
+
+func skip_wait() -> void:
+    finish_reveal()   # legacy alias kept for the character-select route test
+
+func _reset_for_show() -> void:
+    _kill_tweens()
+    _eyebrow.modulate.a = 0.0
+    outcome_label.modulate.a = 0.0
+    outcome_label.position.y = OUTCOME_Y + 8.0
+    _outcome_rule.modulate.a = 0.0
+    _outcome_rule.size.x = _rule_w * 0.5
+    _hero_field.modulate.a = 0.0
+    _hero_tint.modulate.a = 0.0
+    _hero_accent.modulate.a = 0.0
+    _hero_group.modulate.a = 0.0
+    _hero_group.scale = Vector2(0.97, 0.97)
+    _hero_group.position = Vector2(HERO_X, HERO_Y + 10.0)
+    for i in _rows.size():
+        var row: Control = _rows[i]
+        row.modulate.a = 0.0
+        row.position = Vector2(-14.0, i * ROW_STRIDE)
+        if i >= _row_count:
+            row.visible = false
+    _action_bar.modulate.a = 0.0
+    _action_bar.position.y = ACTION_Y + 8.0
+    for id in _actions:
+        var button: Button = _actions[id]["button"]
+        button.disabled = true
+        button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        _actions[id]["underline"].visible = false
+
+func _apply_final_states() -> void:
+    _eyebrow.modulate.a = 1.0
+    outcome_label.modulate.a = 1.0
+    outcome_label.position.y = OUTCOME_Y
+    _outcome_rule.modulate.a = 1.0
+    _outcome_rule.size.x = _rule_w
+    _hero_field.modulate.a = 0.55
+    _hero_tint.modulate.a = 1.0
+    _hero_accent.modulate.a = 1.0
+    _hero_group.modulate.a = 1.0
+    _hero_group.scale = Vector2.ONE
+    _hero_group.position = Vector2(HERO_X, HERO_Y)
+    for i in _rows.size():
+        var row: Control = _rows[i]
+        row.position = Vector2(0.0, i * ROW_STRIDE)
+        if i < _row_count:
+            row.visible = true
+            row.modulate.a = 1.0
+        else:
+            row.visible = false
+    _action_bar.modulate.a = 1.0
+    _action_bar.position.y = ACTION_Y
+
+func _enable_actions() -> void:
+    for id in _actions:
+        var button: Button = _actions[id]["button"]
+        button.disabled = false
+        button.mouse_filter = Control.MOUSE_FILTER_STOP
+        if _cursor != null:
+            _cursor.add_target(button)
+
+func _seed_focus() -> void:
+    # Controller/keyboard focus seeds REMATCH through its authored anchor; a
+    # mouse user keeps the pointer and no focus ring appears (Doc 06 §15).
+    if _cursor == null or _interactive == false:
+        return
+    if _cursor.mode == 1:
+        var spec: Dictionary = _actions["rematch"]
+        spec["button"].grab_focus()
+        _cursor.set_focus_target(spec["anchor"])
+
+func _on_cursor_modality(mouse_mode: bool) -> void:
+    if mouse_mode or not _interactive:
+        return
+    _seed_focus()
+
+# --- actions ---------------------------------------------------------------
+
+func _on_action_pressed(action_id: String) -> void:
+    match action_id:
+        "rematch":
+            rematch_requested.emit()
+        "setup":
+            setup_requested.emit()
+        "stage":
+            stage_requested.emit()
+        "menu":
+            menu_requested.emit()
+
+func _on_action_focus(action_id: String, focused: bool) -> void:
+    _focus_action = action_id if focused else ("" if _focus_action == action_id else _focus_action)
+    if focused and _cursor != null and _cursor.mode == 1:
+        _cursor.set_focus_target(_actions[action_id]["anchor"])
+    _refresh_action_emphasis()
+
+func _on_action_hover(action_id: String, hovered: bool) -> void:
+    # A stationary pointer must not take over the screen (mouse intent §5).
+    if _cursor != null and not _cursor.is_mouse_active():
+        return
+    _hover_action = action_id if hovered else ("" if _hover_action == action_id else _hover_action)
+    _refresh_action_emphasis()
+
+func _refresh_action_emphasis() -> void:
+    for id in _actions:
+        var spec: Dictionary = _actions[id]
+        var button: Button = spec["button"]
+        var emphasized: bool = id == _focus_action or id == _hover_action
+        spec["underline"].visible = emphasized
+        button.add_theme_color_override("font_color", Tokens.CREAM if (emphasized or bool(spec["primary"])) else Tokens.CREAM_DIM)
+
+# --- input -----------------------------------------------------------------
+
+func _input(event: InputEvent) -> void:
+    # Runs before the GUI stage. CRITICAL: guard on is_visible_in_tree() — the
+    # node's own `visible` stays true while the parent panel is hidden, and
+    # consuming events then would swallow every GUI click in the whole game
+    # (this exact regression was caught in a live check).
+    if not is_visible_in_tree():
+        return
+    if not _reveal_active or _reveal_tick < SAFETY_TICKS:
+        return
+    if not _is_confirm_press(event):
+        return
+    finish_reveal()
+    get_viewport().set_input_as_handled()
+
+func _is_confirm_press(event: InputEvent) -> bool:
+    if event is InputEventMouseButton:
+        return event.pressed and event.button_index == MOUSE_BUTTON_LEFT
+    if event is InputEventKey:
+        return event.pressed and not event.echo and event.keycode in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]
+    if event is InputEventJoypadButton:
+        return event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]
+    return false
+
+# --- helpers ---------------------------------------------------------------
+
+func _start(node: Object, property_path: String, value, seconds: float) -> void:
+    var tween := create_tween()
+    tween.tween_property(node, property_path, value, seconds).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    _tweens.append(tween)
+
+func _kill_tweens() -> void:
+    for tween in _tweens:
+        if tween != null and tween.is_valid():
+            tween.kill()
+    _tweens.clear()
+
+func _label(parent: Node, text: String, font_size: int, color: Color, rect: Rect2, align := HORIZONTAL_ALIGNMENT_LEFT) -> Label:
     var label := Label.new()
     label.text = text
     label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -247,413 +650,56 @@ func _make_label(parent: Node, text: String, font_size: int, color: Color, rect:
     parent.add_child(label)
     return label
 
-func _make_plate(parent: Node, rect: Rect2, bg: Color, border: Color, width: int, radius: int) -> Panel:
+func _plate(parent: Node, rect: Rect2, bg: Color, radius: int) -> Panel:
     var plate := Panel.new()
     plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
     plate.position = rect.position
     plate.size = rect.size
-    plate.add_theme_stylebox_override("panel", Tokens.flat(bg, border, width, radius))
+    plate.add_theme_stylebox_override("panel", Tokens.flat(bg, Color(0, 0, 0, 0), 0, radius))
     parent.add_child(plate)
     return plate
 
-func _nav_button(node_name: String, text: String, at: Vector2, action: Callable) -> Button:
-    var button := Button.new()
-    button.name = node_name
-    button.text = text
-    button.position = at
-    button.size = Vector2(44.0, 44.0)
-    button.add_theme_font_size_override("font_size", Tokens.T_NAV)
-    Tokens.apply_styles(button, _secondary_styles())
-    button.pressed.connect(action)
-    _inspector.add_child(button)
-    return button
+func _measure(label: Label) -> float:
+    var font := label.get_theme_font("font")
+    if font == null:
+        return 360.0
+    return font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")).x
 
-func _action_button(node_name: String, text: String, width: float, primary: bool, action: Callable) -> Button:
-    var button := Button.new()
-    button.name = node_name
-    button.text = text
-    button.custom_minimum_size = Vector2(width, ACTIONS_H)
-    button.add_theme_font_size_override("font_size", Tokens.T_ACTION)
-    Tokens.apply_styles(button, _primary_styles() if primary else _secondary_styles())
-    button.pressed.connect(action)
-    _actions.add_child(button)
-    return button
-
-func _primary_styles() -> Dictionary:
-    return {
-        "normal": Tokens.flat(Tokens.SURFACE_2, Tokens.ACCENT, Tokens.STROKE_STRONG, Tokens.RADIUS_PLATE),
-        "hover": Tokens.flat(Tokens.SURFACE_HI, Tokens.ACCENT, Tokens.STROKE_STRONG, Tokens.RADIUS_PLATE),
-        "pressed": Tokens.flat(Tokens.SURFACE_HI, Tokens.ACCENT, Tokens.STROKE_SELECT, Tokens.RADIUS_PLATE),
-        "focus": Tokens.flat(Tokens.SURFACE_2, Tokens.ACCENT, Tokens.STROKE_STRONG, Tokens.RADIUS_PLATE),
-    }
-
-func _secondary_styles() -> Dictionary:
-    return {
-        "normal": Tokens.flat(Tokens.SURFACE_1, Tokens.RULE, Tokens.STROKE, Tokens.RADIUS_PLATE),
-        "hover": Tokens.flat(Tokens.SURFACE_2, Tokens.RULE_WARM, Tokens.STROKE, Tokens.RADIUS_PLATE),
-        "pressed": Tokens.flat(Tokens.SURFACE_2, Tokens.ACCENT, Tokens.STROKE_STRONG, Tokens.RADIUS_PLATE),
-        "focus": Tokens.flat(Tokens.SURFACE_1, Tokens.ACCENT, Tokens.STROKE_STRONG, Tokens.RADIUS_PLATE),
-    }
-
-# --- show / navigation API ------------------------------------------------
-
-func show_results(rows: Array, allow_stage_change := false) -> void:
-    _pages = rows if rows != null else []
-    _page = 0
-    _phase = 0
-    _wait = WAIT_TICKS / FPS
-    _reveal_done = false
-    _reveal_pending = 0
-    for tween in _reveal_tweens:
-        if tween != null and tween.is_valid():
-            tween.kill()
-    _reveal_tweens.clear()
-    _stage_button.visible = allow_stage_change
-    # Results always uses the regular cursor (PC usability): the hand re-anchors
-    # at the real pointer position (read-only, never warped) and needs genuine
-    # mouse motion before the pointer drives hover on this screen again.
-    if _cursor != null:
-        _cursor.visible = true
-        _cursor.clear_carry()
-        _cursor.press_frame_enabled = true
-        _cursor.reset_for_screen()
-    _compute_ranks()
-    _stack_panes()
-    _ensure_hero()
-    _apply_hero()
-    _apply_panes()
-    _apply_page()
-    _stage_wait_frame()
-    # Winner payoff pops in immediately (screen-level motion band).
-    _hero_col.modulate.a = 0.45
-    _hero_col.scale = Vector2(0.94, 0.94)
-    banner.show()
-    var pop := create_tween()
-    pop.tween_property(_hero_col, "modulate:a", 1.0, 0.18).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    pop.parallel().tween_property(_hero_col, "scale", Vector2.ONE, HERO_POP_SECONDS).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-func _select_page(index: int) -> void:
-    if index < 0 or index >= _pages.size():
-        return
-    _page = index
-    _apply_page()
-
-func is_waiting() -> bool:
-    return _phase == 0
-
-func skip_wait() -> void:
-    if _phase == 0:
-        _wait = 0.0
-        _enter_interactive()
-
-func get_page_count() -> int:
-    return _pages.size()
-
-func get_page_index() -> int:
-    return _page
-
-func get_page_name() -> String:
-    return str(_pages[_page]["name"]) if _page >= 0 and _page < _pages.size() else ""
-
-func get_page_stocks() -> int:
-    return int(_pages[_page]["stocks"]) if _page >= 0 and _page < _pages.size() else 0
-
-func get_page_damage() -> int:
-    return int(_pages[_page]["damage"]) if _page >= 0 and _page < _pages.size() else 0
-
-func get_hero_id() -> String:
-    # Resolved roster id of the winner hero ("" when no model can be shown).
-    return _hero_id
-
-func next_page() -> void:
-    if _phase == 0:
-        skip_wait()
-        return
-    if _pages.is_empty():
-        return
-    _page = (_page + 1) % _pages.size()
-    _apply_page()
-
-func prev_page() -> void:
-    if _phase == 0:
-        skip_wait()
-        return
-    if _pages.is_empty():
-        return
-    _page = (_page - 1 + _pages.size()) % _pages.size()
-    _apply_page()
-
-# --- phase flow -----------------------------------------------------------
-
-func _process(delta: float) -> void:
-    if _phase == 0 and _wait > 0.0:
-        _wait = maxf(_wait - delta, 0.0)
-        if _wait <= 0.0:
-            _enter_interactive()
-
-func _enter_interactive() -> void:
-    if _phase == 1 or not is_visible_in_tree():
-        return
-    _phase = 1
-    _hint.hide()
-    _reveal_done = false
-    _reveal_pending = 0
-    _standings_head.show()
-    _standings_rule.show()
-    _inspector.show()
-    _inspector.modulate.a = 0.0
-    _actions.show()
-    _actions.modulate.a = 0.0
-    _actions.position.y = _actions_home_y + 10.0
-    for i in _panes.size():
-        var entry: Dictionary = _panes[i]
-        var box: Button = entry["box"]
-        if i >= _pages.size():
-            continue
-        box.show()
-        box.modulate.a = 0.0
-        var home: Vector2 = entry["home"]
-        box.position = home + Vector2(-18.0, 0.0)
-    # Staged pane reveal: 1ST lands first, then down the placements (own clocks).
-    for i in _panes.size():
-        if i >= _pages.size():
-            continue
-        var entry: Dictionary = _panes[i]
-        var box: Button = entry["box"]
-        var home: Vector2 = entry["home"]
-        var place: int = int(_ranks.get(i, i))
-        var delay: float = PANE_REVEAL_STEP * float(place)
-        var pane_tween := create_tween()
-        pane_tween.tween_property(box, "modulate:a", 1.0, PANE_REVEAL_SECONDS).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-        pane_tween.parallel().tween_property(box, "position:x", home.x, PANE_REVEAL_SECONDS).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-        pane_tween.finished.connect(_on_pane_reveal_done)
-        _reveal_tweens.append(pane_tween)
-        _reveal_pending += 1
-    # Inspector + actions resolve right behind the panes.
-    var settle := create_tween()
-    settle.tween_property(_inspector, "modulate:a", 1.0, FADE_SECONDS).set_delay(0.10).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    settle.parallel().tween_property(_actions, "modulate:a", 1.0, FADE_SECONDS).set_delay(0.10).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    settle.parallel().tween_property(_actions, "position:y", _actions_home_y, FADE_SECONDS).set_delay(0.10).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    # Focus lands on Rematch like the old panel did; the hand never moves on
-    # focus (mouse-intent brief §5), so this only paints the button's frame.
-    _rematch.grab_focus()
-    if _reveal_pending == 0:
-        _reveal_finished()
-
-func _on_pane_reveal_done() -> void:
-    _reveal_pending = maxi(_reveal_pending - 1, 0)
-    if _reveal_pending == 0:
-        _reveal_finished()
-
-func _reveal_finished() -> void:
-    _reveal_done = true
-    _apply_page()
-
-# --- data / presentation --------------------------------------------------
-
-func _compute_ranks() -> void:
-    _ranks = {}
-    var order := _place_order()
-    for place in order.size():
-        _ranks[int(order[place])] = place
-
-func _stack_panes() -> void:
-    # Standings read top-to-bottom by placement: the winner sits on top.
-    # Node identity (ResultPane{i} -> page i) is untouched, only the slot.
-    for i in _panes.size():
-        if i >= _pages.size():
-            continue
-        var entry: Dictionary = _panes[i]
-        var place: int = int(_ranks.get(i, i))
-        var home := Vector2(RIGHT_X, PANE_Y0 + place * PANE_STRIDE)
-        entry["home"] = home
-        var box: Button = entry["box"]
-        box.position = home
-
-func _place_order() -> Array:
-    var order: Array = []
-    for i in _pages.size():
-        order.append(i)
-    order.sort_custom(_is_ranked_higher)
-    return order
-
-func _is_ranked_higher(a: int, b: int) -> bool:
-    # Placement ranking: stocks first, then damage taken.
-    var sa: int = int(_pages[a].get("stocks", 0))
-    var sb: int = int(_pages[b].get("stocks", 0))
-    if sa != sb:
-        return sa > sb
-    return int(_pages[a].get("damage", 0)) < int(_pages[b].get("damage", 0))
-
-func _winner_row() -> Dictionary:
-    var order := _place_order()
-    if order.is_empty():
-        return {}
-    var row: Dictionary = _pages[int(order[0])]
-    # A draw (nobody left standing) keeps the text-only payoff.
-    return row if int(row.get("stocks", 0)) > 0 else {}
-
-func _color_for_row(row: Dictionary) -> Color:
+func _player_color(player_index: int) -> Color:
     var colors: Array = Tokens.PLAYER_COLORS
-    var idx := int(row.get("index", 1)) - 1
-    var color: Color = colors[posmod(idx, colors.size())]
-    return color
+    return colors[posmod(player_index - 1, colors.size())]
 
-func _resolve_hero_id(row: Dictionary) -> String:
-    # Rows carry the display name (not the roster id): prefer an explicit id,
-    # then match the display name back to the roster. "" = no model.
-    var given := str(row.get("id", ""))
-    if given != "" and Roster.ids().has(given):
-        return given
-    var wanted := str(row.get("name", "")).strip_edges().to_upper()
-    if wanted == "":
-        return ""
-    for candidate in Roster.ids():
-        if Roster.display_name(str(candidate)).to_upper() == wanted:
-            return str(candidate)
-    return ""
+func _placement_text(place: int) -> String:
+    var suffix := "TH"
+    if place % 100 < 11 or place % 100 > 13:
+        match place % 10:
+            1:
+                suffix = "ST"
+            2:
+                suffix = "ND"
+            3:
+                suffix = "RD"
+    return "%d%s" % [place, suffix]
 
-func _ensure_hero() -> void:
-    if _hero != null:
-        return
-    _hero = HeroRigScript.new()
-    _hero.position = Vector2.ZERO
-    _hero.size = Vector2(HERO_W, HERO_VIEW_H)
-    _hero.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    _hero_col.add_child(_hero)
-    _hero_col.move_child(_hero, 1)  # plate, model, fallback text, wording
+# --- test surface ----------------------------------------------------------
 
-func _apply_hero() -> void:
-    var winner := _winner_row()
-    _hero_id = _resolve_hero_id(winner) if not winner.is_empty() else ""
-    _hero.show()
-    if _hero.is_node_ready():
-        _hero.set_fighter(_hero_id)
-    else:
-        _hero.ready.connect(_flush_hero, CONNECT_ONE_SHOT)
-    var winner_name := str(winner.get("name", "")) if not winner.is_empty() else ""
-    if winner.is_empty():
-        _caption_bar.add_theme_stylebox_override("panel", Tokens.flat(Tokens.RULE, Color(0, 0, 0, 0), 0, Tokens.RADIUS_FLAT))
-        _winner_tag.hide()
-        _winner_who.hide()
-    else:
-        var pc: Color = _color_for_row(winner)
-        _caption_bar.add_theme_stylebox_override("panel", Tokens.flat(pc, Color(0, 0, 0, 0), 0, Tokens.RADIUS_FLAT))
-        _winner_tag.show()
-        _winner_tag.text = "WINNER"
-        _winner_who.show()
-        _winner_who.text = "P%d" % int(winner.get("index", 0))
-        _winner_who.add_theme_color_override("font_color", pc)
-    # No model resolved (unknown id / draw): keep the text hero, never crash.
-    if _hero_id == "" and winner_name != "":
-        _hero_text.text = winner_name
-        _hero_text.show()
-    else:
-        _hero_text.hide()
-    if str(banner.text).strip_edges() == "":
-        banner.text = ("P%d %s WINS!" % [int(winner.get("index", 0)), winner_name]) if not winner.is_empty() else "DRAW"
+func get_result():
+    return _result
 
-func _flush_hero() -> void:
-    if _hero != null:
-        _hero.set_fighter(_hero_id)
+func is_interactive() -> bool:
+    return _interactive
 
-func _stage_wait_frame() -> void:
-    # Wait phase: only the title, the winner payoff and the hint are on screen.
-    for entry in _panes:
-        var box: Button = entry["box"]
-        var home: Vector2 = entry["home"]
-        box.modulate.a = 0.0
-        box.position = home
-        box.hide()
-    _standings_head.hide()
-    _standings_rule.hide()
-    _inspector.hide()
-    _actions.hide()
-    _hint.show()
+func is_revealing() -> bool:
+    return _reveal_active
 
-func _apply_panes() -> void:
-    for i in _panes.size():
-        var entry: Dictionary = _panes[i]
-        var box: Button = entry["box"]
-        if i >= _pages.size():
-            box.hide()
-            continue
-        var row: Dictionary = _pages[i]
-        var place: int = int(_ranks.get(i, i))
-        box.show()
-        var pc: Color = _color_for_row(row)
-        var plate: Panel = entry["plate"]
-        plate.add_theme_stylebox_override("panel", Tokens.flat(pc, Color(0, 0, 0, 0), 0, Tokens.RADIUS_FLAT))
-        var rank_label: Label = entry["rank"]
-        rank_label.text = ["1ST", "2ND", "3RD", "4TH"][mini(place, 3)]
-        rank_label.add_theme_color_override("font_color", Tokens.ACCENT if place == 0 else Tokens.CREAM)
-        var who: Label = entry["who"]
-        who.text = "P%d" % int(row.get("index", i + 1))
-        who.add_theme_color_override("font_color", pc)
-        var pname: Label = entry["name"]
-        pname.text = str(row.get("name", ""))
-        var stocks := int(row.get("stocks", 0))
-        var stocks_label: Label = entry["stocks"]
-        stocks_label.text = "OUT" if stocks <= 0 else ("STOCKS %d" % stocks)
-        var damage_label: Label = entry["damage"]
-        damage_label.text = "DAMAGE %d%%" % int(row.get("damage", 0))
-        _style_pane(box, place == 0)
+func is_outcome_revealed() -> bool:
+    return _outcome_shown
 
-func _style_pane(box: Button, is_winner: bool) -> void:
-    var styles := Tokens.row_styles()
-    if is_winner:
-        styles["normal"] = Tokens.flat(Tokens.SURFACE_HI, Tokens.ACCENT, Tokens.STROKE_STRONG, Tokens.RADIUS_PLATE)
-    Tokens.apply_styles(box, styles)
+func is_row_revealed(index: int) -> bool:
+    return index >= 0 and index < _rows_shown
 
-func _apply_page() -> void:
-    if _pages.is_empty():
-        return
-    var row: Dictionary = _pages[_page]
-    var pc: Color = _color_for_row(row)
-    _insp_plate.add_theme_stylebox_override("panel", Tokens.flat(pc, Color(0, 0, 0, 0), 0, Tokens.RADIUS_FLAT))
-    _name_label.text = str(row.get("name", ""))
-    var stocks := int(row.get("stocks", 0))
-    _stocks_label.text = "OUT" if stocks <= 0 else ("STOCKS %d" % stocks)
-    _damage_label.text = "DAMAGE %d%%" % int(row.get("damage", 0))
-    _page_label.text = "%d / %d" % [_page + 1, _pages.size()]
-    _refresh_pane_emphasis()
+func get_hero_ids() -> Array:
+    return _hero_ids.duplicate()
 
-func _refresh_pane_emphasis() -> void:
-    # The pane being inspected stays bright; the others recede.
-    if not _reveal_done:
-        return
-    for i in _panes.size():
-        if i >= _pages.size():
-            continue
-        var box: Button = _panes[i]["box"]
-        box.modulate.a = 1.0 if i == _page else PANE_DIM
-
-# --- input ----------------------------------------------------------------
-
-func _input(event: InputEvent) -> void:
-    # Runs before the GUI: LEFT/RIGHT must walk the pages here, otherwise a
-    # focused button eats them as focus navigation (same for the first input
-    # that starts the panels early).
-    # CRITICAL: guard on is_visible_in_tree(). The node's own `visible` stays
-    # true while the parent panel is hidden - consuming events then would
-    # swallow every GUI click in the whole game. This exact regression ate all
-    # mouse clicks until it was caught in a live check.
-    if not is_visible_in_tree():
-        return
-    if _phase == 0:
-        if event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ESCAPE, KEY_R]:
-            return  # Esc (leave) and R (rematch) keep working during the wait
-        if event is InputEventMouseButton and event.pressed:
-            skip_wait()
-            get_viewport().set_input_as_handled()
-        elif event is InputEventKey and event.pressed and not event.echo:
-            skip_wait()
-            get_viewport().set_input_as_handled()
-        return
-    if event is InputEventKey and event.pressed and not event.echo:
-        if event.keycode == KEY_LEFT:
-            prev_page()
-            get_viewport().set_input_as_handled()
-        elif event.keycode == KEY_RIGHT:
-            next_page()
-            get_viewport().set_input_as_handled()
+func get_accent_color() -> Color:
+    return _accent

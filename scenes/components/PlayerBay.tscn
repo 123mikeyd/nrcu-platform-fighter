@@ -1,0 +1,47 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/frontend/player_bay.gd" id="1_bay"]
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="2_anchor"]
+
+[node name="PlayerBay" type="Control"]
+offset_right = 284.0
+offset_bottom = 268.0
+script = ExtResource("1_bay")
+
+[node name="BayPlate" type="Panel" parent="."]
+
+[node name="PlayerHeader" type="Control" parent="."]
+
+[node name="HeaderPlate" type="Panel" parent="PlayerHeader"]
+
+[node name="PlayerBlock" type="Panel" parent="PlayerHeader"]
+
+[node name="PlayerLabel" type="Label" parent="PlayerHeader"]
+text = "P1"
+
+[node name="KindControl" type="Button" parent="PlayerHeader"]
+text = "HMN"
+
+[node name="FighterRenderArea" type="Control" parent="."]
+
+[node name="FighterNamePlate" type="Control" parent="."]
+
+[node name="FighterName" type="Label" parent="FighterNamePlate"]
+
+[node name="SecondaryControls" type="Control" parent="."]
+
+[node name="DifficultyRow" type="Control" parent="SecondaryControls"]
+
+[node name="DifficultyLabel" type="Label" parent="SecondaryControls/DifficultyRow"]
+text = "CPU"
+
+[node name="DifficultyControl" type="Button" parent="SecondaryControls/DifficultyRow"]
+text = "NORMAL"
+
+[node name="TeamControl" type="Button" parent="SecondaryControls"]
+text = "TEAM A"
+
+[node name="ActiveNotch" type="Panel" parent="."]
+
+[node name="CursorAnchor" type="Control" parent="."]
+script = ExtResource("2_anchor")

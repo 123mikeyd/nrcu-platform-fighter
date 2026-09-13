@@ -1,388 +1,490 @@
 extends Control
-# Main Menu (visual spec §12). Not a translucent panel with four rounded
-# buttons: an authored composition — wordmark + rule on the left, a vertical
-# stack of long option bands, and a context region on the right that answers
-# the selected option (descriptor + geometric motif). Selection uses three
-# coordinated layers (plate appears, material/label change, ONE accent bar),
-# never a blinking outline. The composition stands on its own on a neutral
-# background; the temporary shelf art is atmosphere, not structure.
+# NRCU Main Menu — Doc 03 "Selection Rail" (design locked, 1280x720 reference).
 #
-# The title/start screen is its own scene (scenes/title.tscn): BOOT -> TITLE
-# -> this menu.
+# The composition is AUTHORED: scenes/home.tscn holds the abstract dark field,
+# the small header and four MenuRow components (scenes/components/MenuRow.tscn:
+# HitArea / ActivePlate / Label / QuietRail / ActiveRail / CursorAnchor).
+# This script owns only what Doc 03 §23 assigns it — destination data, the
+# selected index, navigation, semantic confirm, row-state orchestration and the
+# screen transition event. It never builds the fixed visual tree, never scales
+# the page in, never pulses anything during idle and never moves the physical
+# mouse.
+#
+# Selection is immediate and interruptible: every accepted change retargets
+# that row's tweens (outgoing plate/rail retract over ~10 frames, incoming rail
+# draws over ~12, label settles over ~9) with overlap and no input gating, so
+# rapid navigation can never queue animations or block the player.
+#
+# Navigation: the authored CursorAnchors decide where the focus hand settles;
+# mouse hover only drives selection after genuine pointer motion (the cursor
+# service arms hover per screen), so a freshly entered screen never inherits
+# stale hover. Quit is an in-place modal over the still-mounted Main (Doc 07
+# §9-10); OS close_requested takes the same confirmation path.
 
-const Style = preload("res://scripts/demo_style.gd")
 const Tokens = preload("res://scripts/ui_tokens.gd")
+const Style = preload("res://scripts/demo_style.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
 
-const BAND_X := 64.0
-const BAND_W := 470.0
-const BAND_H := 62.0
-const BAND_GAP := 8.0
-const BAND_TOP := 236.0
-const BAND_GROW := 12.0
-const CONTEXT_RECT := Rect2(620.0, 236.0, 596.0, 286.0)
+const MATCH_SCENE := "res://scenes/main.tscn"
 
-var buttons: Dictionary = {}
-var page: Control
+# Destination data (Doc 03 §2) in authored visual order.
+const DESTINATIONS: Array = [
+    {"id": "play", "label": "PLAY", "event": "main_play"},
+    {"id": "story", "label": "STORY MODE", "event": "main_story"},
+    {"id": "help", "label": "HOW TO PLAY", "event": "main_help"},
+    {"id": "quit", "label": "QUIT", "event": "main_quit"},
+]
+const ROW_NODES: Array = ["MenuRow_Play", "MenuRow_Story", "MenuRow_Help", "MenuRow_Quit"]
+
+# The rail's authored length (832 px: x 112 -> 944 at 1280x720) is read from
+# the MenuRow component; home.gd never decides composition geometry.
+const RAIL_LEAD := 72.0          # exit-transition lead extension (reach 1016)
+const QUIET_ALPHA := 0.55
+const LABEL_SHIFT := 9.0
+const ACTIVE_SIZE := 36
+const INACTIVE_SIZE := 26
+
+# Motion grammar in frames @60 (Doc 03 §13 / §14).
+const OUT_FRAMES := 10
+const RAIL_FRAMES := 12
+const PLATE_FRAMES := 10
+const LABEL_FRAMES := 9
+const ENTRY_FRAMES := 10
+const ENTRY_STAGGER := 3
+const OVERLAY_FRAMES := 8
+const EXIT_FRAMES := 10
+const FADE_FRAMES := 12
+
+# Lightweight selection memory: returning from a subpage (How to Play, the
+# Quit confirmation, a match) restores the destination that was selected.
+static var _last_selected := 0
+
 var state := "home"
-var _page_lock := 0.0
+var buttons: Dictionary = {}
+
 var _rows: Array = []
-var _motif: Control
-var _context_title: Label
-var _context_body: Label
-var _context_label: Label
-var _accent_rule: Panel
-var _ambient := 0.0
 var _selected := 0
+var _modal_open := false
+var _exiting := false
+var _help_page: Control = null
+var _row_tweens: Dictionary = {}
 
-func _ready():
+@onready var _header: Control = $ReferenceFrame/Header
+@onready var _nav: Control = $ReferenceFrame/Navigation
+@onready var _page_layer: Control = $ReferenceFrame/PageLayer
+@onready var _overlay: Control = $ReferenceFrame/QuitOverlay
+@onready var _plate: Panel = $ReferenceFrame/QuitOverlay/Plate
+@onready var _action_stay: Button = $ReferenceFrame/QuitOverlay/Plate/ActionStay
+@onready var _action_quit: Button = $ReferenceFrame/QuitOverlay/Plate/ActionQuit
+@onready var _stay_rail: Panel = $ReferenceFrame/QuitOverlay/Plate/StayRail
+@onready var _quit_rail: Panel = $ReferenceFrame/QuitOverlay/Plate/QuitRail
+@onready var _anchor_stay: Control = $ReferenceFrame/QuitOverlay/Plate/AnchorStay
+
+func _ready() -> void:
     get_window().title = "NRCU — Friend Demo"
-    get_window().min_size = Vector2i(800,450)
-    theme = Style.make()
-    var background := TextureRect.new()
-    background.name = "ShelfBackground"
-    background.texture = load("res://assets/menu/shelf_background.png")
-    background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(background)
+    theme = Tokens.make_theme()
     get_tree().auto_accept_quit = false
-    get_window().close_requested.connect(func(): show_page("quit"))
+    get_window().close_requested.connect(_open_quit_modal)
+    _collect_rows()
+    _style_nodes()
+    _wire_modal()
     show_page("home")
-    # Screen entry never warps the pointer and never inherits hover.
-    var cursor = get_node_or_null("/root/Cursor")
-    if cursor != null and cursor.hand != null:
-        cursor.hand.reset_for_screen()
+    var hand = _hand()
+    if hand != null:
+        hand.begin_screen("main")
+        if not hand.hover_changed.is_connected(_on_hover_changed):
+            hand.hover_changed.connect(_on_hover_changed)
+        if hand.mode == 1:
+            hand.set_focus_target(_rows[_selected]["anchor"])
+    _entry()
+    # Title -> Main continuity: the held Title frame fades out over the fresh
+    # composition on the persistent Frontend layer, never a cut to black.
+    Frontend.release(0.28)
 
-func _process(delta: float) -> void:
-    if _page_lock > 0.0:
-        _page_lock = maxf(_page_lock - delta, 0.0)
-    # Ambient: the accent rule under the wordmark breathes on its own clock,
-    # independent of any selection response.
-    _ambient += delta
-    if _accent_rule != null and is_instance_valid(_accent_rule):
-        _accent_rule.modulate = Color(1, 1, 1, 0.78 + 0.22 * (0.5 + 0.5 * sin(TAU * _ambient / 3.6)))
-
-func _nav(action: Callable) -> void:
-    # Input hygiene (Doc 01 §3.1): swallow page changes within a short window.
-    if _page_lock > 0.0:
-        return
-    _page_lock = 0.1
-    action.call()
-
-func _animate_page() -> void:
-    # 20F one-shot page enter (Doc 01 §4.1).
-    if page == null:
-        return
-    page.pivot_offset = Vector2.ZERO
-    page.modulate.a = 0.0
-    page.scale = Vector2(0.97, 0.95)
-    var tween := create_tween().set_parallel()
-    tween.tween_property(page, "modulate:a", 1.0, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    tween.tween_property(page, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-
-func show_page(next: String):
-    state = next
-    buttons.clear()
+# --- fixed composition (authored in home.tscn; colors resolved from tokens) --
+func _collect_rows() -> void:
     _rows.clear()
-    _motif = null
-    _context_label = null
-    _context_title = null
-    _context_body = null
-    _accent_rule = null
-    if is_instance_valid(page):
-        remove_child(page)
-        page.queue_free()
-    page = Control.new()
-    page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    add_child(page)
-    if next == "help":
-        var help = Style.help(page, func(): show_page("home"))
-        buttons["home"] = help.find_child("HelpBack",true,false)
-        _animate_page()
-        return
-    if next == "home":
-        _build_wordmark()
-        _build_menu_bands()
-        _build_context_region()
-    else:
-        var title := Label.new()
-        title.text = "Leave the room?"
-        title.position = Vector2(64, 240)
-        title.add_theme_font_size_override("font_size", Tokens.T_SCREEN)
-        page.add_child(title)
-        _build_quit_rows()
-    var values = buttons.values().filter(func(b): return b.visible)
-    for i in values.size():
-        values[i].focus_neighbor_bottom = values[(i+1)%values.size()].get_path()
-        values[i].focus_neighbor_top = values[(i-1+values.size())%values.size()].get_path()
-    values[0].grab_focus()
-    _on_row_selected(0)
-    _animate_page()
+    buttons.clear()
+    for i in ROW_NODES.size():
+        var row: Control = _nav.get_node(str(ROW_NODES[i]))
+        var entry := {
+            "root": row,
+            "hit": row.get_node("HitArea"),
+            "plate": row.get_node("ActivePlate"),
+            "label": row.get_node("Label"),
+            "quiet": row.get_node("QuietRail"),
+            "rail": row.get_node("ActiveRail"),
+            "anchor": row.get_node("CursorAnchor"),
+            "label_x": row.get_node("Label").position.x,
+            "rail_w": (row.get_node("ActiveRail") as Panel).size.x,
+        }
+        (entry["label"] as Label).text = str(DESTINATIONS[i]["label"])
+        var hit: Button = entry["hit"]
+        hit.pressed.connect(_confirm_index.bind(i))
+        hit.focus_entered.connect(_on_row_focus.bind(i))
+        var next_hit: Button = _nav.get_node(str(ROW_NODES[(i + 1) % ROW_NODES.size()])).get_node("HitArea")
+        var prev_hit: Button = _nav.get_node(str(ROW_NODES[(i - 1 + ROW_NODES.size()) % ROW_NODES.size()])).get_node("HitArea")
+        hit.focus_neighbor_bottom = hit.get_path_to(next_hit)
+        hit.focus_neighbor_top = hit.get_path_to(prev_hit)
+        _rows.append(entry)
+        buttons[str(DESTINATIONS[i]["id"])] = hit
 
-func _build_wordmark() -> void:
-    var title := Label.new()
-    title.text = "NRCU"
-    title.position = Vector2(Tokens.MARGIN - 8.0, 48.0)
-    title.add_theme_font_size_override("font_size", 104)
-    page.add_child(title)
-    _accent_rule = Panel.new()
-    _accent_rule.name = "TitleRule"
-    _accent_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    _accent_rule.position = Vector2(Tokens.MARGIN, 176.0)
-    _accent_rule.size = Vector2(252.0, 3.0)
-    _accent_rule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
-    page.add_child(_accent_rule)
-    var caption := Tokens.meta_label("PLATFORM FIGHTER")
-    caption.position = Vector2(Tokens.MARGIN + 2.0, 188.0)
-    caption.add_theme_font_size_override("font_size", Tokens.T_MICRO)
-    caption.modulate = Color(1, 1, 1, 0.6)
-    page.add_child(caption)
-
-func _build_menu_bands() -> void:
-    var options: Array = [
-        {"label": "Play", "id": "play", "numeral": "01", "action": func(): _nav(func(): _enter("vs")), "title": "PLAY", "context": "Pick fighters and a stage, then fight.", "motif": "versus"},
-        {"label": "Story Mode", "id": "story", "numeral": "02", "action": func(): _nav(func(): _enter("story")), "title": "STORY MODE", "context": "One encounter: you against Bobo.", "motif": "encounter"},
-        {"label": "How to Play", "id": "help", "numeral": "03", "action": func(): _nav(func(): show_page("help")), "title": "HOW TO PLAY", "context": "Moves, rules and controls.", "motif": "guide"},
-        {"label": "Quit", "id": "quit", "numeral": "04", "action": func(): _nav(func(): show_page("quit")), "title": "QUIT", "context": "Leave the room.", "motif": "leave"},
-    ]
-    for i in options.size():
-        var option: Dictionary = options[i]
-        var row := Button.new()
-        row.name = str(option["id"])
-        row.text = ""
-        row.position = Vector2(BAND_X, BAND_TOP + i * (BAND_H + BAND_GAP))
-        row.size = Vector2(BAND_W, BAND_H)
-        Tokens.apply_styles(row, {
-            "normal": _band_style(false),
-            "hover": _band_style(true),
-            "pressed": _band_style(true),
-            "focus": _band_style(true),
+func _style_nodes() -> void:
+    # Abstract dark field: BASE + one broad, low-contrast tonal asymmetry.
+    $FullBleed.color = Tokens.BASE
+    $ReferenceFrame/Field.color = Tokens.BASE
+    $ReferenceFrame/ToneBand.color = Color(Tokens.BG_DEEP, 0.5)
+    $ReferenceFrame/Header/NRCU.add_theme_color_override("font_color", Tokens.CREAM)
+    $ReferenceFrame/Header/HeaderRule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.RULE_WARM))
+    $ReferenceFrame/Header/MainMenuLabel.add_theme_color_override("font_color", Tokens.CREAM_DIM)
+    for entry in _rows:
+        var hit: Button = entry["hit"]
+        # No row chrome of any kind: the plate/rail/label ARE the state, and
+        # the cursor itself carries the input affordance (Doc 03 §17/§26).
+        Tokens.apply_styles(hit, {
+            "normal": Tokens.flat(Color(0, 0, 0, 0)),
+            "hover": Tokens.flat(Color(0, 0, 0, 0)),
+            "pressed": Tokens.flat(Color(0, 0, 0, 0)),
+            "focus": Tokens.flat(Color(0, 0, 0, 0)),
+            "disabled": Tokens.flat(Color(0, 0, 0, 0)),
         })
-        var numeral := Label.new()
-        numeral.text = str(option["numeral"])
-        numeral.position = Vector2(18.0, 0.0)
-        numeral.size = Vector2(48.0, BAND_H)
-        numeral.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-        numeral.add_theme_font_size_override("font_size", Tokens.T_META)
-        numeral.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        row.add_child(numeral)
-        var accent := Panel.new()
-        accent.name = "Accent"
-        accent.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        accent.position = Vector2(0.0, 0.0)
-        accent.size = Vector2(4.0, BAND_H)
-        accent.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
-        accent.visible = false
-        row.add_child(accent)
-        var label := Label.new()
-        label.text = str(option["label"])
-        label.position = Vector2(74.0, 0.0)
-        label.size = Vector2(BAND_W - 120.0, BAND_H)
-        label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-        label.add_theme_font_size_override("font_size", Tokens.T_NAV + 4)
-        label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        row.add_child(label)
-        var rule := Panel.new()
-        rule.name = "Rule"
-        rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        rule.position = Vector2(0.0, BAND_H - 1.0)
-        rule.size = Vector2(BAND_W, 1.0)
-        rule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.RULE))
-        row.add_child(rule)
-        row.pressed.connect(option["action"])
-        row.focus_entered.connect(_on_row_selected.bind(i))
-        row.mouse_entered.connect(_on_row_hovered.bind(i))
-        page.add_child(row)
-        buttons[str(option["id"])] = row
-        _rows.append({"button": row, "accent": accent, "numeral": numeral, "label": label, "title": option["title"], "context": option["context"], "motif": option["motif"]})
-        var cursor = get_node_or_null("/root/Cursor")
-        if cursor != null and cursor.hand != null:
-            cursor.hand.add_target(row)
+        var plate: Panel = entry["plate"]
+        plate.add_theme_stylebox_override("panel", Tokens.flat(Tokens.SURFACE_2, Color(0, 0, 0, 0), 0, Tokens.RADIUS_PLATE))
+        (entry["plate"].get_node("TopRule") as Panel).add_theme_stylebox_override("panel", Tokens.flat(Color(Tokens.ACCENT, 0.28)))
+        plate.modulate.a = 0.0
+        var label: Label = entry["label"]
+        label.add_theme_font_size_override("font_size", INACTIVE_SIZE)
+        label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
+        var quiet: Panel = entry["quiet"]
+        quiet.add_theme_stylebox_override("panel", Tokens.flat(Tokens.RULE_WARM))
+        quiet.modulate.a = QUIET_ALPHA
+        (entry["rail"] as Panel).add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
+    _overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _plate.add_theme_stylebox_override("panel", Tokens.flat(Tokens.SURFACE_1, Tokens.RULE, Tokens.STROKE, Tokens.RADIUS_FLAT))
+    $ReferenceFrame/QuitOverlay/Plate/QuitTitle.add_theme_color_override("font_color", Tokens.CREAM)
+    for action in [_action_stay, _action_quit]:
+        Tokens.apply_styles(action, {
+            "normal": Tokens.flat(Color(0, 0, 0, 0)),
+            "hover": Tokens.flat(Color(0, 0, 0, 0)),
+            "pressed": Tokens.flat(Color(0, 0, 0, 0)),
+            "focus": Tokens.flat(Color(0, 0, 0, 0)),
+        })
+        action.add_theme_font_override("font", Tokens.font("medium"))
+    _stay_rail.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
+    _quit_rail.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
+    _set_modal_focus(true)
 
-func _band_style(selected: bool) -> StyleBoxFlat:
-    # Structural layer 1: the plate itself. Unselected bands are just a quiet
-    # material with a hairline rule; selection adds the plate and the accent.
-    if selected:
-        return Tokens.flat(Tokens.SURFACE_2, Tokens.RULE_WARM, Tokens.STROKE)
-    return Tokens.flat(Color(0.06, 0.11, 0.11, 0.55), Color(0, 0, 0, 0), 0)
+# --- pages (compatibility surface: "home" | "help" | "quit") ---------------
+func show_page(next: String) -> void:
+    match next:
+        "help":
+            _open_help()
+        "quit":
+            _open_quit_modal()
+        _:
+            _open_home()
 
-func _build_context_region() -> void:
-    var frame := Panel.new()
-    frame.name = "ContextFrame"
-    frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    frame.position = CONTEXT_RECT.position
-    frame.size = CONTEXT_RECT.size
-    frame.add_theme_stylebox_override("panel", Tokens.flat(Color(0.06, 0.11, 0.11, 0.62), Tokens.RULE, Tokens.STROKE, Tokens.RADIUS_FRAME))
-    page.add_child(frame)
-    _context_title = Label.new()
-    _context_title.name = "ContextTitle"
-    _context_title.position = CONTEXT_RECT.position + Vector2(28.0, 26.0)
-    _context_title.size = Vector2(CONTEXT_RECT.size.x - 56.0, 40.0)
-    _context_title.add_theme_font_size_override("font_size", Tokens.T_SCREEN)
-    page.add_child(_context_title)
-    _context_body = Tokens.meta_label("")
-    _context_body.name = "ContextBody"
-    _context_body.position = CONTEXT_RECT.position + Vector2(28.0, 74.0)
-    _context_body.size = Vector2(CONTEXT_RECT.size.x - 56.0, 60.0)
-    _context_body.add_theme_font_size_override("font_size", Tokens.T_ACTION)
-    _context_body.modulate = Color(1, 1, 1, 0.85)
-    _context_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    page.add_child(_context_body)
-    _context_label = Label.new()
-    _context_label.name = "ContextLine"
-    _context_label.position = CONTEXT_RECT.position + Vector2(28.0, CONTEXT_RECT.size.y - 40.0)
-    _context_label.size = Vector2(CONTEXT_RECT.size.x - 56.0, 24.0)
-    _context_label.add_theme_font_size_override("font_size", Tokens.T_MICRO)
-    _context_label.modulate = Color(1, 1, 1, 0.5)
-    page.add_child(_context_label)
-
-func _on_row_hovered(index: int) -> void:
-    # Stationary pointers must not take over the menu (mouse intent, brief §5).
-    var cursor = get_node_or_null("/root/Cursor")
-    if cursor != null and cursor.hand != null and not cursor.hand.is_mouse_active():
+func _open_home() -> void:
+    if _exiting:
         return
-    _on_row_selected(index)
+    state = "home"
+    _close_modal()
+    _close_help()
+    _nav.visible = true
+    _nav.modulate.a = 1.0
+    _set_rows_focusable(true)
+    _refresh_targets()
+    select_row(_last_selected, true)
+    if _rows.size() > 0:
+        var hit: Button = _rows[_selected]["hit"]
+        if hit.focus_mode != Control.FOCUS_NONE:
+            hit.grab_focus()
+    var hand = _hand()
+    if hand != null and hand.mode == 1:
+        hand.set_focus_target(_rows[_selected]["anchor"])
 
-func _on_row_selected(index: int) -> void:
-    if index < 0 or index >= _rows.size():
+func _open_help() -> void:
+    # Doc 07 §3-8 locks a structured How to Play; until WP-F rebuilds it, the
+    # legacy demo_style page is mounted as the subpage (quiet, same frame).
+    if _exiting:
+        return
+    state = "help"
+    _close_modal()
+    _nav.visible = false
+    _set_rows_focusable(false)
+    if _help_page == null or not is_instance_valid(_help_page):
+        _help_page = Style.help(_page_layer, func() -> void: show_page("home"))
+    _refresh_targets()
+    var hand = _hand()
+    if hand != null and hand.mode == 1 and _help_page != null:
+        var back := _help_page.find_child("HelpBack", true, false)
+        if back != null:
+            hand.set_focus_target(back)
+
+func _close_help() -> void:
+    if _help_page != null and is_instance_valid(_help_page):
+        _help_page.queue_free()
+    _help_page = null
+
+# --- quit confirmation (in-place modal, Doc 07 §9-10) ----------------------
+func _wire_modal() -> void:
+    _action_stay.pressed.connect(_dismiss_modal)
+    _action_quit.pressed.connect(func() -> void: get_tree().quit())
+    _action_stay.focus_entered.connect(_set_modal_focus.bind(true))
+    _action_quit.focus_entered.connect(_set_modal_focus.bind(false))
+
+func _open_quit_modal() -> void:
+    if _exiting or _modal_open:
+        return
+    if state == "help":
+        show_page("home")
+    _modal_open = true
+    state = "quit"
+    _set_rows_focusable(false)
+    _set_modal_focus(true)
+    _overlay.show()
+    _overlay.modulate.a = 0.0
+    var fade := create_tween()
+    fade.tween_property(_overlay, "modulate:a", 1.0, _sec(OVERLAY_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    _refresh_targets()
+    _action_stay.grab_focus()
+    var hand = _hand()
+    if hand != null and hand.mode == 1:
+        hand.set_focus_target(_anchor_stay)
+
+func _dismiss_modal() -> void:
+    if not _modal_open:
+        return
+    _close_modal()
+    FrontendEvents.emit_back("main")
+    state = "home"
+    _set_rows_focusable(true)
+    _refresh_targets()
+    if _rows.size() > 0:
+        _rows[_selected]["hit"].grab_focus()
+    var hand = _hand()
+    if hand != null and hand.mode == 1:
+        hand.set_focus_target(_rows[_selected]["anchor"])
+
+func _close_modal() -> void:
+    if not _modal_open:
+        _overlay.hide()
+        return
+    _modal_open = false
+    var fade := create_tween()
+    fade.tween_property(_overlay, "modulate:a", 0.0, _sec(OVERLAY_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    fade.tween_callback(_overlay.hide)
+
+func _set_modal_focus(stay_focused: bool) -> void:
+    _stay_rail.visible = stay_focused
+    _quit_rail.visible = not stay_focused
+    _action_stay.add_theme_color_override("font_color", Tokens.CREAM if stay_focused else Tokens.CREAM_DIM)
+    _action_quit.add_theme_color_override("font_color", Tokens.CREAM if not stay_focused else Tokens.CREAM_DIM)
+
+func _set_rows_focusable(enabled: bool) -> void:
+    for entry in _rows:
+        (entry["hit"] as Button).focus_mode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
+
+# --- selection -------------------------------------------------------------
+func selected_index() -> int:
+    return _selected
+
+func menu_rows() -> Array:
+    var out: Array = []
+    for entry in _rows:
+        out.append(entry["root"])
+    return out
+
+func is_quit_modal_open() -> bool:
+    return _modal_open
+
+func quit_modal_rect() -> Rect2:
+    return _plate.get_global_rect()
+
+func select_row(index: int, force := false) -> void:
+    if _exiting or index < 0 or index >= _rows.size():
+        return
+    if index == _selected and not force:
         return
     _selected = index
+    _last_selected = index
     for i in _rows.size():
-        var selected: bool = i == index
-        var accent: Panel = _rows[i]["accent"]
-        accent.visible = selected
-        var row_button: Button = _rows[i]["button"]
-        row_button.position.x = BAND_X + (BAND_GROW if selected else 0.0)
-        row_button.size.x = BAND_W - (BAND_GROW if selected else 0.0)
-        var numeral: Label = _rows[i]["numeral"]
-        numeral.add_theme_color_override("font_color", Tokens.ACCENT if selected else Tokens.CREAM_DIM)
-        var label: Label = _rows[i]["label"]
-        label.add_theme_color_override("font_color", Tokens.CREAM if selected else Tokens.CREAM_DIM)
-    _apply_context(_rows[index])
-    # swap the selection plate material without touching layout bounds
-    _rows[index]["button"].add_theme_stylebox_override("normal", _band_style(true))
-    for i in _rows.size():
-        if i != index:
-            _rows[i]["button"].add_theme_stylebox_override("normal", _band_style(false))
+        _reflect_row_state(i, i == index)
 
-func _apply_context(row: Dictionary) -> void:
-    if _context_title == null or _context_body == null:
+func _reflect_row_state(index: int, active: bool) -> void:
+    # Retarget, never queue: this row's running tweens are killed and rebuilt
+    # from the current presentation values.
+    _kill_row_tweens(index)
+    var entry: Dictionary = _rows[index]
+    var label: Label = entry["label"]
+    var plate: Panel = entry["plate"]
+    var rail: Panel = entry["rail"]
+    var quiet: Panel = entry["quiet"]
+    var base_x: float = entry["label_x"]
+    var tweens: Array = []
+    if active:
+        label.add_theme_font_size_override("font_size", ACTIVE_SIZE)
+        label.add_theme_font_override("font", Tokens.font("medium"))
+        label.add_theme_color_override("font_color", Tokens.CREAM)
+        tweens.append(_tween_prop(label, "position:x", base_x + LABEL_SHIFT, LABEL_FRAMES))
+        quiet.hide()
+        plate.show()
+        tweens.append(_tween_prop(plate, "modulate:a", 1.0, PLATE_FRAMES))
+        rail.show()
+        tweens.append(_tween_prop(rail, "size:x", entry["rail_w"], RAIL_FRAMES))
+    else:
+        label.add_theme_font_size_override("font_size", INACTIVE_SIZE)
+        label.add_theme_font_override("font", Tokens.font("regular"))
+        label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
+        tweens.append(_tween_prop(label, "position:x", base_x, LABEL_FRAMES))
+        if rail.visible:
+            var retract := create_tween()
+            retract.tween_property(rail, "size:x", 0.0, _sec(OUT_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+            retract.tween_callback(rail.hide)
+            tweens.append(retract)
+        if plate.visible:
+            var dim := create_tween()
+            dim.tween_property(plate, "modulate:a", 0.0, _sec(OUT_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+            dim.tween_callback(plate.hide)
+            tweens.append(dim)
+        quiet.modulate.a = QUIET_ALPHA
+        quiet.show()
+    _row_tweens[index] = tweens
+
+func _tween_prop(node: Object, property: String, value, frames: int) -> Tween:
+    var tween := create_tween()
+    tween.tween_property(node, property, value, _sec(frames)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    return tween
+
+func _kill_row_tweens(index: int) -> void:
+    for tween in _row_tweens.get(index, []):
+        if tween != null and tween.is_valid():
+            tween.kill()
+    _row_tweens.erase(index)
+
+func _on_row_focus(index: int) -> void:
+    if _modal_open or state != "home" or index < 0 or index >= _rows.size():
         return
-    _context_title.text = str(row["title"])
-    _context_body.text = str(row["context"])
-    _context_label.text = "ENTER  \u00b7  CLICK"
-    if _motif != null and is_instance_valid(_motif):
-        _motif.queue_free()
-    _motif = _build_motif(str(row["motif"]))
-    var tween := create_tween().set_parallel()
-    tween.tween_property(_context_title, "modulate:a", 1.0, 12.0 / 60.0).from(0.35).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    tween.tween_property(_context_body, "modulate:a", 1.0, 14.0 / 60.0).from(0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    if _motif != null:
-        _motif.modulate.a = 0.0
-        var mt := create_tween()
-        mt.tween_property(_motif, "modulate:a", 1.0, 16.0 / 60.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    select_row(index)
+    var hand = _hand()
+    # Keyboard/pad focus moves the hand to the authored anchor; a mouse click
+    # that happens to focus the row must never hijack the pointer modality.
+    if hand != null and hand.mode == 1:
+        hand.set_focus_target(_rows[index]["anchor"])
 
-func _build_motif(kind: String) -> Control:
-    # Geometric placeholder motifs (final art later): thin bars arranged per
-    # option so the context region answers the selection without illustration.
-    var holder := Control.new()
-    holder.name = "ContextMotif"
-    holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    holder.position = CONTEXT_RECT.position + Vector2(28.0, 158.0)
-    holder.size = Vector2(CONTEXT_RECT.size.x - 56.0, CONTEXT_RECT.size.y - 190.0)
-    page.add_child(holder)
-    var w: float = holder.size.x
-    var h: float = holder.size.y
-    var bar := func(x: float, y: float, bw: float, bh: float, color: Color, alpha := 1.0) -> Panel:
-        var p := Panel.new()
-        p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        p.position = Vector2(x, y)
-        p.size = Vector2(bw, bh)
-        p.add_theme_stylebox_override("panel", Tokens.flat(Color(color, alpha)))
-        holder.add_child(p)
-        return p
-    match kind:
-        "versus":
-            # two opposing blocks with a gap: a duel
-            bar.call(0.0, h * 0.15, w * 0.42, h * 0.7, Tokens.SURFACE_3)
-            bar.call(w * 0.58, h * 0.15, w * 0.42, h * 0.7, Tokens.SURFACE_3)
-            bar.call(w * 0.48, h * 0.3, w * 0.04, h * 0.4, Tokens.ACCENT)
-        "encounter":
-            # a stack of encounter cards
-            for i in 4:
-                bar.call(w * 0.06 * i, h * 0.2 + i * h * 0.16, w * 0.5, h * 0.1, Tokens.SURFACE_3 if i < 3 else Tokens.ACCENT)
-        "guide":
-            # a rule list: lines of a manual
-            for i in 4:
-                bar.call(0.0, i * h * 0.26, w * (0.8 - i * 0.14), 3.0, Tokens.CREAM_DIM, 0.8)
-            bar.call(w * 0.86, 0.0, w * 0.14, h * 0.9, Tokens.SURFACE_3)
-        _:
-            # a door left ajar for QUIT
-            bar.call(w * 0.1, 0.0, w * 0.6, h, Tokens.SURFACE_3)
-            bar.call(w * 0.76, 0.0, 3.0, h, Tokens.CREAM_DIM, 0.7)
-            bar.call(w * 0.62, h * 0.44, w * 0.08, h * 0.12, Tokens.ACCENT)
-    return holder
+func _on_hover_changed(target: Control) -> void:
+    if target == null:
+        return
+    if _modal_open:
+        if target == _action_stay:
+            _action_stay.grab_focus()
+        elif target == _action_quit:
+            _action_quit.grab_focus()
+        return
+    if state != "home":
+        return
+    for i in _rows.size():
+        if _rows[i]["hit"] == target:
+            select_row(i)
+            return
 
-func _build_quit_rows() -> void:
-    var options: Array = [
-        {"label": "Stay here", "id": "home", "action": func(): _nav(func(): show_page("home"))},
-        {"label": "Quit", "id": "exit", "action": func(): _nav(func(): get_tree().quit())},
-    ]
-    for i in options.size():
-        var option: Dictionary = options[i]
-        var row := Button.new()
-        row.name = str(option["id"])
-        row.text = str(option["label"])
-        row.position = Vector2(BAND_X, 320.0 + i * (BAND_H + BAND_GAP))
-        row.size = Vector2(BAND_W, BAND_H)
-        row.add_theme_font_size_override("font_size", Tokens.T_NAV)
-        Tokens.apply_styles(row, Tokens.row_styles())
-        row.pressed.connect(option["action"])
-        page.add_child(row)
-        buttons[str(option["id"])] = row
-        var cursor = get_node_or_null("/root/Cursor")
-        if cursor != null and cursor.hand != null:
-            cursor.hand.add_target(row)
+func _confirm_index(index: int) -> void:
+    if _exiting or _modal_open or state != "home" or index < 0 or index >= _rows.size():
+        return
+    select_row(index)
+    var destination: Dictionary = DESTINATIONS[index]
+    FrontendEvents.emit_confirm(str(destination["event"]))
+    match str(destination["id"]):
+        "play":
+            _leave_to_match("vs")
+        "story":
+            _leave_to_match("story")
+        "help":
+            _open_help()
+        "quit":
+            _open_quit_modal()
 
-func add_button(label: String, id: String, y: float, action: Callable):
-    var b := Button.new()
-    b.name = id
-    b.text = label
-    b.position = Vector2(BAND_X, y)
-    b.size = Vector2(290,62)
-    b.add_theme_font_size_override("font_size", Tokens.T_NAV)
-    Tokens.apply_styles(b, Tokens.row_styles())
-    page.add_child(b)
-    b.pressed.connect(action)
-    buttons[id] = b
+func _refresh_targets() -> void:
+    var hand = _hand()
+    if hand == null:
+        return
+    hand.drop_targets()
+    if _modal_open:
+        hand.add_target(_action_stay)
+        hand.add_target(_action_quit)
+    elif state == "help":
+        if _help_page != null and is_instance_valid(_help_page):
+            var back := _help_page.find_child("HelpBack", true, false)
+            if back != null:
+                hand.add_target(back)
+    elif _nav.visible:
+        for entry in _rows:
+            hand.add_target(entry["hit"])
+
+# --- entry / exit choreography (screen-specific, no page scale-in) ---------
+func _entry() -> void:
+    _header.modulate.a = 0.0
+    var head := create_tween()
+    head.tween_property(_header, "modulate:a", 1.0, _sec(ENTRY_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    for i in _rows.size():
+        for key in ["label", "quiet"]:
+            if key == "quiet" and i == _selected:
+                continue
+            var node: Control = _rows[i][key]
+            var target_alpha: float = node.modulate.a if node.modulate.a > 0.0 else (QUIET_ALPHA if key == "quiet" else 1.0)
+            node.modulate.a = 0.0
+            var tw := create_tween()
+            tw.tween_property(node, "modulate:a", target_alpha, _sec(ENTRY_FRAMES)).set_delay(_sec(4 + ENTRY_STAGGER * i)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+func _leave_to_match(mode: String) -> void:
+    if _exiting:
+        return
+    _exiting = true
+    AppStateScript.enter_mode = mode
+    get_tree().auto_accept_quit = true
+    # Doc 03 §21: the selected warm rail leads the destination transition.
+    if _rows.size() > 0:
+        var rail: Panel = _rows[_selected]["rail"]
+        rail.show()
+        var lead := create_tween()
+        lead.tween_property(rail, "size:x", minf(_rows[_selected]["rail_w"] + RAIL_LEAD, 1016.0), _sec(EXIT_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+        lead.tween_callback(_fade_out_then_go)
+    else:
+        _fade_out_then_go()
+
+func _fade_out_then_go() -> void:
+    var fade := create_tween()
+    fade.tween_property(self, "modulate:a", 0.0, _sec(FADE_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+    fade.tween_callback(_go_to_match)
+
+func _go_to_match() -> void:
+    await Frontend.hold_frame()
+    get_tree().change_scene_to_file(MATCH_SCENE)
+
+# --- input -----------------------------------------------------------------
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("ui_cancel"):
+        get_viewport().set_input_as_handled()
+        if _modal_open:
+            _dismiss_modal()
+        elif state == "help":
+            FrontendEvents.emit_back("help")
+            show_page("home")
+        elif state == "home" and not _exiting:
+            _open_quit_modal()
+        return
+    if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F10 \
+            and OS.is_debug_build() and state == "home" and not _modal_open and not _exiting:
+        # Developer route: the legacy monolithic setup stays reachable.
+        get_viewport().set_input_as_handled()
+        _leave_to_match("debug")
+
+# --- helpers ---------------------------------------------------------------
+func _sec(frames: int) -> float:
+    return FrontendClock.seconds(frames)
+
+func _hand():
     var cursor = get_node_or_null("/root/Cursor")
-    if cursor != null and cursor.hand != null:
-        cursor.hand.add_target(b)
-
-func _enter(mode: String) -> void:
-    # Authored transition: the board eases out before the scene change.
-    _animate_out_then(func():
-        AppStateScript.enter_mode = mode
-        get_tree().auto_accept_quit = true
-        get_tree().change_scene_to_file("res://scenes/main.tscn"))
-
-func _animate_out_then(action: Callable) -> void:
-    if page == null:
-        action.call()
-        return
-    var tween := create_tween().set_parallel()
-    tween.tween_property(page, "modulate:a", 0.0, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-    tween.tween_property(page, "scale", Vector2(0.98, 0.97), 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-    tween.chain().tween_callback(action)
-
-func _unhandled_key_input(event):
-    if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-        show_page("quit" if state == "home" else "home")
-        get_viewport().set_input_as_handled()
-    elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F10 and OS.is_debug_build() and state == "home":
-        # Developer route: the old monolithic setup as a debug launcher,
-        # deliberately not part of the normal player menu.
-        _nav(func(): _enter("debug"))
-        get_viewport().set_input_as_handled()
+    if cursor == null or cursor.hand == null:
+        return null
+    return cursor.hand

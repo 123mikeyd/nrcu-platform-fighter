@@ -1,0 +1,33 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/frontend/fighter_tile.gd" id="1_tile"]
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="2_anchor"]
+
+[node name="FighterTile" type="Control"]
+offset_right = 108.0
+offset_bottom = 82.0
+script = ExtResource("1_tile")
+
+[node name="Backplate" type="Panel" parent="."]
+
+[node name="PortraitFrame" type="Control" parent="."]
+clip_contents = true
+
+[node name="PortraitImage" type="TextureRect" parent="PortraitFrame"]
+
+[node name="PortraitBorder" type="Panel" parent="PortraitFrame"]
+
+[node name="CandidateOverlay" type="Control" parent="."]
+
+[node name="Lift" type="ColorRect" parent="CandidateOverlay"]
+
+[node name="AccentRule" type="Panel" parent="CandidateOverlay"]
+
+[node name="NameBand" type="Panel" parent="."]
+
+[node name="FighterName" type="Label" parent="NameBand"]
+
+[node name="TokenLayer" type="Control" parent="."]
+
+[node name="CursorAnchor" type="Control" parent="."]
+script = ExtResource("2_anchor")

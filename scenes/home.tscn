@@ -1,5 +1,9 @@
-[gd_scene load_steps=2 format=3]
-[ext_resource type="Script" path="res://scripts/home.gd" id="1"]
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/home.gd" id="1_home"]
+[ext_resource type="PackedScene" path="res://scenes/components/MenuRow.tscn" id="2_row"]
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="3_anchor"]
+
 [node name="Home" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -7,4 +11,218 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1")
+mouse_filter = 2
+script = ExtResource("1_home")
+
+[node name="FullBleed" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.078, 0.129, 0.137, 1)
+mouse_filter = 2
+
+[node name="ReferenceFrame" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -640.0
+offset_top = -360.0
+offset_right = 640.0
+offset_bottom = 360.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Field" type="ColorRect" parent="ReferenceFrame"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 720.0
+color = Color(0.078, 0.129, 0.137, 1)
+mouse_filter = 2
+
+[node name="ToneBand" type="ColorRect" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 880.0
+offset_right = 1280.0
+offset_bottom = 720.0
+color = Color(0.051, 0.086, 0.09, 0.5)
+mouse_filter = 2
+
+[node name="Header" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 140.0
+mouse_filter = 2
+
+[node name="NRCU" type="Label" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_left = 96.0
+offset_top = 46.0
+offset_right = 380.0
+offset_bottom = 110.0
+theme_override_font_sizes/font_size = 48
+text = "NRCU"
+
+[node name="HeaderRule" type="Panel" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_left = 96.0
+offset_top = 106.0
+offset_right = 296.0
+offset_bottom = 108.0
+mouse_filter = 2
+
+[node name="MainMenuLabel" type="Label" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_left = 98.0
+offset_top = 112.0
+offset_right = 420.0
+offset_bottom = 136.0
+theme_override_font_sizes/font_size = 13
+text = "M A I N   M E N U"
+
+[node name="Navigation" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 720.0
+mouse_filter = 2
+
+[node name="MenuRow_Play" parent="ReferenceFrame/Navigation" instance=ExtResource("2_row")]
+layout_mode = 0
+offset_left = 64.0
+offset_top = 221.0
+offset_right = 664.0
+offset_bottom = 289.0
+
+[node name="QuietRail" parent="ReferenceFrame/Navigation/MenuRow_Play" index="3"]
+offset_left = 142.0
+offset_right = 270.0
+
+[node name="MenuRow_Story" parent="ReferenceFrame/Navigation" instance=ExtResource("2_row")]
+layout_mode = 0
+offset_left = 64.0
+offset_top = 301.0
+offset_right = 664.0
+offset_bottom = 369.0
+
+[node name="QuietRail" parent="ReferenceFrame/Navigation/MenuRow_Story" index="3"]
+offset_left = 242.0
+offset_right = 368.0
+
+[node name="MenuRow_Help" parent="ReferenceFrame/Navigation" instance=ExtResource("2_row")]
+layout_mode = 0
+offset_left = 64.0
+offset_top = 381.0
+offset_right = 664.0
+offset_bottom = 449.0
+
+[node name="QuietRail" parent="ReferenceFrame/Navigation/MenuRow_Help" index="3"]
+offset_left = 252.0
+offset_right = 368.0
+
+[node name="MenuRow_Quit" parent="ReferenceFrame/Navigation" instance=ExtResource("2_row")]
+layout_mode = 0
+offset_left = 64.0
+offset_top = 461.0
+offset_right = 664.0
+offset_bottom = 529.0
+
+[node name="QuietRail" parent="ReferenceFrame/Navigation/MenuRow_Quit" index="3"]
+offset_left = 142.0
+offset_right = 252.0
+
+[node name="PageLayer" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 720.0
+mouse_filter = 2
+
+[node name="QuitOverlay" type="Control" parent="ReferenceFrame"]
+visible = false
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 720.0
+mouse_filter = 2
+
+[node name="Dim" type="ColorRect" parent="ReferenceFrame/QuitOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.55)
+mouse_filter = 0
+
+[node name="Plate" type="Panel" parent="ReferenceFrame/QuitOverlay"]
+layout_mode = 0
+offset_left = 410.0
+offset_top = 260.0
+offset_right = 870.0
+offset_bottom = 460.0
+
+[node name="QuitTitle" type="Label" parent="ReferenceFrame/QuitOverlay/Plate"]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 28.0
+offset_right = 420.0
+offset_bottom = 68.0
+theme_override_font_sizes/font_size = 30
+text = "QUIT NRCU?"
+
+[node name="ActionStay" type="Button" parent="ReferenceFrame/QuitOverlay/Plate"]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 104.0
+offset_right = 220.0
+offset_bottom = 148.0
+theme_override_font_sizes/font_size = 24
+text = "STAY"
+
+[node name="StayRail" type="Panel" parent="ReferenceFrame/QuitOverlay/Plate"]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 152.0
+offset_right = 220.0
+offset_bottom = 155.0
+mouse_filter = 2
+
+[node name="ActionQuit" type="Button" parent="ReferenceFrame/QuitOverlay/Plate"]
+layout_mode = 0
+offset_left = 240.0
+offset_top = 104.0
+offset_right = 420.0
+offset_bottom = 148.0
+theme_override_font_sizes/font_size = 24
+text = "QUIT"
+
+[node name="QuitRail" type="Panel" parent="ReferenceFrame/QuitOverlay/Plate"]
+layout_mode = 0
+offset_left = 240.0
+offset_top = 152.0
+offset_right = 420.0
+offset_bottom = 155.0
+mouse_filter = 2
+
+[node name="AnchorStay" type="Control" parent="ReferenceFrame/QuitOverlay/Plate"]
+layout_mode = 0
+offset_left = 6.0
+offset_top = 126.0
+offset_right = 6.0
+offset_bottom = 126.0
+mouse_filter = 2
+script = ExtResource("3_anchor")
+
+[node name="AnchorQuit" type="Control" parent="ReferenceFrame/QuitOverlay/Plate"]
+layout_mode = 0
+offset_left = 206.0
+offset_top = 126.0
+offset_right = 206.0
+offset_bottom = 126.0
+mouse_filter = 2
+script = ExtResource("3_anchor")
