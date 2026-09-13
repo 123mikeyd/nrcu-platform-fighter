@@ -7,10 +7,18 @@ extends Control
 # the original mouse events, so keyboard focus and programmatic `.pressed`
 # emissions behave exactly as before.
 #
-# Coordinates: meant to be a full-rect child at its canvas origin, so local
-# space equals canvas space for the game's full-screen UI panels.
+# MOUSE INTENT (frontend brief §5, QA dossier §2.1 — P0):
+#   * the hand never moves itself. Controller/keyboard focus never drags it;
+#     focus is shown by the focused control's own frame, not by the pointer.
+#   * `reset_for_screen()` re-anchors the graphic from the viewport's CURRENT
+#     pointer position (read-only — the OS pointer is never warped).
+#   * a stationary pointer does not take over a newly entered screen: hover is
+#     only evaluated after genuine mouse motion. The last real input modality
+#     arbitrates, exposed via `is_mouse_active()` for screens that care.
+#   * coordinates equal canvas space (full-rect child of the cursor layer).
 
 signal hover_changed(target: Control)
+signal modality_changed(mouse_active: bool)
 
 enum Pose { POINT, HOVER, PRESS }
 
@@ -26,8 +34,8 @@ const LEAN_SCALE := 0.0016
 const LEAN_MAX := 0.38
 const BASE_TILT := -0.42
 const PRESS_SECONDS := 0.12  # minimum tap-frame flash (hold keeps it longer)
-const ATTRACT_SECONDS := 0.9
-const ATTRACT_RELEASE_DIST := 28.0
+# Sub-pixel motion jitter must not count as "the player moved the mouse".
+const MOTION_EPSILON := 0.4
 
 # Texture poses (art in assets/ui; anchors = fingertip in texture space).
 const HAND_SCALE := 0.33
@@ -52,9 +60,6 @@ var _lean := BASE_TILT
 var _pose: Pose = Pose.POINT
 var _press := 0.0
 var _pressed_held := false
-var _attract: Control = null
-var _attract_timer := 0.0
-var _attract_anchor := Vector2.ZERO
 var _started := false
 var _mouse := Vector2.ZERO
 var _tex_point: Texture2D
@@ -62,8 +67,11 @@ var _tex_open: Texture2D
 var _tex_carry: Texture2D
 var _tex_press: Texture2D
 var carrying := false
-# Programmatic focus grabs (results screen) set this false so the hand is not
-# pulled toward a target the user did not navigate to. See main.gd.
+# True only after genuine mouse motion/click on the current screen. Screens
+# read this to decide whether the pointer may drive hover/selection.
+var mouse_active := false
+# Kept for callers that suppress focus-driven feedback around programmatic
+# focus grabs (results screen). The hand itself never moves on focus.
 var attract_enabled := true
 # Tap-frame on mouse-down; the story selection turns it off (carry pose rules there).
 var press_frame_enabled := true
@@ -76,25 +84,57 @@ func _ready() -> void:
     _tex_open = load("res://assets/ui/hand_open.png")
     _tex_carry = load("res://assets/ui/hand_carry.png")
     _tex_press = load("res://assets/ui/hand_press.png")
+    var vp := get_viewport()
+    if vp != null:
+        _mouse = vp.get_mouse_position()
+        _pos = _mouse
+        _started = true
 
 func add_target(target: Control) -> void:
     if target == null or targets.has(target):
         return
     targets.append(target)
-    target.focus_entered.connect(attract_to.bind(target))
 
-func attract_to(target: Control) -> void:
-    if not attract_enabled:
+func drop_targets() -> void:
+    targets.clear()
+    hovered = null
+
+# Focus feedback is the control's own frame; the pointer must not chase it.
+func attract_to(_target: Control) -> void:
+    pass
+
+func is_mouse_active() -> bool:
+    return mouse_active
+
+func set_mouse_active(value: bool) -> void:
+    if mouse_active == value:
         return
-    _attract = target
-    _attract_timer = ATTRACT_SECONDS
-    _attract_anchor = _mouse
+    mouse_active = value
+    if not value and hovered != null:
+        hovered = null
+        hover_changed.emit(null)
+    modality_changed.emit(mouse_active)
 
-func reset() -> void:
-    _mouse = get_global_mouse_position()
+# Screen entry / backtracking: anchor the graphic at the pointer as it is
+# right now. Never warps the OS pointer, never inherits the previous screen's
+# hover, and waits for real motion before accepting pointer-driven hover.
+func reset_for_screen() -> void:
+    var vp := get_viewport()
+    if vp != null:
+        _mouse = vp.get_mouse_position()
     _pos = _mouse
     _vel = Vector2.ZERO
     _started = true
+    _press = 0.0
+    _pressed_held = false
+    _lean = BASE_TILT
+    if hovered != null:
+        hovered = null
+        hover_changed.emit(null)
+    set_mouse_active(false)
+
+func reset() -> void:
+    reset_for_screen()
 
 func set_carry() -> void:
     carrying = true
@@ -122,41 +162,29 @@ func clear_carry() -> void:
 func active_target() -> Control:
     if hovered != null and is_instance_valid(hovered) and hovered.is_visible_in_tree():
         return hovered
-    if _attract_timer > 0.0 and is_instance_valid(_attract):
-        return _attract
     return null
 
 func _process(delta: float) -> void:
-    # Track the mouse from input EVENTS (same source the UI hovers use) — the
-    # OS-polled get_global_mouse_position() disagrees with synthetic input and
-    # with window-relative event coords.
-    var mouse := _mouse
     if not _started:
-        reset()
-    if _attract_timer > 0.0:
-        _attract_timer -= delta
-        if mouse.distance_to(_attract_anchor) > ATTRACT_RELEASE_DIST:
-            _attract_timer = 0.0
+        reset_for_screen()
     if _press > 0.0:
         _press = maxf(_press - delta, 0.0)
-    # Hover detection from the real mouse position, smallest visible target wins.
+    # Hover detection: only after genuine mouse input on this screen.
     var new_hover: Control = null
-    var new_area := INF
-    for target in targets:
-        if not is_instance_valid(target) or not target.is_visible_in_tree():
-            continue
-        var rect := target.get_global_rect()
-        if rect.has_point(mouse) and rect.get_area() < new_area:
-            new_hover = target
-            new_area = rect.get_area()
+    if mouse_active:
+        var new_area := INF
+        for target in targets:
+            if not is_instance_valid(target) or not target.is_visible_in_tree():
+                continue
+            var rect := target.get_global_rect()
+            if rect.has_point(_mouse) and rect.get_area() < new_area:
+                new_hover = target
+                new_area = rect.get_area()
     if new_hover != hovered:
         hovered = new_hover
         hover_changed.emit(hovered)
-    # Motion: eased follow of the mouse, attracted to a keyboard-focused target.
-    var goal := mouse
-    if _attract_timer > 0.0 and is_instance_valid(_attract) and _attract.is_visible_in_tree():
-        goal = _attract.get_global_rect().get_center()
-    _vel += (goal - _pos) * SPRING * delta
+    # Motion: eased follow of the real pointer. Nothing else moves the hand.
+    _vel += (_mouse - _pos) * SPRING * delta
     _vel *= maxf(1.0 - DAMP * delta, 0.0)
     _pos += _vel * delta
     # Pose
@@ -173,13 +201,21 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
     if event is InputEventMouseMotion:
         _mouse = event.position
-    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-        if event.pressed:
-            _pressed_held = true
-            _press = PRESS_SECONDS
-        else:
-            _pressed_held = false
-        queue_redraw()
+        if event.relative.length() >= MOTION_EPSILON:
+            set_mouse_active(true)
+    elif event is InputEventMouseButton:
+        if event.button_index == MOUSE_BUTTON_LEFT:
+            if event.pressed:
+                _pressed_held = true
+                _press = PRESS_SECONDS
+            else:
+                _pressed_held = false
+            queue_redraw()
+        set_mouse_active(true)
+    elif event is InputEventJoypadButton or event is InputEventJoypadMotion:
+        set_mouse_active(false)
+    elif event is InputEventKey and event.pressed and not event.echo:
+        set_mouse_active(false)
 
 func _draw() -> void:
     if _tex_ready():

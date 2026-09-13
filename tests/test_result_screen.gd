@@ -35,6 +35,7 @@ func run():
     arena._on_fighter_eliminated(arena.fighters[2])
     check(arena.match_over and arena.result_panel.visible, "result panel shows at match end")
     check(arena.winner_label.visible and "P4" in arena.winner_label.text, "winner banner is up immediately")
+    check(arena.find_child("WinnerHero", true, false) != null, "winner hero column exists")
     var rs = arena.result_panel.find_child("ResultScreen", true, false)
     check(rs != null, "result screen exists")
     if rs == null:
@@ -46,8 +47,19 @@ func run():
     check(rs.get_page_count() == 4, "one page per active player")
     check(rs.get_page_name() == "TEKNIUM", "page 0 shows the first player")
     check(rs.get_page_stocks() == 0, "eliminated first player reads OUT")
+    check(rs.find_child("StatPanel", true, false) != null, "detail inspector (StatPanel) exists")
+    check(rs.find_child("PrevPage", true, false) != null and rs.find_child("NextPage", true, false) != null, "page nav buttons exist")
+    check(rs.find_child("WaitHint", true, false).visible, "wait hint is up during the wait")
+    check(not rs.find_child("ResultPane0", true, false).visible, "standings panes stay hidden during the wait")
+    # Winner hero: exactly one live 3D rig, model resolved from the winner row.
+    var hero_nodes = rs.find_children("*", "SubViewportContainer", true, false)
+    check(hero_nodes.size() == 1, "exactly one live 3D hero instance")
+    check(hero_nodes[0].has_fighter(), "winner model is instantiated")
+    check(rs.get_hero_id() == "turbofit", "winner hero resolves the roster id from the display name")
     arena._unhandled_key_input(make_key(KEY_SPACE))
     check(not rs.is_waiting() and rs.get_page_index() == 0, "first input starts the panels without navigating")
+    check(not rs.find_child("WaitHint", true, false).visible, "wait hint clears when the panels start")
+    check(rs.find_child("ResultPane0", true, false).visible, "standings panes appear when the wait resolves")
     arena._unhandled_key_input(make_key(KEY_RIGHT))
     check(rs.get_page_index() == 1, "right walks the pages")
     arena._unhandled_key_input(make_key(KEY_LEFT))
@@ -69,6 +81,7 @@ func run():
     arena.fighters[2].stocks = 0
     arena._on_fighter_eliminated(arena.fighters[2])
     check(arena.result_panel.visible and rs.is_waiting(), "result again in the wait phase")
+    check(rs.find_children("*", "SubViewportContainer", true, false).size() == 1, "hero rig is reused across results, never duplicated")
     await create_timer(2.8).timeout
     check(not rs.is_waiting(), "no input: panels auto-start after 160 ticks")
     check(arena.find_child("MainMenu", true, false) != null, "results expose a visible main menu action")
