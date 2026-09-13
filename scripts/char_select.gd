@@ -87,6 +87,8 @@ func _ready() -> void:
     Tokens.apply_styles(_back, Tokens.row_styles())
     _back.add_theme_color_override("font_color", Tokens.CREAM)
     _back.pressed.connect(_on_back_pressed)
+    if cursor != null and not cursor.modality_changed.is_connected(_on_modality_changed):
+        cursor.modality_changed.connect(_on_modality_changed)
     _mode_free.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _set_mode(0))
     _mode_teams.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _set_mode(1))
     _mode_free.focus_mode = Control.FOCUS_ALL
@@ -121,6 +123,8 @@ func _ready() -> void:
         if cursor != null:
             cursor.add_target(bay)
     _ready_band.ready_pressed.connect(_on_ready_pressed)
+    _ready_band.focus_mode = Control.FOCUS_ALL
+    _ready_band.focus_entered.connect(_on_ready_band_focused)
     _ready_band.apply_reference_width(Tokens.DESIGN.x)
     _ready_band.position.x = (Tokens.DESIGN.x - _ready_band.size.x) * 0.5
     _ready_band.hide_band()
@@ -289,8 +293,10 @@ func _refresh() -> void:
     _recompute_tokens()
     if ready_allowed():
         _ready_band.show_band()
+        _wire_ready_neighbors(true)
     else:
         _ready_band.hide_band()
+        _wire_ready_neighbors(false)
 
 func _recompute_tokens() -> void:
     # UNASSIGNED players hide their token; committed players rest on their tile.
@@ -362,6 +368,43 @@ func _on_tile_focused(index: int) -> void:
     if _seeding_focus:
         return  # programmatic entry seed: candidate + hand only, no carry
     _begin_carry(_active)
+
+func _on_modality_changed(is_mouse: bool) -> void:
+    # Mouse -> focus switch while the screen is up: seed the logical selection
+    # so the first keyboard confirm commits the candidate (Doc 00 §12.3).
+    if is_mouse or not is_visible_in_tree():
+        return
+    var vp := get_viewport()
+    if vp != null and vp.gui_get_focus_owner() != null:
+        return  # focus is already established — never stomp it
+    if _tiles.is_empty() or _phase == Phase.EXITING:
+        return
+    _seed_focus()
+
+func _on_ready_band_focused() -> void:
+    if cursor == null or cursor.mode != 1:
+        return
+    cursor.set_focus_target(_ready_band.anchor())
+
+func _wire_ready_neighbors(band_shown: bool) -> void:
+    # Doc 04 19/20A: the ready transition is keyboard/controller reachable.
+    if _tiles.is_empty():
+        return
+    var n := _tiles.size()
+    for i in n:
+        var tile = _tiles[i]
+        var col: int = i % COLS
+        if band_shown:
+            tile.focus_neighbor_bottom = tile.get_path_to(_ready_band)
+        else:
+            var below: int = i + COLS
+            if below < n:
+                tile.focus_neighbor_bottom = tile.get_path_to(_tiles[below])
+            else:
+                tile.focus_neighbor_bottom = tile.get_path_to(_bays[col % 4])
+    if band_shown:
+        _ready_band.focus_neighbor_top = _ready_band.get_path_to(_tiles[0])
+        _ready_band.focus_neighbor_bottom = _ready_band.get_path_to(_bays[0])
 
 func _on_bay_focused(index: int) -> void:
     if cursor == null or cursor.mode != 1:
@@ -543,6 +586,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
         var b: int = _bays.find(focused)
         if b >= 0 and _phase == Phase.IDLE:
             _on_bay_activated(b)
+            get_viewport().set_input_as_handled()
+            return
+        if focused == _ready_band and ready_allowed():
+            _on_ready_pressed()
             get_viewport().set_input_as_handled()
             return
         if focused == _mode_free or focused == _mode_teams:

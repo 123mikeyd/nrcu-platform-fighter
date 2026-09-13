@@ -4,7 +4,6 @@ const FighterScript = preload("res://scripts/fighter.gd")
 const Config = preload("res://scripts/match_config.gd")
 const SetupScript = preload("res://scripts/match_setup.gd")
 const DemoStyle = preload("res://scripts/demo_style.gd")
-const StoryStageScript = preload("res://scripts/story_stage.gd")
 const StageSelectScript = preload("res://scripts/stage_select.gd")
 const CharSelectScript = preload("res://scripts/char_select.gd")
 const ResultScreenScript = preload("res://scripts/result_screen.gd")
@@ -28,13 +27,12 @@ var active_slots: Array = []
 # One encounter only. Empty state means ordinary freeplay.
 var story_state := ""
 var story_panel: Control
+var story_briefing                      # Story Encounter Briefing scene (Doc 07 §11-16)
 var story_title: Label
 var story_detail: Label
 var story_action: Button
 var story_back: Button
 var story_character: OptionButton
-var story_choice_row: HBoxContainer
-var story_stage: Control
 var stage_panel: Control
 var stage_select: Control
 var char_panel: Control
@@ -96,6 +94,10 @@ func _ready() -> void:
         open_vs()
     elif entry == "story":
         open_story()
+    # Arriving through the persistent transition layer: the previous screen
+    # may have held its frame for the crossfade (Main Menu PLAY). Reveal this
+    # scene underneath it — never leave a stale hold covering the arena.
+    Frontend.release(0.28)
 
 func _process(_delta: float) -> void:
     for i in range(fighters.size()):
@@ -127,9 +129,8 @@ func back_to_menu() -> void:
 
 func show_setup() -> void:
     _cancel_ready()
-    if story_stage != null and story_stage.cursor != null:
-        story_stage.cursor.clear_carry()
-        story_stage.cursor.press_frame_enabled = true
+    if story_briefing != null:
+        story_briefing.reset()
     result_panel.hide()
     story_state = ""
     story_panel.hide()
@@ -213,46 +214,18 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
     return true
 
 func _build_story_panel(layer: CanvasLayer) -> void:
-    story_panel = Control.new()
-    story_panel.theme = DemoStyle.make()
-    story_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    # Doc 07 §11-16: the Encounter Briefing scene owns the Story visual layer
+    # (enemy presentation, objective/rules, fighter selection, rail action).
+    # This screen keeps the state machine: ready / playing / complete / lost,
+    # the encounter launch and the Story -> Main route.
+    story_briefing = (load("res://scenes/story_briefing.tscn") as PackedScene).instantiate()
+    story_panel = story_briefing as Control
     layer.add_child(story_panel)
-    var shade := ColorRect.new()
-    shade.color = Color("273a37")
-    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    story_panel.add_child(shade)
-    var center := CenterContainer.new()
-    center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    story_panel.add_child(center)
-    var column := VBoxContainer.new()
-    column.custom_minimum_size.x = 700
-    column.add_theme_constant_override("separation", 24)
-    center.add_child(column)
-    story_title = Label.new()
-    story_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    story_title.add_theme_font_size_override("font_size", 42)
-    column.add_child(story_title)
-    story_detail = Label.new()
-    story_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    story_detail.add_theme_font_size_override("font_size", 20)
-    column.add_child(story_detail)
-    story_choice_row = HBoxContainer.new()
-    story_choice_row.alignment = BoxContainer.ALIGNMENT_CENTER
-    story_choice_row.add_theme_constant_override("separation", 20)
-    column.add_child(story_choice_row)
-    var choice_stack := VBoxContainer.new()
-    choice_stack.add_theme_constant_override("separation", 14)
-    story_choice_row.add_child(choice_stack)
-    var choice_label := Label.new()
-    choice_label.text = "PICK YOUR FIGHTER / P1"
-    choice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    choice_stack.add_child(choice_label)
-    var cards_row := HBoxContainer.new()
-    cards_row.name = "FighterCardRow"
-    cards_row.alignment = BoxContainer.ALIGNMENT_CENTER
-    cards_row.add_theme_constant_override("separation", 18)
-    choice_stack.add_child(cards_row)
-    # Hidden selection model: the card stage drives it; kept for state + tests.
+    story_title = story_briefing.title_label()
+    story_detail = story_briefing.objective_label()
+    story_action = story_briefing.action_button()
+    story_back = story_briefing.back_button()
+    # Hidden selection model: stable fighter ids, kept for state + tests.
     var roster = load("res://scripts/roster.gd")
     var playable_ids := _story_playable_ids()
     story_character = OptionButton.new()
@@ -264,24 +237,11 @@ func _build_story_panel(layer: CanvasLayer) -> void:
     story_character.select(playable_ids.find("turbofit"))
     story_character.hide()
     story_panel.add_child(story_character)
-    story_action = Button.new()
-    story_action.custom_minimum_size.y = 54
+    story_briefing.build(playable_ids)
     story_action.pressed.connect(start_story)
-    column.add_child(story_action)
-    story_back = Button.new()
-    story_back.text = "BACK TO MAIN"
-    story_back.custom_minimum_size.y = 48
     story_back.pressed.connect(_leave_story)
-    column.add_child(story_back)
-    story_stage = StoryStageScript.new()
-    story_stage.name = "StoryStage"
-    story_panel.add_child(story_stage)
-    story_stage.build(playable_ids, cards_row)
-    story_stage.chosen.connect(_on_story_card_chosen)
-    story_stage.exit_finished.connect(_on_story_exit_finished)
-    story_stage.cursor.add_target(story_action)
-    story_stage.cursor.add_target(story_back)
-    story_stage.set_selected_id("turbofit")
+    story_briefing.chosen.connect(_on_story_card_chosen)
+    story_briefing.exit_finished.connect(_on_story_exit_finished)
     story_panel.hide()
 
 func _build_stage_panel(layer: CanvasLayer) -> void:
@@ -458,19 +418,13 @@ func open_story() -> void:
     show_setup()
     setup.hide()
     story_state = "ready"
-    story_title.text = "STORY 01 / BOBO"
-    story_detail.text = "A big goofball with a slow two-hit claw attack.\nDeplete Bobo's 400 HP. Dodge his claws, then punish the recovery!\nHe stays put. You have three stocks — watch the edges!\n\nA / D move · Space jump · F basic · G special\nAim with WASD · E shield · Esc back to main"
-    story_choice_row.show()
-    story_action.text = "START ENCOUNTER"
-    story_panel.show()
-    story_stage.begin_pick()
-    story_stage.play_enter()
+    # Doc 07 §11-14: the briefing scene presents ENCOUNTER 01 (Bobo, the
+    # objective, the rules, the player's fighter selection) and its own
+    # rail/action; this screen keeps the state and the launch.
     var current_meta = story_character.get_selected_metadata()
     var current: String = current_meta if current_meta is String and current_meta != "" else "turbofit"
-    story_stage.set_selected_id(current)
-    # Step 0 cursor API: story entry is a screen transition (the old
-    # `cursor.reset()` shim no longer exists).
-    story_stage.cursor.begin_screen("story")
+    story_panel.show()
+    story_briefing.open(current)
     Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 
 func _story_playable_ids() -> Array[String]:
@@ -488,7 +442,7 @@ func start_story() -> void:
             if story_character.get_item_metadata(index) == selected:
                 story_character.select(index)
                 break
-    story_stage.set_selected_id(selected)
+    story_briefing.set_selected_id(selected)
     slots[0].character = selected
     slots[0].kind = "human"
     slots[0].device = -1
@@ -498,9 +452,6 @@ func start_story() -> void:
     slots[2].kind = "empty"
     slots[3].kind = "empty"
     if start_match(slots, false, true):
-        story_stage.clear_chip()
-        story_stage.cursor.clear_carry()
-        story_stage.cursor.press_frame_enabled = true
         story_state = "playing"
         hud_title.text = "STORY 01 — %s VS BOBO" % player_one.fighter_name
         hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\nBobo: 400 HP · slow two-hit claws · punish his recovery! · Esc: back to main"
@@ -729,15 +680,12 @@ func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
         Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
         var won: bool = player_one.stocks > 0 and player_two.stocks <= 0
         story_state = "complete" if won else "lost"
-        story_title.text = "your pretty cool" if won else "TRY AGAIN"
-        story_detail.text = "STAGE COMPLETE\nBobo is all tuckered out. You win this first encounter!" if won else "Out of stocks! Bobo is still standing.\nRetry with three fresh stocks and Bobo at 400 HP."
-        story_action.text = "REPLAY" if won else "RETRY"
-        story_choice_row.hide()
         winner_label.visible = false
         story_panel.show()
-        story_stage.cursor.attract_enabled = false
-        story_action.grab_focus()
-        story_stage.cursor.attract_enabled = true
+        # Doc 07 §16: the result is the briefing's own lightweight state
+        # (shipped Story result wording + replay/retry + MAIN MENU), never
+        # the multiplayer Results screen.
+        story_briefing.show_result(won)
         return
     # Explicit result snapshot at match resolution, before any reset mutates
     # the fighter state (Doc 06 §23, Doc 09 §11): stable fighter ids, explicit
@@ -800,7 +748,7 @@ func _leave_story() -> void:
     # story -> main menu, VS -> character select (selections kept), the debug
     # launcher -> its setup screen.
     if story_state == "ready":
-        story_stage.play_exit()
+        story_briefing.play_exit()
         return
     if _entry_mode == "story":
         back_to_menu()

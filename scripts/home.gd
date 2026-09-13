@@ -22,7 +22,6 @@ extends Control
 # §9-10); OS close_requested takes the same confirmation path.
 
 const Tokens = preload("res://scripts/ui_tokens.gd")
-const Style = preload("res://scripts/demo_style.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
 
 const MATCH_SCENE := "res://scenes/main.tscn"
@@ -96,6 +95,8 @@ func _ready() -> void:
             hand.hover_changed.connect(_on_hover_changed)
         if hand.mode == 1:
             hand.set_focus_target(_rows[_selected]["anchor"])
+        if not hand.modality_changed.is_connected(_on_modality_changed):
+            hand.modality_changed.connect(_on_modality_changed)
     _entry()
     # Title -> Main continuity: the held Title frame fades out over the fresh
     # composition on the persistent Frontend layer, never a cut to black.
@@ -203,9 +204,26 @@ func _open_home() -> void:
     if hand != null and hand.mode == 1:
         hand.set_focus_target(_rows[_selected]["anchor"])
 
+func _on_modality_changed(is_mouse: bool) -> void:
+    # Mouse -> focus switch: seed the logical selection (Doc 00 §12.3) so the
+    # first keyboard/controller confirm activates the selected row.
+    if is_mouse or not is_visible_in_tree():
+        return
+    var vp := get_viewport()
+    if vp != null and vp.gui_get_focus_owner() != null:
+        return  # focus is already established — never stomp it
+    if _rows.is_empty():
+        return
+    var hit: Button = _rows[_selected]["hit"]
+    if hit.focus_mode != Control.FOCUS_NONE:
+        hit.grab_focus()
+    var hand = _hand()
+    if hand != null:
+        hand.set_focus_target(_rows[_selected]["anchor"])
+
 func _open_help() -> void:
-    # Doc 07 §3-8 locks a structured How to Play; until WP-F rebuilds it, the
-    # legacy demo_style page is mounted as the subpage (quiet, same frame).
+    # Doc 07 §3-8: the structured How to Play screen (BASICS/FIGHTERS manual)
+    # replaces the legacy demo_style wall-of-text page.
     if _exiting:
         return
     state = "help"
@@ -213,7 +231,10 @@ func _open_help() -> void:
     _nav.visible = false
     _set_rows_focusable(false)
     if _help_page == null or not is_instance_valid(_help_page):
-        _help_page = Style.help(_page_layer, func() -> void: show_page("home"))
+        _help_page = (load("res://scenes/how_to_play.tscn") as PackedScene).instantiate()
+        _help_page.name = "HowToPlay"
+        _page_layer.add_child(_help_page)
+        _help_page.connect("closed", func() -> void: show_page("home"))
     _refresh_targets()
     var hand = _hand()
     if hand != null and hand.mode == 1 and _help_page != null:
