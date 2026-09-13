@@ -438,6 +438,8 @@ func _update_chip_visual() -> void:
     _chip_rect.scale = Vector2(1.0 + 0.28 * squash, 1.0 - 0.28 * squash)
 
 func _unhandled_key_input(event: InputEvent) -> void:
+    if not is_visible_in_tree():
+        return
     if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
             confirm()

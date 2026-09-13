@@ -229,9 +229,15 @@ func _input(event: InputEvent) -> void:
     # Runs before the GUI: LEFT/RIGHT must walk the pages here, otherwise a
     # focused button eats them as focus navigation (same for the first input
     # that starts the panels early).
-    if not visible:
+    # CRITICAL: guard on is_visible_in_tree(). The node's own `visible` stays
+    # true while the parent panel is hidden - consuming events then would
+    # swallow every GUI click in the whole game. This exact regression ate all
+    # mouse clicks until it was caught in a live check.
+    if not is_visible_in_tree():
         return
     if _phase == 0:
+        if event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ESCAPE, KEY_R]:
+            return  # Esc (leave) and R (rematch) keep working during the wait
         if event is InputEventMouseButton and event.pressed:
             skip_wait()
             get_viewport().set_input_as_handled()

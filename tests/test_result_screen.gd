@@ -14,6 +14,15 @@ func run():
     var arena = load("res://scenes/main.tscn").instantiate()
     root.add_child(arena)
     for i in 5: await process_frame
+    # Regression: while the result screen is hidden it must not consume input
+    # (a `visible` guard on the child is wrong when the parent panel is hidden).
+    var probe = arena.result_panel.find_child("ResultScreen", true, false)
+    check(probe != null, "result screen exists before any result")
+    var probe_click := InputEventMouseButton.new()
+    probe_click.pressed = true
+    probe_click.position = Vector2(640.0, 300.0)
+    probe._input(probe_click)
+    check(not arena.get_viewport().is_input_handled(), "hidden result screen does not eat clicks")
     var slots = load("res://scripts/match_config.gd").default_slots()
     check(arena.start_match(slots, false), "match starts")
     for fighter in arena.fighters:
