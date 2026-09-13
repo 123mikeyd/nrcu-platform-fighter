@@ -1,7 +1,8 @@
 extends SceneTree
-# CSS composition contract (visual spec §13): four regions, reserved selection
-# gutter, stable scalable cells, structural player color. Runs the screen in
-# isolation (no arena), so it stays fast and independent of the other screens.
+# Character Select — composition & geometry (Doc 04 §3/§5/§8/§30-§32).
+#
+# Supersedes the old test that protected the rejected right-side global
+# HeroRig layout. Interaction contracts live in tests/test_char_select.gd.
 var failures := 0
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
@@ -9,61 +10,95 @@ func check(ok: bool, message: String):
         failures += 1
         printerr("FAIL: " + message)
 func run():
-    var Roster = load("res://scripts/roster.gd")
-    var Tokens = load("res://scripts/ui_tokens.gd")
-    var css = load("res://scripts/char_select.gd").new()
-    css.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    root.add_child(css)
-    await process_frame
-    var cards: Array = []
-    for id in Roster.ids():
-        cards.append({"id": str(id), "name": Roster.display_name(str(id)).to_upper(), "palette": Roster.palette(str(id), 0)})
-    css.build(cards)
-    await process_frame
-    var state = load("res://scripts/match_selection_state.gd").new()
-    css.open_with(state)
-    for i in 40: await process_frame
-    check(css.get_cards().size() == 7, "roster builds seven cells")
-    # regions
-    check(css.find_child("HeroRig", true, false) != null, "hero region exists")
-    check(css.find_child("FighterName", true, false) != null, "fighter name exists")
-    check(css.find_child("PanelBox0", true, false) != null and css.find_child("PanelBox3", true, false) != null, "four player bays exist")
-    check(css.find_child("ModeToggle", true, false) != null and css.find_child("ReadyButton", true, false) != null, "header controls exist")
-    # roster cells stay inside the reserved field and keep compact scale
-    var min_w := 999.0
+    var arena = load("res://scenes/main.tscn").instantiate()
+    root.add_child(arena)
+    for i in 4: await process_frame
+    arena.open_vs()
+    for i in 3: await process_frame
+    var css = arena.char_panel.find_child("CharSelect", true, false)
+    check(css != null, "css exists")
+    if css == null:
+        arena.queue_free(); await process_frame; quit(1); return
+    for i in 20: await process_frame
+    # --- no global hero region (rejected architecture) --------------------
+    check(css.find_child("HeroRig", true, false) == null, "no global right-side HeroRig region")
+    check(css.find_child("HeroFrame", true, false) == null, "no global hero frame")
+    # --- four vertical player stations ------------------------------------
+    var bays: Array = css.get_bays()
+    check(bays.size() == 4, "four player bay components exist")
+    var station_top := INF
+    var bay_gap_ok := true
+    for i in bays.size():
+        var b: Control = bays[i]
+        var r: Rect2 = b.get_global_rect()
+        station_top = minf(station_top, r.position.y)
+        check(r.size.y >= 240.0, "bay %d is a substantial player station" % i)
+        if i > 0:
+            var prev: Rect2 = bays[i - 1].get_global_rect()
+            if r.position.x <= prev.position.x or r.position.x - prev.end.x > 24.0:
+                bay_gap_ok = false
+    check(bay_gap_ok, "the four stations are laid out in one row with a tight gap")
+    check(station_top >= 430.0, "the stations occupy the lower field")
+    for i in bays.size():
+        var b: Control = bays[i]
+        if str(arena.selection_state.slots[i].kind) != "empty":
+            check(b.render_view() != null, "bay %d has a fighter presentation area" % i)
+    # --- roster occupies the reserved upper field -------------------------
+    var tiles: Array = css.get_tiles()
+    check(tiles.size() == 7, "seven roster tiles")
+    var field: Control = css.find_child("RosterField", true, false)
+    check(field != null, "the roster field exists")
     var in_field := true
-    var max_y := 0.0
-    for b in css.get_cards():
-        var r: Rect2 = b.get_rect()
-        min_w = minf(min_w, r.size.x)
-        max_y = maxf(max_y, r.end.y)
-        if r.position.x < 0.0 or r.end.x > 660.0 or r.position.y < 100.0 or r.end.y > 545.0:
+    var size_ok := true
+    var top := INF
+    for t in tiles:
+        var r: Rect2 = t.get_global_rect()
+        var fr: Rect2 = field.get_global_rect()
+        top = minf(top, r.position.y)
+        if r.position.x < 0.0 or r.end.x > fr.end.x or r.position.y < 0.0 or r.end.y > fr.end.y:
             in_field = false
-    check(in_field, "cells stay inside the roster field (left of the hero)")
-    check(min_w >= 60.0 and min_w <= 160.0, "seven cells keep compact scale (%.0f px)" % min_w)
-    check(max_y <= 545.0, "roster never runs into the player bays")
-    # hero region sits in the right half and never overlaps the roster
-    var hero: Control = css.find_child("HeroRig", true, false)
-    check(hero.position.x >= 660.0, "hero region is the right half")
-    check(hero.size.x >= 400.0 and hero.size.y >= 280.0, "hero region has real presence")
-    # selection plate grows into the reserved gutter only
-    css.hover_slot(0)
+        if absf(r.size.x - 108.0) > 1.0 or absf(r.size.y - 82.0) > 1.0:
+            size_ok = false
+    check(in_field, "every tile stays inside the reserved roster field")
+    check(size_ok, "tile geometry is the fixed 108x82 family")
+    check(top < station_top, "the roster sits above the player stations")
+    # --- reference frame centered (canvas_items + expand) -----------------
+    var frame: Control = css.find_child("ReferenceFrame", true, false)
+    check(frame != null and absf(frame.size.x - 1280.0) < 1.0 and absf(frame.size.y - 720.0) < 1.0, "core UI lives in a centered 1280x720 ReferenceFrame")
+    check(css.find_child("ReadyBand", true, false) != null, "the ready band component exists")
+    # --- no selection collision by construction ---------------------------
+    for i in tiles.size():
+        for j in range(i + 1, tiles.size()):
+            if tiles[i].get_rect().intersects(tiles[j].get_rect()):
+                check(false, "tiles %d and %d overlap" % [i, j])
+    check(true, "no tile overlaps")
+    # --- scalability: the roster grows inside the same field --------------
+    for count in [12, 20, 30]:
+        var cards: Array = []
+        for i in count:
+            cards.append({"id": "teknium", "name": "SYNTH %02d" % i})
+        css.build(cards)
+        for i in 3: await process_frame
+        var boxes: Array = css.get_tiles()
+        check(boxes.size() == count, "css builds %d synthetic tiles" % count)
+        var fr: Rect2 = field.get_global_rect()
+        var min_w := 999.0
+        var bounded := true
+        for b in boxes:
+            var r: Rect2 = b.get_rect()
+            min_w = minf(min_w, r.size.x)
+            if r.position.x < 0.0 or r.end.x > fr.end.x or r.position.y < 0.0 or r.end.y > fr.end.y:
+                bounded = false
+        check(bounded, "%d fighters stay inside the reserved field" % count)
+        check(min_w >= 100.0, "%d fighters keep the fixed tile width" % count)
+        # player stations never move because of roster growth
+        var bay0: Rect2 = bays[0].get_global_rect()
+        check(absf(bay0.position.y - station_top) < 1.0, "player stations do not move at %d fighters" % count)
+    # restore the real roster for the rest of the suite
+    css.build([])
     await process_frame
-    var box: Panel = css.find_child("SelectBox", true, false)
-    var card0: Button = css.get_cards()[0]
-    check(box.visible, "selection plate follows the hover")
-    var overhang: float = card0.get_rect().position.y - box.position.y
-    check(overhang > 0.0 and overhang <= Tokens.SELECTION_GUTTER / 2.0, "plate stays inside the reserved gutter (%.1f px)" % overhang)
-    var plate_gap: float = card0.get_rect().position.x - box.position.x
-    check(not box.get_rect().intersects(css.get_cards()[1].get_rect().grow(-1.0)), "plate never reaches the neighbouring cell")
-    # player color is structural: the bay carries a 6 px left bar in its color
-    var bay: Button = css.find_child("PanelBox0", true, false)
-    var bay_style: StyleBoxFlat = bay.get_theme_stylebox("normal")
-    check(bay_style != null and bay_style.border_width_left >= 4, "bay header carries a structural player-color bar")
-    # bays span the design canvas without drifting past the margin
-    var bay3: Button = css.find_child("PanelBox3", true, false)
-    check(bay3.position.x + bay3.size.x <= Tokens.DESIGN.x - Tokens.MARGIN + 1.0, "four bays fit the design width")
-    css.queue_free()
+    check(css.get_tiles().size() == 7, "the real roster restores")
+    arena.queue_free()
     await process_frame
-    if failures == 0: print("PASS: css composition (four regions, gutter-safe selection, bay structure)")
+    if failures == 0: print("PASS: css composition (no global hero, four stations, reserved roster field, fixed geometry, scalability)")
     quit(1 if failures else 0)

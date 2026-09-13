@@ -8,6 +8,7 @@ const StoryStageScript = preload("res://scripts/story_stage.gd")
 const StageSelectScript = preload("res://scripts/stage_select.gd")
 const CharSelectScript = preload("res://scripts/char_select.gd")
 const ResultScreenScript = preload("res://scripts/result_screen.gd")
+const MatchResultScript = preload("res://scripts/match_result.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
 const SelectionStateScript = preload("res://scripts/match_selection_state.gd")
 var ready_remaining := 0.0
@@ -53,6 +54,10 @@ var p1_label: Label
 var p2_label: Label
 var winner_label: Label
 var match_over := false
+# Elimination order observed during the match (player_index sequence). The
+# result snapshot is built from it at resolution, before any reset mutates
+# the fighters (Doc 06 §4/§19).
+var _elimination_order: Array = []
 var p1_spawn := Vector3(-4.0, 1.0, 0.0)
 var p2_spawn := Vector3(4.0, 1.0, 0.0)
 
@@ -114,15 +119,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
         get_viewport().set_input_as_handled()
     elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R and match_over:
         _reset_match()
-    elif result_panel != null and result_panel.visible and event is InputEventKey and event.pressed and not event.echo:
-        # Result grammar: any key starts the panels early; LEFT/RIGHT walk the
-        # pages once the panels are up.
-        if result_screen.is_waiting():
-            result_screen.skip_wait()
-        elif event.keycode == KEY_LEFT:
-            result_screen.prev_page()
-        elif event.keycode == KEY_RIGHT:
-            result_screen.next_page()
+    # Results owns its own reveal/accelerate input (see result_screen.gd).
 
 func back_to_menu() -> void:
     show_setup()
@@ -182,6 +179,7 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
     hud_controls.text = freeplay_controls
     active_slots = slots.duplicate(true)
     teams_enabled = teams
+    _elimination_order.clear()
     match_over = false
     winner_label.visible = false
     var roster = load("res://scripts/roster.gd")
@@ -271,7 +269,7 @@ func _build_story_panel(layer: CanvasLayer) -> void:
     story_action.pressed.connect(start_story)
     column.add_child(story_action)
     story_back = Button.new()
-    story_back.text = "BACK TO MATCH SETUP"
+    story_back.text = "BACK TO MAIN"
     story_back.custom_minimum_size.y = 48
     story_back.pressed.connect(_leave_story)
     column.add_child(story_back)
@@ -280,7 +278,7 @@ func _build_story_panel(layer: CanvasLayer) -> void:
     story_panel.add_child(story_stage)
     story_stage.build(playable_ids, cards_row)
     story_stage.chosen.connect(_on_story_card_chosen)
-    story_stage.exit_finished.connect(show_setup)
+    story_stage.exit_finished.connect(_on_story_exit_finished)
     story_stage.cursor.add_target(story_action)
     story_stage.cursor.add_target(story_back)
     story_stage.set_selected_id("turbofit")
@@ -387,7 +385,7 @@ func _build_char_panel(layer: CanvasLayer) -> void:
     shade.color = Color("273a37")
     shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     char_panel.add_child(shade)
-    char_select = CharSelectScript.new()
+    char_select = (load("res://scenes/character_select.tscn") as PackedScene).instantiate()
     char_select.name = "CharSelect"
     char_panel.add_child(char_select)
     var roster = load("res://scripts/roster.gd")
@@ -461,7 +459,7 @@ func open_story() -> void:
     setup.hide()
     story_state = "ready"
     story_title.text = "STORY 01 / BOBO"
-    story_detail.text = "A big goofball with a slow two-hit claw attack.\nDeplete Bobo's 400 HP. Dodge his claws, then punish the recovery!\nHe stays put. You have three stocks — watch the edges!\n\nA / D move · Space jump · F basic · G special\nAim with WASD · E shield · Esc back to setup"
+    story_detail.text = "A big goofball with a slow two-hit claw attack.\nDeplete Bobo's 400 HP. Dodge his claws, then punish the recovery!\nHe stays put. You have three stocks — watch the edges!\n\nA / D move · Space jump · F basic · G special\nAim with WASD · E shield · Esc back to main"
     story_choice_row.show()
     story_action.text = "START ENCOUNTER"
     story_panel.show()
@@ -470,7 +468,9 @@ func open_story() -> void:
     var current_meta = story_character.get_selected_metadata()
     var current: String = current_meta if current_meta is String and current_meta != "" else "turbofit"
     story_stage.set_selected_id(current)
-    story_stage.cursor.reset()
+    # Step 0 cursor API: story entry is a screen transition (the old
+    # `cursor.reset()` shim no longer exists).
+    story_stage.cursor.begin_screen("story")
     Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 
 func _story_playable_ids() -> Array[String]:
@@ -503,7 +503,7 @@ func start_story() -> void:
         story_stage.cursor.press_frame_enabled = true
         story_state = "playing"
         hud_title.text = "STORY 01 — %s VS BOBO" % player_one.fighter_name
-        hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\nBobo: 400 HP · slow two-hit claws · punish his recovery! · Esc: match setup"
+        hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\nBobo: 400 HP · slow two-hit claws · punish his recovery! · Esc: back to main"
         player_one.reset_fighter(p1_spawn, true)
         # Central floor lane keeps this large opponent clear of side platforms.
         player_two.reset_fighter(Vector3(0.6, 1.0, 0.0), true)
@@ -684,7 +684,7 @@ func _build_hud() -> void:
     result_screen = ResultScreenScript.new()
     result_screen.name = "ResultScreen"
     result_panel.add_child(result_screen)
-    winner_label = result_screen.banner
+    winner_label = result_screen.outcome_label
     result_screen.rematch_requested.connect(_reset_match)
     result_screen.setup_requested.connect(_on_result_change_fighters)
     result_screen.menu_requested.connect(back_to_menu)
@@ -704,9 +704,13 @@ func _build_hud() -> void:
     ready_label.hide()
     layer.add_child(ready_label)
 
-func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
+func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
     if match_over:
         return
+    # Elimination order is match-layer state: recorded here, before the
+    # survivor check can end the match (Doc 06 §4).
+    if int(loser.stocks) <= 0 and loser.player_index not in _elimination_order:
+        _elimination_order.append(loser.player_index)
     var survivors: Array = fighters.filter(func(f): return f.stocks > 0)
     var sides: Array = []
     for fighter in survivors:
@@ -735,29 +739,19 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
         story_action.grab_focus()
         story_stage.cursor.attract_enabled = true
         return
-    if survivors.is_empty():
-        winner_label.text = "DRAW"
-    elif teams_enabled:
-        winner_label.text = "TEAM %s WINS!" % ("A" if sides[0] == 0 else "B")
-    else:
-        winner_label.text = "P%d %s WINS!" % [survivors[0].player_index, survivors[0].fighter_name]
-    winner_label.visible = true
-    var rows: Array = []
-    for fighter in fighters:
-        rows.append({
-            "name": fighter.fighter_name,
-            "index": fighter.player_index,
-            "stocks": fighter.stocks,
-            "damage": roundi(fighter.damage_percent),
-        })
-    rows.sort_custom(func(a, b): return int(a["index"]) < int(b["index"]))
+    # Explicit result snapshot at match resolution, before any reset mutates
+    # the fighter state (Doc 06 §23, Doc 09 §11): stable fighter ids, explicit
+    # placement, teams and winner flags. Results is pure presentation over it.
+    var result = MatchResultScript.resolve(fighters, teams_enabled, _elimination_order)
     result_panel.show()
-    result_screen.show_results(rows, selection_state != null)
+    winner_label.visible = true
+    result_screen.show_result(result, selection_state != null)
 
 func _reset_match() -> void:
     if story_state in ["complete", "lost"]:
         start_story()
         return
+    _elimination_order.clear()
     match_over = false
     winner_label.visible = false
     for fighter in fighters:
@@ -813,6 +807,14 @@ func _leave_story() -> void:
     elif _entry_mode == "vs":
         char_panel.show()
         char_select.reopen()
+    else:
+        show_setup()
+
+func _on_story_exit_finished() -> void:
+    # Story Back follows the player route: Story -> Main. The debug launcher
+    # keeps its setup screen (Doc 07 §15: no "MATCH SETUP" in the story flow).
+    if _entry_mode == "story":
+        back_to_menu()
     else:
         show_setup()
 
