@@ -42,6 +42,7 @@ const SETTLE_SECONDS := 0.14   # pose settle after modality reacquisition
 
 const HAND_SCALE := 0.33
 const TIP_POINT := Vector2(15.5, 1.0)
+const TIP_CARRY := Vector2(67.5, 32.0)   # approved baked carry pose's anchor
 const TIP_GRAB := Vector2(50.0, 1.0)
 const TIP_PRESS := Vector2(49.0, 22.0)
 # Where a carried token sits relative to the fingertip (texture space), so it
@@ -77,6 +78,7 @@ var _carry_offset := Vector2.ZERO
 var _tex_point: Texture2D
 var _tex_grab: Texture2D
 var _tex_press: Texture2D
+var _tex_carry: Texture2D
 var _hand: Control
 var _token_slot: Control
 
@@ -96,6 +98,11 @@ func _ready() -> void:
     _tex_point = load("res://assets/ui/hand_point.png")
     _tex_grab = load("res://assets/ui/hand_grab.png")
     _tex_press = load("res://assets/ui/hand_press.png")
+    # The carry pose is the APPROVED BAKED sprite (hand + coin as one image,
+    # pixel-identical to the artist's Krita reference). Layering the coin under
+    # the hand was tried and abandoned together with William — the bake is the
+    # robust result and must not be replaced by a runtime composite.
+    _tex_carry = load("res://assets/ui/hand_carry.png")
     var vp := get_viewport()
     if vp != null:
         _mouse = vp.get_mouse_position()
@@ -164,6 +171,9 @@ func set_carry(token: Control = null) -> void:
         if ts.x <= 0.0:
             ts = Vector2(26.0, 26.0)
         token.position = CARRY_CENTER - ts * 0.5
+        # The baked carry sprite carries the coin in its art; the particle
+        # token object keeps its state but does not draw on top of the hand.
+        token.visible = _tex_carry == null
         token.visible = true
     set_visual_mode(Visual.CARRY)
 
@@ -266,15 +276,18 @@ func is_pressing() -> bool:
 func active_texture() -> Texture2D:
     if is_pressing() and _tex_press != null:
         return _tex_press
-    if visual == Visual.CARRY and _tex_grab != null:
-        return _tex_grab
+    if visual == Visual.CARRY:
+        if _tex_carry != null:
+            return _tex_carry
+        if _tex_grab != null:
+            return _tex_grab
     return _tex_point
 
 func active_tip() -> Vector2:
     if is_pressing():
         return TIP_PRESS
     if visual == Visual.CARRY:
-        return TIP_GRAB
+        return TIP_CARRY if _tex_carry != null else TIP_GRAB
     return TIP_POINT
 
 func _draw_hand() -> void:
