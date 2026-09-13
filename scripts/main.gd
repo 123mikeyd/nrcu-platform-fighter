@@ -346,6 +346,24 @@ func _launch_match() -> void:
     char_panel.show()
     char_select.reopen()
 
+func _on_result_change_fighters() -> void:
+    result_panel.hide()
+    if selection_state != null:
+        # VS flow: back to the character select with everything preserved.
+        char_panel.show()
+        char_select.reopen()
+    else:
+        show_setup()
+
+func _on_result_change_stage() -> void:
+    if selection_state == null:
+        return
+    result_panel.hide()
+    _sss_from = "css"
+    _pending_match = false
+    stage_panel.show()
+    stage_select.open_with(selection_state.stage, selection_state.stage)
+
 func open_stage_select(focus_id: String) -> void:
     var current: String = setup.selected_level()
     show_setup()
@@ -668,7 +686,9 @@ func _build_hud() -> void:
     result_panel.add_child(result_screen)
     winner_label = result_screen.banner
     result_screen.rematch_requested.connect(_reset_match)
-    result_screen.setup_requested.connect(show_setup)
+    result_screen.setup_requested.connect(_on_result_change_fighters)
+    result_screen.menu_requested.connect(back_to_menu)
+    result_screen.stage_requested.connect(_on_result_change_stage)
     result_panel.hide()
     ready_label = Label.new()
     ready_label.name = "ReadyGo"
@@ -732,7 +752,7 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
         })
     rows.sort_custom(func(a, b): return int(a["index"]) < int(b["index"]))
     result_panel.show()
-    result_screen.show_results(rows)
+    result_screen.show_results(rows, selection_state != null)
 
 func _reset_match() -> void:
     if story_state in ["complete", "lost"]:

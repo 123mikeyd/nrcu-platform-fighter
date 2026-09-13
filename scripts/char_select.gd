@@ -14,13 +14,20 @@ signal back_requested
 signal exit_finished
 
 const FPS := 60.0
-const CARD_SIZE := Vector2(232.0, 128.0)
-const GAP := 14.0
-const ROW1_Y := 250.0
-const ROW2_Y := 394.0
-const NAME_Y := 478.0
-const PANEL_SIZE := Vector2(280.0, 130.0)
-const PANEL_Y := 530.0
+# Roster field: stable, compact cell scale that does not grow with a small
+# roster and absorbs a much larger one (5 columns, rows shrink to fit).
+const COLS := 5
+const CELL_W := 140.0
+const CELL_H := 80.0
+const GAP := 10.0
+const FIELD_X := 270.0
+const FIELD_W := 740.0
+const FIELD_TOP := 160.0
+const FIELD_BOTTOM := 545.0
+const PANEL_SIZE := Vector2(300.0, 130.0)
+const PANEL_Y := 560.0
+const PLAYER_COLORS := [Color("d95a4f"), Color("4f7fd9"), Color("d9c04f"), Color("5ad94f")]
+const NAME_Y := 300.0
 const ENTER_LOCK := 0.5
 const NAME_IN := 9.0 / FPS
 const NAME_OUT := 11.0 / FPS
@@ -56,6 +63,7 @@ var _hovered := -1
 var _active := 0
 var _focus_card := -1
 var _pulse := 0.0
+var _ready_pulse := 0.0
 var _chip_index := -1
 var _chip_pos := Vector2.ZERO
 var _place_from := Vector2.ZERO
@@ -74,6 +82,14 @@ func _ready() -> void:
         cursor = root.hand
 
 func build(cards: Array) -> void:
+    # Re-entrant: rebuilding with a different roster replaces the old field
+    # (used by the scalability tests with synthetic fighter counts).
+    if _content != null and is_instance_valid(_content):
+        _content.queue_free()
+        _content = null
+        _cards.clear()
+        _card_buttons.clear()
+        _panels.clear()
     _cards = cards
     _content = Control.new()
     _content.name = "CharContent"
@@ -102,14 +118,23 @@ func build(cards: Array) -> void:
     _mode_button = Button.new()
     _mode_button.name = "ModeToggle"
     _mode_button.size = Vector2(330.0, 46.0)
-    _mode_button.position = Vector2(64.0, 126.0)
+    _mode_button.position = Vector2(64.0, 96.0)
     _mode_button.pressed.connect(_on_mode_pressed)
     _content.add_child(_mode_button)
+    # READY is a state of the screen, not a form submit: it lights up and
+    # pulses once the configuration is valid, and states the requirement
+    # while it is not.
     _ready_button = Button.new()
     _ready_button.name = "ReadyButton"
-    _ready_button.text = "READY  >"
-    _ready_button.size = Vector2(216.0, 46.0)
-    _ready_button.position = Vector2(maxf(view.x, 1280.0) - 280.0, 126.0)
+    _ready_button.text = "NEED 2 FIGHTERS"
+    _ready_button.size = Vector2(270.0, 46.0)
+    _ready_button.position = Vector2(maxf(view.x, 1280.0) - 334.0, 96.0)
+    _ready_button.add_theme_font_size_override("font_size", 14)
+    _ready_button.add_theme_stylebox_override("normal", _flat(Color("273a37"), Color("e5ad69"), 2, 10))
+    _ready_button.add_theme_stylebox_override("hover", _flat(Color("35595a"), Color("e5ad69"), 2, 10))
+    _ready_button.add_theme_stylebox_override("pressed", _flat(Color("35595a"), Color("e5ad69"), 3, 10))
+    _ready_button.add_theme_stylebox_override("disabled", _flat(Color("273a37"), Color("8a5a2b"), 1, 10))
+    _ready_button.add_theme_color_override("font_disabled_color", Color(1, 1, 1, 0.35))
     _ready_button.pressed.connect(_on_ready_pressed)
     _content.add_child(_ready_button)
     _box = Panel.new()
@@ -118,44 +143,46 @@ func build(cards: Array) -> void:
     _box.add_theme_stylebox_override("panel", _flat(Color(0, 0, 0, 0), Color("e5ad69"), 3, 12))
     _box.hide()
     _content.add_child(_box)
+    # Roster field: a stable, compact grid. Seven fighters occupy a subset of
+    # the reserved field; a much larger roster packs tighter without a redesign.
     var count: int = _cards.size()
-    var row1 := mini(count, 4)
-    var row2: int = maxi(count - 4, 0)
-    var row1_total: float = row1 * CARD_SIZE.x + maxf(row1 - 1, 0) * GAP
-    var row2_total: float = row2 * CARD_SIZE.x + maxf(row2 - 1, 0) * GAP
-    var row1_x: float = (view.x - row1_total) * 0.5 + CARD_SIZE.x * 0.5
-    var row2_x: float = (view.x - row2_total) * 0.5 + CARD_SIZE.x * 0.5
+    var rows: int = maxi(ceili(float(count) / COLS), 1)
+    var cell_h: float = minf(CELL_H, (FIELD_BOTTOM - FIELD_TOP - (rows - 1) * GAP) / rows)
+    var cell_w: float = cell_h * (CELL_W / CELL_H)
+    var cell_size := Vector2(cell_w, cell_h)
     for i in count:
         var slot: Dictionary = _cards[i]
-        var in_row2: bool = i >= 4
-        var col: int = i - 4 if in_row2 else i
-        var center := Vector2(
-            (row2_x if in_row2 else row1_x) + col * (CARD_SIZE.x + GAP),
-            ROW2_Y if in_row2 else ROW1_Y)
+        var row: int = i / COLS
+        var col: int = i % COLS
+        var in_row: int = mini(count - row * COLS, COLS)
+        var row_total: float = in_row * cell_w + maxf(in_row - 1, 0) * GAP
+        var row_x: float = FIELD_X + (FIELD_W - row_total) * 0.5 + cell_w * 0.5
+        var center := Vector2(row_x + col * (cell_w + GAP), FIELD_TOP + cell_h * 0.5 + row * (cell_h + GAP))
         slot["anchor"] = center
         var card := Button.new()
         card.name = "FighterCard" + str(i)
-        card.size = CARD_SIZE
-        card.custom_minimum_size = CARD_SIZE
-        card.pivot_offset = CARD_SIZE * 0.5
+        card.size = cell_size
+        card.custom_minimum_size = cell_size
+        card.pivot_offset = cell_size * 0.5
         card.add_theme_stylebox_override("normal", _flat(Color("284e50"), Color("1b3436"), 2, 10))
         card.add_theme_stylebox_override("hover", _flat(Color("3d6362"), Color("e5ad69"), 2, 10))
         card.add_theme_stylebox_override("pressed", _flat(Color("2f4f4e"), Color("e5ad69"), 3, 10))
         card.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 10))
-        card.position = center - CARD_SIZE * 0.5
+        card.position = center - cell_size * 0.5
         var accent := Panel.new()
         accent.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        accent.position = Vector2(10.0, 8.0)
-        accent.size = Vector2(CARD_SIZE.x - 20.0, 12.0)
-        accent.add_theme_stylebox_override("panel", _flat(slot["palette"], Color(0, 0, 0, 0), 0, 6))
+        accent.position = Vector2(6.0, 6.0)
+        accent.size = Vector2(cell_w - 12.0, 9.0)
+        accent.add_theme_stylebox_override("panel", _flat(slot["palette"], Color(0, 0, 0, 0), 0, 5))
         card.add_child(accent)
         var name_label := Label.new()
         name_label.text = str(slot["name"])
         name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-        name_label.position = Vector2(8.0, 28.0)
-        name_label.size = Vector2(CARD_SIZE.x - 16.0, CARD_SIZE.y - 54.0)
-        name_label.add_theme_font_size_override("font_size", 20)
+        name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        name_label.position = Vector2(4.0, 18.0)
+        name_label.size = Vector2(cell_w - 8.0, cell_h - 30.0)
+        name_label.add_theme_font_size_override("font_size", 14)
         name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card.add_child(name_label)
         card.pressed.connect(_on_card_pressed.bind(i))
@@ -168,9 +195,11 @@ func build(cards: Array) -> void:
         _build_panel(p)
     _name_label = Label.new()
     _name_label.name = "FighterName"
-    _name_label.size = Vector2(view.x, 40.0)
-    _name_label.position = Vector2(0.0, NAME_Y)
+    _name_label.size = Vector2(220.0, 240.0)
+    _name_label.position = Vector2(1030.0, NAME_Y)
     _name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    _name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _name_label.add_theme_font_size_override("font_size", 26)
     _content.add_child(_name_label)
     # The token must draw ABOVE the cards: a parent's own _draw sits below its
@@ -188,48 +217,50 @@ func build(cards: Array) -> void:
         cursor.add_target(_back)
 
 func _build_panel(index: int) -> void:
+    var pc: Color = PLAYER_COLORS[index]
     var box := Button.new()
     box.name = "PanelBox" + str(index)
     box.size = PANEL_SIZE
-    box.position = Vector2(50.0 + index * 300.0, PANEL_Y)
-    box.add_theme_stylebox_override("normal", _flat(Color("284e50"), Color("1b3436"), 2, 12))
-    box.add_theme_stylebox_override("hover", _flat(Color("2f4f4e"), Color("8a5a2b"), 2, 12))
-    box.add_theme_stylebox_override("pressed", _flat(Color("2f4f4e"), Color("e5ad69"), 2, 12))
+    box.position = Vector2(16.0 + index * 316.0, PANEL_Y)
+    box.add_theme_stylebox_override("normal", _flat(Color("284e50"), pc, 2, 12))
+    box.add_theme_stylebox_override("hover", _flat(Color("2f4f4e"), pc, 2, 12))
+    box.add_theme_stylebox_override("pressed", _flat(Color("2f4f4e"), pc, 3, 12))
     box.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 12))
     box.pressed.connect(_on_panel_pressed.bind(index))
     _content.add_child(box)
     var tag := Label.new()
     tag.text = "P%d" % (index + 1)
-    tag.position = Vector2(10.0, 6.0)
-    tag.add_theme_font_size_override("font_size", 22)
+    tag.position = Vector2(12.0, 6.0)
+    tag.add_theme_font_size_override("font_size", 24)
+    tag.add_theme_color_override("font_color", pc)
     tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
     box.add_child(tag)
     var kind := Button.new()
     kind.name = "PanelKind" + str(index)
-    kind.position = Vector2(186.0, 6.0)
+    kind.position = Vector2(206.0, 6.0)
     kind.size = Vector2(84.0, 34.0)
     kind.add_theme_font_size_override("font_size", 13)
     kind.pressed.connect(_on_kind_pressed.bind(index))
     box.add_child(kind)
     var fighter := Label.new()
     fighter.name = "PanelFighter" + str(index)
-    fighter.position = Vector2(10.0, 46.0)
-    fighter.size = Vector2(260.0, 28.0)
+    fighter.position = Vector2(10.0, 48.0)
+    fighter.size = Vector2(280.0, 30.0)
     fighter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    fighter.add_theme_font_size_override("font_size", 18)
+    fighter.add_theme_font_size_override("font_size", 20)
     fighter.mouse_filter = Control.MOUSE_FILTER_IGNORE
     box.add_child(fighter)
     var diff := Button.new()
     diff.name = "PanelDiff" + str(index)
-    diff.position = Vector2(10.0, 86.0)
-    diff.size = Vector2(124.0, 36.0)
+    diff.position = Vector2(10.0, 88.0)
+    diff.size = Vector2(130.0, 36.0)
     diff.add_theme_font_size_override("font_size", 12)
     diff.pressed.connect(_on_diff_pressed.bind(index))
     box.add_child(diff)
     var team := Button.new()
     team.name = "PanelTeam" + str(index)
-    team.position = Vector2(146.0, 86.0)
-    team.size = Vector2(124.0, 36.0)
+    team.position = Vector2(156.0, 88.0)
+    team.size = Vector2(134.0, 36.0)
     team.add_theme_font_size_override("font_size", 12)
     team.pressed.connect(_on_team_pressed.bind(index))
     box.add_child(team)
@@ -267,7 +298,7 @@ func open_with(state) -> void:
         var card: Button = _card_buttons[i]
         card.modulate.a = 0.0
         card.scale = Vector2.ONE
-        var target: Vector2 = _cards[i]["anchor"] - CARD_SIZE * 0.5
+        var target: Vector2 = _cards[i]["anchor"] - card.size * 0.5
         card.position = target + Vector2(0.0, 18.0)
         var tween := create_tween()
         tween.tween_property(card, "position", target, 0.22).set_delay(i * 3.0 / FPS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -378,8 +409,8 @@ func _refresh() -> void:
         var kind := str(slot.get("kind", "human"))
         var active: bool = i == _active
         var fill := Color("35595a") if active else Color("284e50")
-        var border := Color("e5ad69") if active else Color("1b3436")
-        panel["box"].add_theme_stylebox_override("normal", _flat(fill, border, 3 if active else 2, 12))
+        var pc: Color = PLAYER_COLORS[i]
+        panel["box"].add_theme_stylebox_override("normal", _flat(fill, pc, 3 if active else 2, 12))
         panel["kind"].text = str(KIND_LABELS.get(kind, "?"))
         var is_empty: bool = kind == "empty"
         panel["fighter"].text = "-" if is_empty else _display_for(str(slot.get("character", "")))
@@ -389,6 +420,12 @@ func _refresh() -> void:
         panel["team"].text = "TEAM %s" % ("A" if int(slot.get("team", 0)) == 0 else "B")
     _mode_button.text = "MODE: FREE-FOR-ALL" if _state.mode == 0 else "MODE: TEAMS"
     _ready_button.disabled = not ready_allowed()
+    if ready_allowed():
+        _ready_button.text = "READY"
+    elif _state.mode == 1:
+        _ready_button.text = "NEED 3 FIGHTERS + BOTH TEAMS"
+    else:
+        _ready_button.text = "NEED 2 FIGHTERS"
 
 func _display_for(id: String) -> String:
     return load("res://scripts/roster.gd").display_name(id).to_upper()
@@ -507,6 +544,13 @@ func _swap_name(text: String) -> void:
 func _process(delta: float) -> void:
     if _lock > 0.0:
         _lock = maxf(_lock - delta, 0.0)
+    # Ambient: the ready state breathes on its own clock (independent of any
+    # selection response).
+    if _state != null and ready_allowed() and _phase != Phase.EXITING:
+        _ready_pulse += delta
+        _ready_button.modulate = Color(1, 1, 1, 0.85 + 0.15 * (0.5 + 0.5 * sin(TAU * _ready_pulse / 1.1)))
+    else:
+        _ready_button.modulate = Color(1, 1, 1, 1)
     if _box != null and _box.visible and _phase != Phase.EXITING:
         _pulse += delta
         _box.modulate.a = 0.72 + 0.28 * (0.5 + 0.5 * sin(TAU * _pulse / (PULSE_TICKS / FPS)))

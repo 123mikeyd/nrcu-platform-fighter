@@ -55,6 +55,9 @@ func run():
     check(rs.get_page_index() == 3, "left wraps around to the last page")
     check(rs.get_page_name() == "TURBOFIT", "page 3 shows the survivor")
     check(rs.get_page_stocks() == 3, "survivor still holds three stocks")
+    # pane click = detail inspector
+    arena.result_panel.find_child("ResultPane2", true, false).pressed.emit()
+    check(rs.get_page_index() == 2, "pane click inspects that player")
     arena.find_child("Rematch", true, false).pressed.emit()
     check(not arena.result_panel.visible and arena.ready_remaining > 0, "rematch hides results and restarts the countdown")
     check(not arena.match_over and arena.fighters.size() == 4, "rematch rebuilds the match")
@@ -68,8 +71,10 @@ func run():
     check(arena.result_panel.visible and rs.is_waiting(), "result again in the wait phase")
     await create_timer(2.8).timeout
     check(not rs.is_waiting(), "no input: panels auto-start after 160 ticks")
+    check(arena.find_child("MainMenu", true, false) != null, "results expose a visible main menu action")
+    check(not arena.find_child("ChangeStage", true, false).visible, "change stage hidden without a VS state")
     arena.find_child("ChangeFighters", true, false).pressed.emit()
-    check(arena.setup.visible and not arena.result_panel.visible, "change fighters returns to the setup")
+    check(arena.setup.visible and not arena.result_panel.visible, "change fighters returns to setup (debug route)")
     arena.queue_free()
     await process_frame
     if failures == 0: print("PASS: result screen (banner, 160-tick wait, page walk, rematch, change fighters)")

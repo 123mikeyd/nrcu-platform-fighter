@@ -112,6 +112,27 @@ func run():
     check(arena.fighters.size() == 2, "two fighters from the selection state")
     check(arena.fighters[0].character_id == "ggb" and arena.fighters[1].character_id == "teknium", "fighters match the state")
     check(arena.story_state == "" and arena.match_over == false, "freeplay match running")
+    # results: regular cursor, visible actions, change-stage round trip
+    for f in arena.fighters:
+        f.set_physics_process(false)
+    arena.fighters[1].stocks = 0
+    arena._on_fighter_eliminated(arena.fighters[1])
+    check(arena.result_panel.visible, "result screen after the VS match")
+    var rs = arena.result_panel.find_child("ResultScreen", true, false)
+    rs.skip_wait()
+    var hand2 = arena.get_node_or_null("/root/Cursor").hand
+    check(hand2.visible, "results show the regular cursor again")
+    check(not hand2.is_carrying(), "no token state leaks into the results")
+    var change_stage = arena.find_child("ChangeStage", true, false)
+    check(change_stage.visible, "change stage visible in the VS flow")
+    change_stage.pressed.emit()
+    for i in 2: await process_frame
+    check(arena.stage_panel.visible and not arena.result_panel.visible, "change stage opens the stage page")
+    await create_timer(0.6).timeout
+    sss.request_back()
+    await create_timer(0.6).timeout
+    check(arena.char_panel.visible, "stage back from the results path lands on the CSS")
+    check(str(state.slots[0].character) == "ggb", "fighters preserved through the results round trip")
     arena.queue_free()
     await process_frame
     if failures == 0: print("PASS: VS flow (CSS panels/mode/ready -> SSS -> start_match, state round trip)")
