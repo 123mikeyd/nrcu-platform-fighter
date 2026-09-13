@@ -32,7 +32,7 @@ signal modality_changed(mouse_mode: bool)
 enum Mode { MOUSE, FOCUS }
 enum Visual { REGULAR, CARRY }
 
-const SPRING := 420.0          # focus-mode positional spring
+const SPRING := 180.0          # focus-mode positional spring (critically controlled)
 const DAMP := 30.0
 const LEAN_SCALE := 0.0013
 const LEAN_MAX := 0.30
@@ -148,7 +148,9 @@ func is_mouse_active() -> bool:
     return mode == Mode.MOUSE and _hover_armed
 
 # --- carry (token lives in the screen; the cursor only carries it) -------
-func set_carry(token: Control) -> void:
+func set_carry(token: Control = null) -> void:
+    # `token` is the screen-owned PlayerTokenView. A legacy caller may pass
+    # nothing (carry pose only); the production CSS always passes its token.
     _carrying_token = token
     if token != null:
         if token.get_parent() != _token_slot:
@@ -281,6 +283,14 @@ func _draw_hand() -> void:
 # --- deprecated compatibility shims (removed after screen migration) ------
 func reset_for_screen() -> void:
     begin_screen("")
+
+func release_carry() -> Vector2:
+    var at := hotspot
+    clear_carry()
+    return at
+
+func chip_world_position() -> Vector2:
+    return hotspot + CARRY_OFFSET
 
 func attract_to(_target: Control) -> void:
     pass

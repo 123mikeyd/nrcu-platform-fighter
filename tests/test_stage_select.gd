@@ -1,4 +1,9 @@
 extends SceneTree
+# Stage Select — PRODUCTION route contract (Doc 05 §6/§11).
+#
+# Drives the real player route: open_vs -> MatchSelectionState -> CSS -> SSS,
+# never the legacy debug Match Setup. Debug-adapter coverage lives in
+# tests/test_debug_match_setup.gd.
 var failures := 0
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
@@ -9,32 +14,45 @@ func run():
     var arena = load("res://scenes/main.tscn").instantiate()
     root.add_child(arena)
     for i in 5: await process_frame
-    check(arena.has_method("open_stage_select"), "arena exposes the stage page")
-    # card path: opens with the clicked stage as the focus
-    arena.setup.stage_select_requested.emit("toy_room")
-    for i in 2: await process_frame
+    check(arena.has_method("open_vs"), "arena exposes the VS entry")
+    # --- production entry: Main -> CSS -> READY -> SSS ---------------------
+    arena.open_vs()
+    for i in 3: await process_frame
+    var css = arena.char_panel.find_child("CharSelect", true, false)
+    check(css != null, "character select exists")
+    css.ready_requested.emit()
+    # Poll for the SSS to open, then inspect the ENTRY window immediately:
+    # the scene-start guard is active and the tiles are still parked/flying.
+    var opened := false
+    for i in 90:
+        await process_frame
+        if arena.stage_panel.visible:
+            opened = true
+            break
+    check(opened, "READY from the CSS opens the stage page")
     var stage = arena.stage_panel.find_child("StageSelect", true, false)
     check(stage != null, "stage page exists")
     if stage == null:
-        arena.queue_free()
-        await process_frame
-        quit(1)
-        return
-    check(arena.stage_panel.visible and not arena.setup.visible, "stage page replaces the setup screen")
+        arena.queue_free(); await process_frame; quit(1); return
+    check(arena.stage_panel.visible and not arena.char_panel.visible, "READY from the CSS opens the stage page")
+    check(stage.get_input_lock() > 0.0, "scene-start lock is active during the entrance")
+    var early_tiles: Array = stage.get_tiles()
+    check(early_tiles.size() == 3 and early_tiles[2].position.x > 1280.0, "tiles start parked off-screen right")
+    await create_timer(0.9).timeout
+    var hand = arena.get_node_or_null("/root/Cursor").hand
+    check(hand != null, "cursor service reachable")
+    # --- cursor contract on entry -----------------------------------------
+    check(not hand.is_carrying(), "the CSS token can never leak into the stage page")
+    check(hand.mode == 0, "stage page presents the regular mouse cursor")
+    # --- composition guards (unchanged product invariants) ----------------
     var tiles: Array = stage.get_tiles()
     check(tiles.size() == 3, "three stage tiles")
-    check(stage.get_input_lock() > 0.0, "scene-start lock is active")
-    check(tiles[2].position.x > 1280.0, "tiles start parked off-screen right")
     var vw: float = stage.get_viewport_rect().size.x
-    await create_timer(0.6).timeout
+    await create_timer(0.7).timeout
     for i in tiles.size():
         check(tiles[i].position.x + 170.0 < vw, "tile %d flew into view" % i)
-    check(stage.get_hovered_id() == "toy_room", "focus id hovered after the entrance")
+    check(stage.get_hovered_id() == str(arena.selection_state.stage), "entry hovers the stored stage")
     check(stage.get_box_visible(), "highlight box sits on the hovered tile")
-    check(stage.get_name_text() == "TOY SHELF / BEDROOM", "name display follows the hover")
-    # Composition gates (visual spec): the field and the preview are separate
-    # regions, the highlight lives in the reserved gutter, and every stage
-    # image is really cropped by a clipping frame instead of stretched.
     var preview = stage.find_child("StagePreview", true, false)
     check(preview != null and preview is TextureRect, "the preview region is its own TextureRect")
     check(preview != null and preview.position.x >= 700.0, "the preview region stays right of the field")
@@ -87,54 +105,58 @@ func run():
                 separated = false
     check(separated, "the preview region never overlaps the stage field")
     check(stage.find_child("StageReserve3", true, false) != null, "the field shows its reserved slots")
-    tiles[0].pressed.emit()
-    check(stage.get_hovered_id() == "debug", "first press moves the hover")
-    check(stage.get_confirmed_id() == "", "no confirm on a hover move")
-    tiles[0].pressed.emit()
-    check(stage.get_confirmed_id() == "debug", "second press confirms")
+    # --- focus anchors (Step 0): authored tile anchors, no mouse warp ------
+    var anchor_one: Control = stage.get_tile_anchor(1)
+    check(anchor_one != null, "every tile exposes an authored CursorAnchor")
+    var key := InputEventKey.new()
+    key.keycode = KEY_TAB
+    key.pressed = true
+    hand._input(key)
+    check(hand.mode == 1, "keyboard input switches the cursor to focus mode")
+    var mouse_before: Vector2 = hand._mouse
+    var stage_slot2: int = stage._index_of(stage.get_hovered_id())
+    stage.hover_slot(1 if stage_slot2 != 1 else 2)
+    check(hand._focus_anchor != null, "focus mode targets the hovered tile's anchor")
+    var anchor_pos: Vector2 = hand._focus_anchor.get_global_rect().position
+    for i in 40:
+        await process_frame
+    check(hand._mouse == mouse_before, "the physical pointer coordinate is untouched by focus movement")
+    check(hand.hotspot.distance_to(anchor_pos) < 6.0, "the focus hand settles at the authored anchor")
+    # --- hover vs confirm semantics (unchanged) ---------------------------
+    var first: int = 0 if stage.get_hovered_id() != "debug" else 1
+    tiles[first].pressed.emit()
+    check(stage.get_hovered_id() == str(stage._slots[first]["id"]), "first press previews the stage")
+    check(stage.get_confirmed_id() == "", "hovering never commits the stage")
+    check(str(arena.selection_state.stage) == "debug", "hover does not mutate the persistent stage")
+    tiles[first].pressed.emit()
+    check(stage.get_confirmed_id() == str(stage._slots[first]["id"]), "second press confirms")
     check(stage.is_confirming(), "confirm lock engaged")
-    check(arena.setup.level.selected == 0, "hidden model updated at confirm")
-    tiles[1].pressed.emit()
-    check(stage.get_confirmed_id() == "debug", "presses swallowed while confirming")
-    await create_timer(0.9).timeout
-    check(not arena.stage_panel.visible, "stage page closed after the confirm lock")
-    check(arena.setup.visible, "setup is back")
-    check(arena.setup.selected_level() == "debug", "the chosen stage is the selection")
-    # back path: keeps the previous choice, hover falls back to the current stage
-    arena.setup.stage_select_requested.emit("")
-    for i in 2: await process_frame
-    check(arena.stage_panel.visible, "stage page reopens")
-    check(stage.get_hovered_id() == "", "no hover during the entrance")
-    await create_timer(0.6).timeout
-    check(stage.get_hovered_id() == "debug", "empty focus falls back to the current stage")
-    stage.request_back()
-    check(stage.is_exiting(), "back starts the exit")
-    await create_timer(0.5).timeout
-    check(not arena.stage_panel.visible, "back closes the page")
-    check(arena.setup.selected_level() == "debug", "back keeps the choice")
-    # the LEVEL row confirm opens the same page
-    await create_timer(0.6).timeout
-    arena.setup.main_menu.set_focus(1)
-    arena.setup.main_menu.confirm()
+    tiles[0].pressed.emit()
+    check(stage.get_confirmed_id() == str(stage._slots[first]["id"]), "presses swallowed while confirming")
+    await create_timer(1.0).timeout
+    check(not arena.stage_panel.visible and not arena.char_panel.visible, "VS screens closed after the confirm")
+    check(arena.active_level == str(stage._slots[first]["id"]), "confirmed stage launches the match through the selection state")
+    check(str(arena.selection_state.stage) == str(stage._slots[first]["id"]), "the persistent stage holds the confirmed value")
+    # --- backtracking: CSS -> SSS -> CSS preserves the selection ----------
+    var arena2 = load("res://scenes/main.tscn").instantiate()
+    root.add_child(arena2)
+    for i in 5: await process_frame
+    arena2.open_vs()
     for i in 3: await process_frame
-    check(arena.stage_panel.visible, "LEVEL row opens the stage page")
-    stage.request_back()
-    await create_timer(0.5).timeout
-    check(arena.setup.visible and not arena.stage_panel.visible, "back from the row path returns to setup")
-    # the stage cards in the setup open the page with their own stage focused
-    await create_timer(0.4).timeout
-    var card_one = arena.setup.find_child("StageCard1", true, false)
-    check(card_one != null, "stage cards exist in the setup")
-    card_one.pressed.emit()
-    for i in 2: await process_frame
-    check(arena.stage_panel.visible, "stage card opens the page")
-    await create_timer(0.6).timeout
-    check(stage.get_hovered_id() == "toy_room", "the clicked card is the hovered stage")
-    check(arena.setup.selected_level() == "debug", "hovering a card does not change the selection")
-    stage.request_back()
-    await create_timer(0.5).timeout
-    check(not arena.stage_panel.visible, "card path back closes the page")
+    arena2.selection_state.slots[0]["character"] = "ggb"
+    var css2 = arena2.char_panel.find_child("CharSelect", true, false)
+    css2.ready_requested.emit()
+    for i in 3: await process_frame
+    await create_timer(0.9).timeout
+    var stage2 = arena2.stage_panel.find_child("StageSelect", true, false)
+    check(arena2.stage_panel.visible, "stage page opens again")
+    stage2.request_back()
+    await create_timer(0.9).timeout
+    check(arena2.char_panel.visible and not arena2.stage_panel.visible, "SSS Back returns to the CSS")
+    check(str(arena2.selection_state.slots[0]["character"]) == "ggb", "Back preserves the fighter configuration")
+    check(not hand.is_carrying(), "returning from SSS carries no token")
     arena.queue_free()
+    arena2.queue_free()
     await process_frame
-    if failures == 0: print("PASS: stage page (staggered entrance, sticky hover, name swap, confirm/back, model sync)")
+    if failures == 0: print("PASS: production stage select (route, cursor anchors, hover/confirm, backtracking preservation)")
     quit(1 if failures else 0)

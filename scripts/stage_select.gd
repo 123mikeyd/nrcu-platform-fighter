@@ -44,6 +44,7 @@ signal confirmed(id: String)
 signal exit_finished
 
 const Tokens = preload("res://scripts/ui_tokens.gd")
+const CursorAnchorScript = preload("res://scripts/frontend/cursor_anchor.gd")
 
 const FPS := 60.0
 
@@ -100,6 +101,7 @@ var cursor: Control
 
 var _slots: Array = []
 var _tiles: Array = []
+var _tile_anchors: Array = []
 var _captions: Array = []
 var _content: Control
 var _preview_layer: Control
@@ -132,6 +134,7 @@ func build(slots: Array) -> void:
         _content = null
         _slots = []
         _tiles.clear()
+        _tile_anchors.clear()
         _captions.clear()
         _preview_layer = null
         _preview = null
@@ -299,6 +302,14 @@ func _build_field() -> void:
             tile.add_child(label)
         tile.pressed.connect(_on_tile_pressed.bind(i))
         tile.mouse_entered.connect(_on_tile_hovered.bind(i))
+        # Authored focus-cursor anchor: the focus hand settles at the tile's
+        # lower-left so artwork and caption stay uncovered (Doc 05 §4).
+        var anchor := CursorAnchorScript.new()
+        anchor.name = "TileAnchor" + str(i)
+        anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        anchor.place_at(Vector2(12.0, cell.y - 12.0))
+        tile.add_child(anchor)
+        _tile_anchors.append(anchor)
         _content.add_child(tile)
         _tiles.append(tile)
         _captions.append(label)
@@ -380,9 +391,8 @@ func open_with(current_id: String, focus_id: String) -> void:
         # Character Select token state must never leak in here. The hand is
         # re-anchored at the pointer as it is now and waits for real motion.
         cursor.visible = true
-        cursor.reset_for_screen()
+        cursor.begin_screen("stage_select")
         cursor.clear_carry()
-        cursor.press_frame_enabled = true
     # The preview region fades on its own clock; the name swaps on its own
     # (see _swap_name), so the two layers never collapse into one fade.
     _preview_layer.modulate.a = 0.0
@@ -428,6 +438,8 @@ func _seed_focus() -> void:
     if idx < 0 or idx >= _tiles.size():
         return
     _tiles[idx].grab_focus()
+    if cursor != null and cursor.mode == 1 and idx < _tile_anchors.size():
+        cursor.set_focus_target(_tile_anchors[idx])
 
 func hover_slot(index: int) -> void:
     # Hover exists only after the entrance: during ENTERING, CONFIRMING and
@@ -445,6 +457,10 @@ func hover_slot(index: int) -> void:
     _box.size = rect.size + Vector2(SELECTION_GROW, SELECTION_GROW) * 2.0
     _box.show()
     _pulse = 0.0
+    if cursor != null and cursor.mode == 1 and index < _tile_anchors.size():
+        # In focus/keyboard mode the hand tracks the logical selection at the
+        # tile's authored anchor; the physical mouse is never involved.
+        cursor.set_focus_target(_tile_anchors[index])
     _preview_image.texture = load(str(_slots[index]["tex"]))
     _preview_image.modulate.a = 0.55
     var settle := create_tween()
@@ -518,10 +534,15 @@ func reset() -> void:
         _content.modulate.a = 1.0
     if cursor != null:
         cursor.visible = true
-        cursor.reset_for_screen()
+        cursor.begin_screen("stage_select")
 
 func get_tiles() -> Array:
     return _tiles
+
+func get_tile_anchor(index: int) -> Control:
+    if index < 0 or index >= _tile_anchors.size():
+        return null
+    return _tile_anchors[index]
 
 func get_back_button() -> Button:
     return _back
