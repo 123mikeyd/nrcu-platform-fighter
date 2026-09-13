@@ -8,7 +8,7 @@ func run():
     await process_frame
     if home.find_children("*", "Node3D", true, false).size() != 0 or home.find_child("ShelfBackground", true, false) == null:
         print("FAIL: home must use texture, no 3D nodes"); quit(1); return
-    if home.buttons.keys() != ["play", "help", "quit"]:
+    if home.buttons.keys() != ["play", "story", "debug", "help", "quit"]:
         print("FAIL: home live actions missing"); quit(1); return
     home.show_page("help")
     if not home.buttons.has("home"):

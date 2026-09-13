@@ -66,7 +66,7 @@ func build(slots: Array) -> void:
     title.add_theme_font_size_override("font_size", 30)
     _content.add_child(title)
     var subtitle := Label.new()
-    subtitle.text = "Click a stage to confirm it - Esc / BACK returns to the setup."
+    subtitle.text = "Click a stage to confirm it - Esc / BACK goes back."
     subtitle.position = Vector2(66.0, 84.0)
     subtitle.add_theme_font_size_override("font_size", 16)
     subtitle.modulate = Color(1, 1, 1, 0.72)

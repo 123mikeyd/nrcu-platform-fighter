@@ -1,5 +1,6 @@
 extends Control
 const Style = preload("res://scripts/demo_style.gd")
+const AppStateScript = preload("res://scripts/app_state.gd")
 var buttons: Dictionary = {}
 var page: Control
 var state := "home"
@@ -61,15 +62,18 @@ func show_page(next: String):
     title.add_theme_font_size_override("font_size",102 if next == "home" else 30)
     page.add_child(title)
     if next == "home":
-        add_button("Play", "play", 354, func(): _nav(func():
-            get_tree().auto_accept_quit = true
-            get_tree().change_scene_to_file("res://scenes/main.tscn")))
-        add_button("How to Play", "help", 434, func(): _nav(func(): show_page("help")))
-        add_button("Quit", "quit", 514, func(): _nav(func(): show_page("quit")))
+        add_button("Play", "play", 320, func(): _nav(func(): _enter("vs")))
+        add_button("Story Mode", "story", 392, func(): _nav(func(): _enter("story")))
+        add_button("Debug Match Setup", "debug", 464, func(): _nav(func(): _enter("debug")))
+        add_button("How to Play", "help", 536, func(): _nav(func(): show_page("help")))
+        add_button("Quit", "quit", 608, func(): _nav(func(): show_page("quit")))
+        # The old monolithic setup stays reachable as a developer launcher
+        # (debug builds only).
+        buttons["debug"].visible = OS.is_debug_build()
     else:
         add_button("Stay here", "home", 354, func(): _nav(func(): show_page("home")))
         add_button("Quit", "exit", 434, func(): _nav(func(): get_tree().quit()))
-    var values = buttons.values()
+    var values = buttons.values().filter(func(b): return b.visible)
     for i in values.size():
         values[i].focus_neighbor_bottom = values[(i+1)%values.size()].get_path()
         values[i].focus_neighbor_top = values[(i-1+values.size())%values.size()].get_path()
@@ -88,6 +92,11 @@ func add_button(label: String, id: String, y: float, action: Callable):
     var cursor = get_node_or_null("/root/Cursor")
     if cursor != null and cursor.hand != null:
         cursor.hand.add_target(b)
+func _enter(mode: String) -> void:
+    AppStateScript.enter_mode = mode
+    get_tree().auto_accept_quit = true
+    get_tree().change_scene_to_file("res://scenes/main.tscn")
+
 func _unhandled_key_input(event):
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
         show_page("quit" if state == "home" else "home")

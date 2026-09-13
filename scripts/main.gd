@@ -8,6 +8,8 @@ const StoryStageScript = preload("res://scripts/story_stage.gd")
 const StageSelectScript = preload("res://scripts/stage_select.gd")
 const CharSelectScript = preload("res://scripts/char_select.gd")
 const ResultScreenScript = preload("res://scripts/result_screen.gd")
+const AppStateScript = preload("res://scripts/app_state.gd")
+const SelectionStateScript = preload("res://scripts/match_selection_state.gd")
 var ready_remaining := 0.0
 var go_remaining := 0.0
 var ready_label: Label
@@ -36,7 +38,10 @@ var stage_panel: Control
 var stage_select: Control
 var char_panel: Control
 var char_select: Control
-var _char_player := -1
+var selection_state
+var _entry_mode := "debug"
+var _sss_from := "debug"
+var _pending_match := false
 var hud_title: Label
 var hud_controls: Label
 var freeplay_controls: String
@@ -75,11 +80,17 @@ func _ready() -> void:
     setup.start_requested.connect(start_match)
     setup.story_requested.connect(open_story)
     setup.stage_select_requested.connect(open_stage_select)
-    setup.character_select_requested.connect(open_char_select)
     setup.back_requested.connect(back_to_menu)
     _build_story_panel(menu_layer)
     _build_stage_panel(menu_layer)
     _build_char_panel(menu_layer)
+    var entry: String = AppStateScript.enter_mode
+    AppStateScript.enter_mode = "debug"
+    _entry_mode = entry
+    if entry == "vs":
+        open_vs()
+    elif entry == "story":
+        open_story()
 
 func _process(_delta: float) -> void:
     for i in range(fighters.size()):
@@ -95,7 +106,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
         if setup.visible and setup.close_help(): return
         if char_panel != null and char_panel.visible:
-            char_select.request_back()
+            back_to_menu()
         elif stage_panel != null and stage_panel.visible:
             stage_select.request_back()
         elif setup.visible: back_to_menu()
@@ -144,7 +155,7 @@ func show_setup() -> void:
     setup.show()
     setup.find_child("StartMatchButton",true,false).grab_focus()
 
-func start_match(slots: Array, teams: bool, bobo_encounter := false) -> bool:
+func start_match(slots: Array, teams: bool, bobo_encounter := false, level := "") -> bool:
     var validation_slots := slots.duplicate(true)
     if bobo_encounter and validation_slots[1].character == "bobo":
         validation_slots[1].character = "ice_mage"
@@ -152,7 +163,7 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false) -> bool:
     if not error.is_empty():
         setup.error_label.text = error
         return false
-    apply_level(setup.selected_level())
+    apply_level(level if level != "" else setup.selected_level())
     for fighter in fighters:
         remove_child(fighter)
         fighter.queue_free()
@@ -300,22 +311,55 @@ func _build_stage_panel(layer: CanvasLayer) -> void:
         })
     stage_select.build(slots)
     stage_select.confirmed.connect(_on_stage_confirmed)
-    stage_select.exit_finished.connect(show_setup)
+    stage_select.exit_finished.connect(_on_stage_exit)
     stage_panel.hide()
 
 func _on_stage_confirmed(id: String) -> void:
-    setup.select_level_by_id(id)
+    if _sss_from == "css":
+        # VS flow: the stage finishes the configuration; the match launches
+        # once the page has closed (see _on_stage_exit).
+        selection_state.set_stage(id)
+        _pending_match = true
+    else:
+        # Debug launcher: keep the old write-back into the hidden model.
+        setup.select_level_by_id(id)
+
+func _on_stage_exit() -> void:
+    if _pending_match:
+        _pending_match = false
+        _launch_match()
+        return
+    if _sss_from == "css":
+        stage_panel.hide()
+        char_panel.show()
+        char_select.reopen()
+    else:
+        show_setup()
+
+func _launch_match() -> void:
+    var slots: Array = selection_state.to_slots()
+    stage_panel.hide()
+    if start_match(slots, selection_state.mode == 1, false, selection_state.stage):
+        char_panel.hide()
+        return
+    # Validation failed: back to the character page so the player can fix it.
+    char_panel.show()
+    char_select.reopen()
 
 func open_stage_select(focus_id: String) -> void:
     var current: String = setup.selected_level()
     show_setup()
     setup.hide()
+    _sss_from = "debug"
+    _pending_match = false
     var focus: String = focus_id if focus_id in SetupScript.LEVEL_IDS else current
     stage_panel.show()
     stage_select.open_with(current, focus)
 
 func _build_char_panel(layer: CanvasLayer) -> void:
-    # Character page (CSS grammar): roster grid, hand + token, name swap.
+    # Character Select (CSS): the player-facing VS screen. It edits the
+    # persistent selection state; READY hands over to the stage page and the
+    # stage confirmation adapts the state into start_match().
     char_panel = Control.new()
     char_panel.name = "CharPanel"
     char_panel.theme = DemoStyle.make()
@@ -329,38 +373,40 @@ func _build_char_panel(layer: CanvasLayer) -> void:
     char_select.name = "CharSelect"
     char_panel.add_child(char_select)
     var roster = load("res://scripts/roster.gd")
-    var slots: Array = []
+    var cards: Array = []
     for id in roster.ids():
-        slots.append({
+        cards.append({
             "id": id,
             "name": roster.display_name(id).to_upper(),
             "palette": roster.palette(id, 0),
         })
-    char_select.build(slots)
-    char_select.confirmed.connect(_on_char_confirmed)
-    char_select.exit_finished.connect(_on_char_exit)
+    char_select.build(cards)
+    char_select.ready_requested.connect(_on_css_ready)
+    char_select.back_requested.connect(back_to_menu)
+    char_select.exit_finished.connect(_on_css_exit)
     char_panel.hide()
 
-func _on_char_confirmed(id: String) -> void:
-    if _char_player >= 0:
-        setup.select_character_by_id(_char_player, id)
-
-func _on_char_exit() -> void:
-    show_setup()
-    if _char_player >= 0:
-        setup.reopen_player(_char_player)
-    _char_player = -1
-
-func open_char_select(player_index: int, focus_id: String) -> void:
-    if player_index < 0 or player_index >= setup.rows.size():
-        return
-    var current: String = Config.CHARACTERS[setup.rows[player_index].character.selected]
+func open_vs() -> void:
+    # Player-facing VS entry: Character Select -> Stage Select -> match.
     show_setup()
     setup.hide()
-    _char_player = player_index
-    var focus: String = focus_id if focus_id in Config.CHARACTERS else current
+    _sss_from = "css"
+    _pending_match = false
+    selection_state = SelectionStateScript.new()
     char_panel.show()
-    char_select.open_with(current, focus, player_index)
+    char_select.open_with(selection_state)
+
+func _on_css_ready() -> void:
+    if not char_select.ready_allowed():
+        return
+    char_select.play_exit()
+
+func _on_css_exit() -> void:
+    char_panel.hide()
+    _sss_from = "css"
+    _pending_match = false
+    stage_panel.show()
+    stage_select.open_with(selection_state.stage, selection_state.stage)
 
 func apply_level(id: String) -> void:
     if id not in SetupScript.LEVEL_IDS: id = "debug"
@@ -736,9 +782,17 @@ func _physics_process(delta: float) -> void:
 
 func _leave_story() -> void:
     # Animated leave (Melee EXIT_FROM); instant for states without the ready
-    # selection (e.g. mid-match).
+    # selection (e.g. mid-match). The way back follows the entry route:
+    # story -> main menu, VS -> character select (selections kept), the debug
+    # launcher -> its setup screen.
     if story_state == "ready":
         story_stage.play_exit()
+        return
+    if _entry_mode == "story":
+        back_to_menu()
+    elif _entry_mode == "vs":
+        char_panel.show()
+        char_select.reopen()
     else:
         show_setup()
 

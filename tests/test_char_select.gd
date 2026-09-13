@@ -9,86 +9,110 @@ func run():
     var arena = load("res://scenes/main.tscn").instantiate()
     root.add_child(arena)
     for i in 5: await process_frame
-    var setup = arena.setup
-    check(arena.has_method("open_char_select"), "arena exposes the character page")
-    # enter through the real chain: PLAYER 2 row -> subpage -> FIGHTER row
-    await create_timer(0.4).timeout
-    setup.main_menu.set_focus(3)
-    setup.main_menu.confirm()
-    await create_timer(0.5).timeout
-    check(setup.player_menu.visible, "player subpage open")
-    await create_timer(0.3).timeout
-    setup.player_menu.set_focus(1)
-    setup.player_menu.confirm()
-    for i in 3: await process_frame
-    var page = arena.char_panel.find_child("CharSelect", true, false)
-    check(page != null, "character page exists")
-    if page == null:
+    check(arena.has_method("open_vs"), "arena exposes the VS entry")
+    # player-facing entry: home sets the mode, main opens the CSS
+    arena.open_vs()
+    for i in 2: await process_frame
+    var css = arena.char_panel.find_child("CharSelect", true, false)
+    check(css != null, "character select exists")
+    if css == null:
         arena.queue_free()
         await process_frame
         quit(1)
         return
-    check(arena.char_panel.visible and not setup.visible, "character page replaces the setup")
-    var cards: Array = page.get_cards()
+    check(arena.char_panel.visible and not arena.setup.visible, "VS entry shows the CSS, not the setup")
+    check(arena.selection_state != null, "persistent selection state created")
+    var state = arena.selection_state
+    check(state.slots.size() == 4, "four player slots in the state")
+    var cards: Array = css.get_cards()
     check(cards.size() == 7, "seven fighter cards")
-    check(cards[0].name == "FighterCard0", "card naming")
-    var label := cards[3].get_child(1) as Label
-    check(label != null and label.text == "TURBOFIT", "card label matches the roster")
-    var hand = page.cursor
-    check(hand != null, "hand bound")
-    check(page.get_input_lock() > 0.0, "scene-start lock active")
-    check(hand.is_carrying(), "hand carries the token at open")
-    check(not hand.press_frame_enabled, "no tap frame during the selection")
-    check(page.get_hovered_id() == "", "no hover during the entrance")
-    await create_timer(0.8).timeout
-    check(page.get_hovered_id() == "doge_man", "focus id hovered after the entrance")
-    check(page.get_box_visible(), "highlight box on the hovered card")
-    check(page.get_name_text() == "DOGE MAN", "name display follows the hover")
-    cards[0].pressed.emit()
-    check(page.get_hovered_id() == "teknium", "first press moves the hover")
-    check(page.get_confirmed_id() == "", "no confirm on a hover move")
-    cards[0].pressed.emit()
-    check(page.get_confirmed_id() == "teknium", "second press confirms")
-    check(page.is_confirming(), "confirm lock engaged")
-    check(setup.rows[1].character.selected == 0, "hidden model updated at confirm")
-    check(not hand.is_carrying(), "token released on confirm")
-    cards[4].pressed.emit()
-    check(page.get_confirmed_id() == "teknium", "presses swallowed while confirming")
-    await create_timer(0.4).timeout
-    check(page.is_chip_landed(), "token set down")
-    var chip_pos: Vector2 = page.get_chip_position()
-    check(cards[0].get_global_rect().grow(12.0).has_point(chip_pos), "token set down on the picked card")
-    check(not cards[1].get_global_rect().has_point(chip_pos), "token not on another card")
+    var kind1 = css.find_child("PanelKind1", true, false)
+    var diff1 = css.find_child("PanelDiff1", true, false)
+    var team0 = css.find_child("PanelTeam0", true, false)
+    var box1 = css.find_child("PanelBox1", true, false)
+    var mode = css.find_child("ModeToggle", true, false)
+    var ready = css.find_child("ReadyButton", true, false)
+    check(kind1 != null and diff1 != null and team0 != null and box1 != null and mode != null and ready != null, "CSS panels and controls exist")
+    check(state.slots[1].kind == "bot" and diff1.visible, "default P2 is a CPU with a difficulty cell")
+    check(not team0.visible, "team cells hidden in free-for-all")
+    kind1.pressed.emit()
+    check(state.slots[1].kind == "empty", "kind cycles bot -> empty")
+    check(not diff1.visible, "difficulty hides for empty")
+    kind1.pressed.emit()
+    check(state.slots[1].kind == "human", "kind cycles empty -> human")
+    kind1.pressed.emit()
+    check(state.slots[1].kind == "bot", "kind cycles human -> bot")
+    var before_diff: String = str(state.slots[1].difficulty)
+    diff1.pressed.emit()
+    check(str(state.slots[1].difficulty) != before_diff, "difficulty cycles on the CPU panel")
+    mode.pressed.emit()
+    check(state.mode == 1, "mode toggle switches to teams")
+    check(team0.visible, "team cells appear in team mode")
+    team0.pressed.emit()
+    check(int(state.slots[0].team) == 1, "team cell flips A -> B")
+    mode.pressed.emit()
+    check(state.mode == 0, "mode toggles back")
+    # wait out the scene-start entry before the card presses (Melee-style
+    # input lock, same as the other screens)
     await create_timer(0.7).timeout
-    check(not arena.char_panel.visible, "character page closed after the confirm lock")
-    check(setup.visible, "setup is back")
-    check(setup.player_menu.visible, "back on the player subpage (entry row rule)")
-    check(setup.player_menu.focus == 1, "focus landed on the FIGHTER row")
-    check(setup.rows[1].character.selected == 0, "the chosen fighter sticks")
+    # assignment: the active panel (P1) receives the clicked fighter
+    cards[2].pressed.emit()
+    check(str(state.slots[0].character) == "ggb", "card press assigns to the active panel")
+    box1.pressed.emit()
+    check(css.get_active() == 1, "panel click activates that player")
+    cards[0].pressed.emit()
+    check(str(state.slots[1].character) == "teknium", "next card press goes to the activated panel")
+    # ready gating mirrors match_config.validate
+    var kind2 = css.find_child("PanelKind2", true, false)
+    var kind3 = css.find_child("PanelKind3", true, false)
+    kind2.pressed.emit()
+    kind3.pressed.emit()
+    check(state.active_count() == 2 and state.can_ready(), "two active fighters can ready")
+    kind1.pressed.emit()
+    check(state.active_count() == 1 and not state.can_ready(), "one fighter cannot ready")
+    check(ready.disabled, "READY is disabled below the minimum")
+    ready.pressed.emit()
+    check(arena.char_panel.visible, "READY without the minimum does nothing")
+    kind1.pressed.emit()
+    check(state.active_count() == 2 and state.can_ready(), "config valid again")
+    # chip flow: the token is set down on the assigned card
+    var hand = css.cursor
+    check(not hand.is_carrying(), "token released on the first assignment")
     await create_timer(0.4).timeout
-    setup.player_menu.set_focus(5)
-    setup.player_menu.confirm()
-    await create_timer(0.5).timeout
-    check(setup.main_menu.visible, "back to the main list")
-    check("Teknium" in str(setup.main_menu.rows[3]["label"]), "main list row shows the new fighter")
-    # back path keeps the previous choice
-    setup.main_menu.set_focus(3)
-    setup.main_menu.confirm()
-    await create_timer(0.5).timeout
-    await create_timer(0.3).timeout
-    setup.player_menu.set_focus(1)
-    setup.player_menu.confirm()
-    for i in 3: await process_frame
-    check(arena.char_panel.visible, "character page reopens")
-    await create_timer(0.8).timeout
-    check(page.get_hovered_id() == "teknium", "empty focus falls back to the current fighter")
-    page.request_back()
-    check(page.is_exiting(), "back exits")
+    check(css.is_chip_landed(), "token set down")
+    var chip_pos: Vector2 = css.get_chip_position()
+    check(cards[0].get_global_rect().grow(12.0).has_point(chip_pos), "token set down on the assigned card")
+    # READY -> stage page
+    ready.pressed.emit()
+    check(css.is_exiting(), "READY exits the CSS")
     await create_timer(0.6).timeout
-    check(not arena.char_panel.visible and setup.visible, "back closes the page")
-    check(setup.player_menu.visible, "back lands on the subpage")
-    check(setup.rows[1].character.selected == 0, "back keeps the choice")
+    check(not arena.char_panel.visible and arena.stage_panel.visible, "stage page opens after READY")
+    var sss = arena.stage_panel.find_child("StageSelect", true, false)
+    check(sss != null, "stage page exists")
+    await create_timer(0.6).timeout
+    check(sss.get_hovered_id() == str(state.stage), "stage page starts on the stored stage")
+    # back from the stage page returns to the CSS with everything kept
+    sss.request_back()
+    await create_timer(0.6).timeout
+    check(arena.char_panel.visible and not arena.stage_panel.visible, "stage back returns to the CSS")
+    check(str(state.slots[0].character) == "ggb" and str(state.slots[1].character) == "teknium", "selections survive the stage round trip")
+    # READY again, confirm a stage -> the match launches through start_match
+    await create_timer(0.4).timeout
+    css.find_child("ReadyButton", true, false).pressed.emit()
+    await create_timer(0.7).timeout
+    check(arena.stage_panel.visible, "stage page again")
+    await create_timer(0.5).timeout
+    sss.hover_slot(1)
+    check(sss.get_hovered_id() == "toy_room", "hovered toy room")
+    sss.confirm()
+    check(sss.get_confirmed_id() == "toy_room", "stage confirmed")
+    await create_timer(1.0).timeout
+    check(not arena.stage_panel.visible and not arena.char_panel.visible, "VS screens closed after the confirm")
+    check(arena.active_level == "toy_room", "confirmed stage applied to the match")
+    check(arena.fighters.size() == 2, "two fighters from the selection state")
+    check(arena.fighters[0].character_id == "ggb" and arena.fighters[1].character_id == "teknium", "fighters match the state")
+    check(arena.story_state == "" and arena.match_over == false, "freeplay match running")
     arena.queue_free()
     await process_frame
-    if failures == 0: print("PASS: character page (grid, hand+token, confirm/back, entry row return, model sync)")
+    if failures == 0: print("PASS: VS flow (CSS panels/mode/ready -> SSS -> start_match, state round trip)")
     quit(1 if failures else 0)
