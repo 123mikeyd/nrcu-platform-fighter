@@ -17,6 +17,17 @@ extends Control
 #     the state instead of re-applying defaults.
 #   * candidate fighter != committed fighter. Hover/focus only changes the
 #     candidate; only a confirm (click / semantic accept) edits the state.
+#   * THE ONE LIFT RULE (Doc 01 §5 / Doc 04 §12): a chip leaves its tile for the
+#     hand ONLY through the owner's explicit actions —
+#       (a) A on its own tile      -> a no-op (the same id is re-written);
+#       (b) A on a DIFFERENT tile  -> the commit MOVES (re-pick);
+#       (c) ui_cancel / Back (B)   -> the staged take-back.
+#     Hover (the tile's own mouse entry), the candidate preview, focus browsing,
+#     the modality switch and the roster envelope may only cancel an IN-FLIGHT
+#     carry: they never lift a committed chip (owner report: hovering another
+#     fighter after a commit put the committed chip back into the hand). It is
+#     enforced in ONE place — _begin_carry, gated on _has_committed_pick, the
+#     single source of the committed-pick question.
 #   * ui_cancel (Esc / pad B / the Back control) is STAGED: it cancels a carried
 #     chip, then takes the ACTIVE player's committed chip back into the hand
 #     (the screen stays — the player can re-place or re-browse), then clears a
@@ -682,6 +693,10 @@ func _tile_index_of(id: String) -> int:
 
 # --- token carry (Doc 01 §5 grammar) -------------------------------------
 func _on_tile_entered(index: int) -> void:
+	# The tile's own mouse entry — the pointer HOVER path the owner uses. Hover
+	# only ever moves the CANDIDATE/preview; whether it also picks a chip up is
+	# decided by the ONE lift rule inside _begin_carry, so a committed chip can
+	# never be lifted just because the pointer crossed another fighter.
 	if cursor != null and not cursor.is_mouse_active():
 		return
 	if _phase == Phase.EXITING:
@@ -692,6 +707,7 @@ func _on_tile_entered(index: int) -> void:
 func _on_tile_focused(index: int) -> void:
 	# Keyboard/controller parity: focus on a tile means candidate + focus hand
 	# at the authored anchor + the active player's token in carry presentation.
+	# The same ONE lift rule applies here (focus browsing is not a lift).
 	if index < 0 or index >= _tiles.size():
 		return
 	FocusGraph.track(self, _tiles[index])
@@ -777,6 +793,16 @@ func _begin_carry(player: int) -> void:
 		return
 	if _carried_by == player:
 		return
+	# THE ONE LIFT RULE (Doc 01 §5 / Doc 04 §12) — this is the ONLY place a chip
+	# can leave a tile for the hand, so the gate lives here and every lift path
+	# (tile mouse entry / focus browse / entry or modality seeding) inherits it:
+	# a player who already owns a COMMITTED pick has no liftable chip. The two
+	# sanctioned lifts are (b) A on another tile, handled by _on_tile_pressed as a
+	# direct re-place, and (c) the staged take-back in _take_back_committed, which
+	# clears the commit BEFORE asking here. Hover / candidate preview / focus
+	# browsing may only cancel an IN-FLIGHT carry of an UNCOMMITTED chip.
+	if _has_committed_pick(player):
+		return
 	if _carried_by >= 0:
 		_return_carried()
 	_carried_by = player
@@ -794,6 +820,10 @@ func _begin_carry(player: int) -> void:
 func _return_carried() -> void:
 	# Cancel/leave: the token RETURNS home through a real motion (ledger C-007):
 	# to its committed tile when it has one, else home + hide.
+	# Under the ONE lift rule a carried chip is ALWAYS uncommitted (a committed
+	# pick is lifted only by the staged take-back, which clears the commit first),
+	# so the committed-tile branch below is a defensive fallback for a state
+	# written from outside the screen — never the browsing path.
 	if _carried_by < 0:
 		return
 	var player := _carried_by
@@ -990,6 +1020,12 @@ func _on_tile_pressed(id: String) -> void:
 	if tile_index < 0:
 		return
 	var was_placed: bool = _token_state[player] == TokenView.State.PLACED
+	# (a) A on the tile that already owns this player's committed chip: the
+	# commit already holds this fighter and the chip is already on the tile, so
+	# the action is a NO-OP — never a lift and never a placement nudge. The chip
+	# stays PLACED and nothing is re-homed.
+	if str(slot.get("character", "")) == id and _carried_by != player and was_placed:
+		return
 	slot["character"] = id           # THE commit: candidate -> committed
 	var from_carry: bool = _carried_by == player
 	if from_carry:
@@ -1158,8 +1194,13 @@ func _flat_back() -> void:
 	back_requested.emit()
 
 func _has_committed_pick(player: int) -> bool:
-	# A COMMITTED pick is a non-EMPTY player with a fighter in the persistent
-	# state; a candidate is only a preview and never counts (Doc 04 §12).
+	# THE single source of the COMMITTED-pick question, and therefore of the ONE
+	# lift rule: a non-EMPTY player with a fighter in the persistent state owns a
+	# committed chip, and no hover / candidate preview / focus browse / modality
+	# switch / roster envelope may take it off its tile. Both the staged cancel
+	# (stage 2, _take_back_committed) and the carry gate in _begin_carry read
+	# THIS, so "is this chip liftable?" can never be answered two different ways.
+	# A candidate is only a preview and never counts (Doc 04 §12).
 	if _state == null or player < 0 or player >= _state.slots.size():
 		return false
 	var slot: Dictionary = _state.slots[player]

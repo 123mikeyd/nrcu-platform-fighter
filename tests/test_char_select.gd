@@ -117,19 +117,24 @@ func run():
     check(not token_rect.intersects(name_band) or token_rect.get_area() == 0.0, "the token does not cover the name band")
     check(bays[0].presented_fighter() == "ggb", "the bay presents the committed fighter")
 
-    # --- no sticky token: leave / re-enter / release -----------------------
-    # A committed player's token stays placed, and browsing lifts it without
-    # ever leaving a residue behind.
+    # --- a committed chip is never lifted by browsing (Doc 01 §5 lift rule) -
+    # Hovering another tile only moves the candidate: a committed chip stays
+    # PLACED on its own tile (owner report: the hover used to put it back into
+    # the hand, with no A pressed).
     arm_mouse(hand, tiles[tile_ggb].get_global_rect().get_center())
     css._on_tile_entered(css._tile_index_of("doge_man"))
-    check(hand.is_carrying() and css.token_state(0) == CARRIED, "browsing lifts the committed player's token again")
-    check(css.token_view(0).get_parent().name == "CursorCarryLayer", "the lifted token is owned by the carry layer")
+    check(not hand.is_carrying() and css.get_carried_by() == -1,
+        "browsing never lifts a committed player's token (carried_by %d)" % css.get_carried_by())
+    check(css.token_state(0) == PLACED,
+        "the committed token stays PLACED while browsing (state %d)" % css.token_state(0))
+    check(css.token_view(0).get_parent() == tile_node.token_layer(),
+        "the committed token stays owned by its own tile")
     css._leave_field()
     await create_timer(0.25).timeout
-    check(not hand.is_carrying() and css.token_state(0) == PLACED, "cancelling returns the token to its committed tile")
+    check(not hand.is_carrying() and css.token_state(0) == PLACED, "leaving the roster keeps the chip on its tile")
     check(str(state.slots[0]["character"]) == "ggb", "cancelling never changed the committed fighter")
     check(css.get_carried_by() == -1, "no carry survives the cancel (carried_by %d)" % css.get_carried_by())
-    check(css.token_view(0).get_parent() == tile_node.token_layer(), "the returned token is owned by the committed tile again")
+    check(css.token_view(0).get_parent() == tile_node.token_layer(), "the token is owned by the committed tile")
     # leave / re-enter repeatedly: the FSM never sticks
     for i in 3:
         arm_mouse(hand, tiles[tile_ggb].get_global_rect().get_center())
@@ -140,33 +145,50 @@ func run():
         "the leave/re-enter loop never leaves a sticky token")
 
     # --- active-player switch resolves the previous player's carry ---------
-    arm_mouse(hand, tiles[tile_ggb].get_global_rect().get_center())
-    css._on_tile_entered(css._tile_index_of("doge_man"))
-    check(css.get_carried_by() == 0, "precondition: P1's token is carried")
+    # A carry only ever exists for a player WITHOUT a committed pick, so the
+    # journey takes the committed chip back with B first (the ONE sanctioned
+    # take-back, stage 2 of the staged cancel) and then switches the station.
+    css._on_bay_activated(0)
+    await press_pad_b()
+    check(str(state.slots[0]["character"]) == "", "precondition: B took P1's commit back")
+    check(css.get_carried_by() == 0, "precondition: P1's token is carried (uncommitted)")
     css._on_bay_activated(1)
     check(css.get_carried_by() == -1, "switching the active player resolves the previous player's carry first")
     check(css.get_active() == 1, "bay activation changes the active player explicitly")
     await create_timer(0.3).timeout
-    check(css.token_state(0) == PLACED, "the old player's token returns to its committed tile")
-    check(css.token_view(0).get_parent() == tile_node.token_layer(), "…and is owned by the committed tile again")
-    # committing for P2 (already a CPU) keeps P1's token intact
+    check(css.token_state(0) == UNASSIGNED, "the taken-back (uncommitted) token returns home")
+    check(css.token_view(0).get_parent() == css.token_home_layer(), "…and is owned by the home layer")
+    # committing for P2 (already a CPU) keeps that slot's own token intact
     css._on_tile_pressed("ggb")
     await create_timer(0.3).timeout
-    check(str(state.slots[1]["character"]) == "ggb", "P2 committed the duplicate pick")
-    check(css.token_state(1) == PLACED and css.token_state(0) == PLACED, "two players can commit the same fighter")
+    check(str(state.slots[1]["character"]) == "ggb", "P2 committed the pick")
+    check(css.token_state(1) == PLACED, "the CPU's committed chip is PLACED on its tile")
+    check(css.token_view(1).get_parent() == tile_node.token_layer(), "…owned by that tile")
+    # the chip P1 took back is still UNCOMMITTED: nothing re-commits it on its own
+    check(str(state.slots[0]["character"]) == "" and not hand.is_carrying(),
+        "taking a chip back never re-commits it on its own")
+    # two players can commit the same fighter: the chips share the tile without
+    # ever overlapping exactly (deterministic slot ordinals, Doc 04 §16).
+    css._on_bay_activated(0)
+    css._on_tile_pressed("ggb")
+    await create_timer(0.4).timeout
+    check(str(state.slots[0]["character"]) == "ggb" and str(state.slots[1]["character"]) == "ggb",
+        "two players can commit the same fighter")
+    check(css.token_state(0) == PLACED and css.token_state(1) == PLACED, "both chips rest PLACED on the shared tile")
     var t0 = css.token_view(0)
     var t1 = css.token_view(1)
     var r0 := Rect2(t0.position, t0.size)
     var r1 := Rect2(t1.position, t1.size)
     check(not r0.intersects(r1), "placed tokens on one tile never overlap exactly")
-    check(css.get_active() == 1, "committing does not advance the active player")
+    check(css.get_active() == 0, "committing does not advance the active player")
 
     # --- kind transitions never silently create a fighter ------------------
     # Setting a slot EMPTY cancels its interaction, clears the fighter and
     # leaves the token UNASSIGNED (Doc 04 §6, ledger C-039).
     css._on_bay_activated(1)
-    arm_mouse(hand, tiles[tile_ggb].get_global_rect().get_center())
-    css._on_tile_entered(css._tile_index_of("mephisto"))
+    await press_pad_b()              # stage 2: the CPU's committed chip back into the hand
+    check(str(state.slots[1]["character"]) == "" and css.get_carried_by() == 1,
+        "precondition: P2's committed chip is carried (carried_by %d)" % css.get_carried_by())
     css._on_kind_clicked(1)          # bot -> empty while its token is carried
     check(str(state.slots[1]["kind"]) == "empty", "kind control cycles to EMPTY")
     check(str(state.slots[1]["character"]) == "", "EMPTY clears the committed fighter")
@@ -309,8 +331,10 @@ func run():
     # and the Back route follows the CSS's ENTRY ORIGIN, never a hardcoded Main.
     await staged_cancel_suite(vs, hand)
     # --- (A) a committed pick survives browsing the UI; (B) the hand's pose
-    # follows the CSS state on entry / target change, not the next input event.
+    # follows the CSS state on entry / target change, not the next input event;
+    # (C) a COMMITTED chip is never lifted by HOVER (the owner-reported bug).
     await browse_survival_suite(vs, hand)
+    await committed_chip_hover_suite(vs, hand)
     await entry_pose_suite(vs, hand)
 
     # --- Back cancels a carried token (fresh host: the route itself is a scene
@@ -455,15 +479,25 @@ func browse_survival_suite(vs, hand) -> void:
     check(css.ready_allowed() and css.get_ready_band().is_shown(), "browse survival: the configuration is valid (Ready band up)")
     check(css.token_state(0) == PLACED, "browse survival: the committed chip rests PLACED on its tile")
 
-    # POINTER: browse another tile (the chip lifts into the hand), then move across
-    # every other destination.
+    # POINTER: hover another tile — only the CANDIDATE/preview moves (the
+    # committed chip may not be lifted by a hover), then move across every other
+    # destination. Leaving the populated roster field is driven the way the
+    # runtime does it: the pointer really is outside the field, so the field's
+    # own GUI mouse exit fires and the CSS consumes it as "leave the roster".
     var other: int = css._tile_index_of("mephisto")
+    var ggb_tile: int = css._tile_index_of("ggb")
     arm_mouse(hand, tiles[other].get_global_rect().get_center())
     tiles[other].mouse_entered.emit()
-    check(css.get_carried_by() == 0, "browse survival: hovering another tile lifts the committed chip into the hand")
+    check(int(css.get_candidate()) == other, "browse survival: hovering another tile moves the candidate")
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "browse survival: hovering another tile lifts NOTHING into the hand (carried_by %d)" % css.get_carried_by())
+    check(css.token_state(0) == PLACED and css.token_view(0).get_parent() == tiles[ggb_tile].token_layer(),
+        "browse survival: the committed chip stays PLACED on its own tile while hovering")
     check(str(state.slots[0]["character"]) == "ggb", "browse survival: …without touching the commit")
     for spot in browse_destinations(css):
         arm_mouse(hand, (spot["control"] as Control).get_global_rect().get_center())
+        if not bool(spot["browses"]):
+            css.get_node("ReferenceFrame/RosterField").mouse_exited.emit()
         await create_timer(0.08).timeout
         check(str(state.slots[0]["character"]) == "ggb",
             "browse survival (pointer over the %s): the active player's commit survives" % str(spot["name"]))
@@ -474,7 +508,9 @@ func browse_survival_suite(vs, hand) -> void:
                 "browse survival (pointer over the %s): the active bay presents the COMMITTED fighter" % str(spot["name"]))
     await create_timer(0.4).timeout
     check(css.get_carried_by() == -1, "browse survival: no carry is left in flight when the pointer leaves the roster")
-    check(css.token_state(0) == PLACED, "browse survival: the chip returned to its committed tile (state %d)" % css.token_state(0))
+    check(css.token_state(0) == PLACED, "browse survival: the chip is still PLACED on its committed tile (state %d)" % css.token_state(0))
+    check(css.token_view(0).get_parent() == tiles[ggb_tile].token_layer(),
+        "browse survival: the chip is still owned by its committed tile after the pointer journey")
     check(bays[0].presented_fighter() == "ggb", "browse survival: the active bay is back on the committed fighter")
 
     # PAD/FOCUS: the same journey through the engine's own focus navigation.
@@ -497,6 +533,218 @@ func browse_survival_suite(vs, hand) -> void:
     css._on_tile_pressed("mephisto")
     await create_timer(0.4).timeout
     check(str(state.slots[0]["character"]) == "mephisto", "browse survival: the station can still re-pick a different fighter afterwards")
+    if is_instance_valid(host):
+        host.queue_free()
+    await process_frame
+
+# --- (C) a COMMITTED chip is never lifted by HOVER ---------------------------
+#
+# OWNER REPORT (live pad + mouse, current build): after a station COMMITTED a
+# fighter, merely HOVERING another fighter tile put the committed chip back into
+# the hand — with no A pressed. The rule (single-sourced in char_select: the
+# _has_committed_pick gate inside _begin_carry, the ONE place a chip can leave a
+# tile for the hand): a committed chip leaves its tile ONLY through the owner's
+# explicit actions —
+#   (a) A on its own tile      -> a no-op (the same id is re-written);
+#   (b) A on a DIFFERENT tile  -> the commit MOVES (re-pick, _on_tile_pressed);
+#   (c) B / ui_cancel          -> the staged take-back (_take_back_committed,
+#                                 which clears the commit BEFORE asking to lift).
+# Hover, the candidate preview, focus browsing, the modality switch and the
+# roster-envelope rule may only cancel an IN-FLIGHT carry of an UNCOMMITTED chip.
+#
+# WHY THIS SUITE EXISTS: the browse-survival cases assert the PERSISTENT commit
+# survives browsing, but never that the CHIP is still on its tile — so a lift on
+# hover passed them. Every case below drives the REAL MOUSE-HOVER path: a genuine
+# InputEventMouseMotion into the engine's own dispatch (the viewport push, which
+# reaches the cursor service's `_input` callback) plus the tile's own
+# `mouse_entered` entry, the GUI entry a windowed run emits when the pointer
+# crosses the tile. The FOCUS path is exercised as well, but never as the proof.
+
+func pointer_motion(hand, at: Vector2) -> void:
+    # The engine's pointer-motion delivery: the viewport dispatch plus the
+    # callback that dispatch reaches (the frontend input contract convention).
+    # It also re-claims the MOUSE modality, exactly as a real mouse does.
+    var event := InputEventMouseMotion.new()
+    event.position = at
+    event.relative = Vector2(28.0, 0.0)
+    root.push_input(event, true)
+    hand._input(event)
+    # Two idle frames: SceneTree.process_frame is emitted BEFORE the nodes'
+    # _process callbacks, so the cursor service refreshes its authoritative
+    # hotspot on the frame after the one the first await returns on.
+    await process_frame
+    await process_frame
+
+func hover_tile_mouse(hand, css, index: int) -> void:
+    # Enter another fighter tile the way the runtime does it: move the pointer
+    # over the tile (guarded: the hotspot must really be on it), then fire the
+    # tile's own mouse entry. Never the focus path, never a private helper.
+    var tile: Control = css.get_tiles()[index]
+    var at: Vector2 = tile.get_global_rect().get_center()
+    await pointer_motion(hand, at)
+    check(tile.get_global_rect().has_point(hand.hotspot),
+        "hover lift: the pointer hotspot really sits on tile %d (%s)" % [index, str(hand.hotspot)])
+    tile.mouse_entered.emit()
+    await create_timer(0.12).timeout
+
+func pointer_click(hand, control: Control, at: Vector2) -> void:
+    # A real left click on a custom Control: the engine delivers the button to
+    # the control's own `_gui_input` (the screen's public mouse path).
+    await pointer_motion(hand, at)
+    var down := InputEventMouseButton.new()
+    down.button_index = MOUSE_BUTTON_LEFT
+    down.position = at
+    down.pressed = true
+    control._gui_input(down)
+    var up := InputEventMouseButton.new()
+    up.button_index = MOUSE_BUTTON_LEFT
+    up.position = at
+    up.pressed = false
+    control._gui_input(up)
+    await process_frame
+
+func committed_chip_hover_suite(vs, hand) -> void:
+    var host = await vs.enter(self)
+    var css = host.char_select()
+    if css == null or not await vs.wait_css_ready(host, self):
+        check(false, "hover lift: a CSS is mounted and idle")
+        return
+    var state = host.selection_state
+    var tiles: Array = css.get_tiles()
+    var bays: Array = css.get_bays()
+    var ggb: int = css._tile_index_of("ggb")
+    var other: int = css._tile_index_of("mephisto")
+    var third: int = css._tile_index_of("turbofit")
+    check(ggb >= 0 and other >= 0 and third >= 0 and other != ggb and third != ggb and third != other,
+        "hover lift: three distinct roster tiles are available (%d/%d/%d)" % [ggb, other, third])
+    await create_timer(0.5).timeout
+
+    # --- the ACTIVE station commits through the real pointer path -----------
+    await hover_tile_mouse(hand, css, ggb)
+    await pointer_click(hand, tiles[ggb], tiles[ggb].get_global_rect().get_center())
+    await create_timer(0.4).timeout
+    check(hand.is_mouse_active(), "hover lift: the pointer modality is armed (mode %d, armed %s)"
+        % [int(hand.mode), str(hand.is_pointer_hover_armed())])
+    check(str(state.slots[0]["character"]) == "ggb", "hover lift: P1 committed ggb through the pointer")
+    check(css.token_state(0) == PLACED, "hover lift: the committed chip rests PLACED (state %d)" % css.token_state(0))
+    check(css.token_view(0).get_parent() == tiles[ggb].token_layer(), "hover lift: the chip is owned by the committed tile")
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(), "hover lift: nothing is in the hand after the commit")
+
+    # --- HOVERING other fighter tiles must lift NOTHING ---------------------
+    for index in [other, third]:
+        await hover_tile_mouse(hand, css, index)
+        check(int(css.get_candidate()) == index,
+            "hover lift (tile %d): the hover still moves the CANDIDATE/preview" % index)
+        check(str(state.slots[0]["character"]) == "ggb",
+            "hover lift (tile %d): the committed pick is unchanged" % index)
+        check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+            "hover lift (tile %d): hovering cannot lift the committed chip (carried_by %d)"
+            % [index, int(css.get_carried_by())])
+        check(css.token_state(0) == PLACED,
+            "hover lift (tile %d): the chip is still PLACED (state %d)" % [index, css.token_state(0)])
+        check(css.token_view(0).get_parent() == tiles[ggb].token_layer(),
+            "hover lift (tile %d): the chip is still owned by its committed tile" % index)
+        check(css.token_view(0).visible, "hover lift (tile %d): the chip is still drawn on its tile" % index)
+
+    # --- hovering the chip's OWN tile is not a lift either ------------------
+    await hover_tile_mouse(hand, css, ggb)
+    check(int(css.get_candidate()) == ggb and str(state.slots[0]["character"]) == "ggb",
+        "hover lift (own tile): the committed tile is the candidate and the pick is unchanged")
+    check(int(css.get_carried_by()) == -1 and css.token_state(0) == PLACED,
+        "hover lift (own tile): the chip stays on its tile (carried_by %d, state %d)"
+        % [int(css.get_carried_by()), css.token_state(0)])
+    check(bays[0].presented_fighter() == "ggb", "hover lift (own tile): the active bay still shows the committed fighter")
+
+    # --- (a) A on the chip's OWN tile is a no-op ---------------------------
+    var slot_before: Vector2 = css.token_view(0).position
+    await pointer_click(hand, tiles[ggb], tiles[ggb].get_global_rect().get_center())
+    await create_timer(0.3).timeout
+    check(str(state.slots[0]["character"]) == "ggb", "hover lift (A on its own tile): the commit is unchanged")
+    check(int(css.get_carried_by()) == -1 and css.token_state(0) == PLACED
+        and css.token_view(0).get_parent() == tiles[ggb].token_layer(),
+        "hover lift (A on its own tile): the chip is not lifted or re-homed (state %d)" % css.token_state(0))
+    check(css.token_view(0).position.is_equal_approx(slot_before),
+        "hover lift (A on its own tile): the chip keeps its exact slot")
+
+    # --- the pointer leaving the roster keeps the commit --------------------
+    await pointer_motion(hand, Vector2(640.0, 30.0))
+    css.get_node("ReferenceFrame/RosterField").mouse_exited.emit()
+    await create_timer(0.25).timeout
+    check(int(css.get_candidate()) == -1, "hover lift (off roster): leaving the roster clears only the candidate")
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED,
+        "hover lift (off roster): the committed chip is untouched")
+    check(int(css.get_carried_by()) == -1 and bays[0].presented_fighter() == "ggb",
+        "hover lift (off roster): the bay returns to the COMMITTED fighter")
+
+    # --- a CPU station's committed chip survives the active player's hover ---
+    css._on_bay_activated(1)                      # P2 is the fresh-default CPU
+    css._on_tile_pressed("doge_man")
+    await create_timer(0.4).timeout
+    check(str(state.slots[1]["character"]) == "doge_man", "hover lift (CPU): the CPU station committed doge_man")
+    var cpu_tile: int = css._tile_index_of("doge_man")
+    css._on_bay_activated(0)                      # back to the hovering (ACTIVE) player
+    await create_timer(0.3).timeout
+    check(int(css.get_active()) == 0, "hover lift (CPU): P1 is the active player again")
+    for index in [other, cpu_tile, ggb]:
+        await hover_tile_mouse(hand, css, index)
+        check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+            "hover lift (CPU, over tile %d): hovering lifts nothing into the hand (carried_by %d)"
+            % [index, int(css.get_carried_by())])
+        check(str(state.slots[1]["character"]) == "doge_man" and css.token_state(1) == PLACED,
+            "hover lift (CPU, over tile %d): the CPU's committed chip is untouched (state %d)"
+            % [index, css.token_state(1)])
+        check(css.token_view(1).get_parent() == tiles[cpu_tile].token_layer(),
+            "hover lift (CPU, over tile %d): the CPU's chip is still on its own tile" % index)
+        check(css.token_view(1).visible, "hover lift (CPU, over tile %d): the CPU's chip is still drawn" % index)
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED,
+        "hover lift (CPU): the active player's own commit survived the journey too")
+
+    # --- (b) A on ANOTHER tile still MOVES the committed chip --------------
+    await hover_tile_mouse(hand, css, other)
+    await pointer_click(hand, tiles[other], tiles[other].get_global_rect().get_center())
+    await create_timer(0.5).timeout
+    check(str(state.slots[0]["character"]) == "mephisto",
+        "hover lift (A on another tile): the commit MOVES to the hovered fighter")
+    check(css.token_state(0) == PLACED and css.token_view(0).get_parent() == tiles[other].token_layer(),
+        "hover lift (A on another tile): the chip moved onto the new tile (state %d)" % css.token_state(0))
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "hover lift (A on another tile): the move is a direct re-place, never through the hand")
+
+    # --- (c) B still takes the committed chip back (the ONLY take-back) ----
+    var cancels := [0]
+    connect_cancel_counter(cancels)
+    await press_pad_b()
+    check(cancels[0] >= 1, "hover lift (B): a real pad-B press reaches the screen")
+    check(str(state.slots[0]["character"]) == "", "hover lift (B): the staged take-back UNDOES the commit")
+    check(int(css.get_carried_by()) == 0 and css.token_state(0) == CARRIED and hand.is_carrying(),
+        "hover lift (B): the committed chip is back IN THE HAND (carried_by %d, state %d)"
+        % [int(css.get_carried_by()), css.token_state(0)])
+    check(str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "hover lift (B): the taken-back chip is owned by the carry layer")
+
+    # --- ...and with that chip IN the hand, hovering must not disturb it ----
+    await hover_tile_mouse(hand, css, cpu_tile)
+    check(int(css.get_carried_by()) == 0 and css.token_state(0) == CARRIED and hand.is_carrying(),
+        "hover lift (carry in flight): the UNCOMMITTED carry survives the hover (carried_by %d)"
+        % int(css.get_carried_by()))
+    check(str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "hover lift (carry in flight): the carried chip stays in the hand's own layer")
+    check(str(state.slots[1]["character"]) == "doge_man" and css.token_state(1) == PLACED
+        and css.token_view(1).get_parent() == tiles[cpu_tile].token_layer(),
+        "hover lift (carry in flight): the CPU's committed chip is still on its own tile")
+    check(int(css.get_candidate()) == cpu_tile,
+        "hover lift (carry in flight): the hover only moved the candidate (%d)" % int(css.get_candidate()))
+
+    # --- ...and the staged cancel still peels that carry (stage 1) ----------
+    # The suite ends with NOTHING in flight: a chip left in the hand across a
+    # screen teardown would be a cursor-owned leftover (Doc 04 §4).
+    await press_pad_b()
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "hover lift (end): the uncommitted carry is cancelled back out of the hand (carried_by %d)"
+        % int(css.get_carried_by()))
+    check(str(state.slots[1]["character"]) == "doge_man" and css.token_state(1) == PLACED,
+        "hover lift (end): the CPU's committed chip is still committed and PLACED")
+
     if is_instance_valid(host):
         host.queue_free()
     await process_frame

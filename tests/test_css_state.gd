@@ -6,8 +6,9 @@ extends SceneTree
 # navigation):
 #
 #   fresh entry -> candidate A -> candidate B -> leave roster -> re-enter ->
-#   commit B -> browse C -> cancel -> commit C -> change active player
-#   mid-browse -> set the active player Empty mid-browse
+#   commit B -> browse C -> take the commit back (staged cancel) -> commit C ->
+#   change active player with a chip in flight -> set the active player Empty
+#   mid-browse
 #
 # and every step asserts: candidate; committed id; carried player; token
 # parent; token state; active player; bay preview; Ready validity.
@@ -20,9 +21,12 @@ extends SceneTree
 #   Doc 01 §2  fresh defaults preselect NO fighter (P1 Human / P2 CPU /
 #              P3+P4 Empty) and cannot ready until the player builds a state;
 #   Doc 01 §5  the token grammar: clean grab hand + the player's SEPARATE
-#              token, carry on hover/focus, return home on cancel/leave,
-#              placement motion on confirm, active-player switch resolves the
-#              previous player's carry first, no sticky token;
+#              token, carry on hover/focus while the station owns NO committed
+#              pick (the ONE lift rule: a committed chip leaves its tile only
+#              through A on another tile or the staged B take-back),
+#              return home on cancel/leave, placement motion on confirm,
+#              active-player switch resolves the previous player's carry first,
+#              no sticky token;
 #   Doc 01 §4  device ownership and Ready gating (>= 2 active, >= 1 Human);
 #   Doc 04 §4  explicit token parents: TokenHomeLayer / CursorCarryLayer /
 #              FighterTile token layer.
@@ -167,16 +171,33 @@ func drive_commit(index: int) -> void:
 
 func drive_leave() -> void:
     # Leave the roster: the mouse path moves the hotspot out of the populated
-    # roster envelope (the deterministic boundary of ledger C-004/C-005), the
-    # semantic path moves focus off the roster (to the header Back).
+    # roster envelope AND fires the field's own GUI mouse exit — the entry the
+    # engine emits when the pointer really leaves the field (the deterministic
+    # boundary of ledger C-004/C-005); the semantic path moves focus off the
+    # roster (to the header Back).
     if driver == "mouse":
         mouse_move(Vector2(640.0, 30.0))
+        css.get_node("ReferenceFrame/RosterField").mouse_exited.emit()
         await frames(5)
     else:
         var back: Control = css.get_node("ReferenceFrame/Header/BackAction")
         back.grab_focus()
         await frames(5)
     await frames(2)
+
+func drive_take_back() -> void:
+    # The ONE sanctioned lift of a COMMITTED chip: the staged cancel's stage 2,
+    # driven by a real parsed device event (pad B for the controller pass, the
+    # ui_cancel key Esc for the mouse and keyboard passes). Never a private call.
+    if driver == "controller":
+        Input.parse_input_event(pad_button(JOY_BUTTON_B, true))
+        await frames(3)
+        Input.parse_input_event(pad_button(JOY_BUTTON_B, false))
+    else:
+        Input.parse_input_event(key_event(KEY_ESCAPE, true))
+        await frames(3)
+        Input.parse_input_event(key_event(KEY_ESCAPE, false))
+    await frames(5)
 
 func drive_activate_bay(index: int) -> void:
     if driver == "mouse":
@@ -301,18 +322,23 @@ func matrix(vs, device: String) -> void:
     check(bays[0].presented_fighter() == "ggb", "the bay presents the committed fighter")
     check(not css.ready_allowed(), "one active fighter is not ready")
 
-    # --- browse C / cancel --------------------------------------------------
+    # --- browse C / leave the roster (a COMMITTED chip is never lifted) -----
     await drive_enter(c)
-    check(css.token_state(0) == CARRIED, "browsing lifts the committed token into the carry")
+    check(int(css.get_candidate()) == c, "browsing another tile moves the candidate")
+    check(css.token_state(0) == PLACED,
+        "browsing NEVER lifts the committed token (state %d)" % css.token_state(0))
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "browsing a committed station puts nothing in the hand")
+    check(token_parent_name(0) == "TokenLayer", "the committed chip stays on its own tile while browsing")
     check(bays[0].presented_fighter() == "mephisto", "the bay previews candidate C before commit")
     check(str(state.slots[0]["character"]) == "ggb", "browsing never changes the committed fighter")
     await drive_leave()
     await frames(20)
-    check(str(state.slots[0]["character"]) == "ggb", "cancel keeps the committed fighter")
-    check(css.token_state(0) == PLACED, "cancel returns the token to the committed tile")
-    check(token_parent_name(0) == "TokenLayer", "…owned by the committed tile again")
+    check(str(state.slots[0]["character"]) == "ggb", "leaving the roster keeps the committed fighter")
+    check(css.token_state(0) == PLACED, "the committed token is still PLACED on its tile")
+    check(token_parent_name(0) == "TokenLayer", "…owned by the committed tile")
     check(bays[0].presented_fighter() == "ggb", "the bay returns to the committed fighter")
-    check(not hand.is_carrying(), "no sticky carry after cancel")
+    check(not hand.is_carrying(), "no sticky carry after leaving the roster")
 
     # --- commit C -----------------------------------------------------------
     await drive_enter(c)
@@ -322,16 +348,29 @@ func matrix(vs, device: String) -> void:
     check(css.token_state(0) == PLACED, "the token is PLACED on the new tile")
     check(token_parent_name(0) == "TokenLayer", "the token moved to the new tile's token layer")
 
-    # --- change active player mid-browse ------------------------------------
-    await drive_enter(a)
-    check(int(css.get_carried_by()) == 0, "precondition: P1's token is carried")
+    # --- change active player with a chip IN FLIGHT -------------------------
+    # A carry only exists for a player WITHOUT a committed pick, so the journey
+    # takes the committed chip back with the staged cancel (B / Esc) first.
+    await drive_take_back()
+    check(str(state.slots[0]["character"]) == "", "the staged cancel takes the committed chip back (stage 2)")
+    check(int(css.get_carried_by()) == 0, "precondition: P1's token is carried (uncommitted)")
     await drive_activate_bay(1)
     check(int(css.get_active()) == 1, "the station activation changes the active player")
     check(int(css.get_carried_by()) == -1, "changing the active player resolves the previous player's carry")
     check(not hand.is_carrying(), "the hand is free after the switch")
     await frames(20)
-    check(css.token_state(0) == PLACED, "P1's token returned to its committed tile")
-    check(token_parent_name(0) == "TokenLayer", "…owned by the tile")
+    check(css.token_state(0) == UNASSIGNED, "the taken-back (uncommitted) token returns home")
+    check(token_parent_name(0) == "TokenHomeLayer", "…owned by TokenHomeLayer")
+    # The take-back released P1's station; re-commit it through the SAME public
+    # path so the rest of the matrix keeps its two-fighter configuration.
+    await drive_activate_bay(0)
+    await drive_enter(a)
+    await drive_commit(a)
+    await frames(20)
+    check(str(state.slots[0]["character"]) == "doge_man", "P1 re-commits a fighter through the public path")
+    check(css.token_state(0) == PLACED, "…and its chip is PLACED again (state %d)" % css.token_state(0))
+    await drive_activate_bay(1)
+    check(int(css.get_active()) == 1, "the matrix continues on the second station")
 
     # --- set the active player Empty mid-browse -----------------------------
     await drive_enter(b)
