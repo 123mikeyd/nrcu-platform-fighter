@@ -38,6 +38,16 @@ func run():
     # The Story encounter now launches from the MatchFlow host (WP-0 step 4): the
     # prototype stays isolated from the story route too.
     var story = load("res://tests/fixtures/story_route.gd").new()
+    # The resolved debug match RETURNs gameplay to the router (Doc 02 §5): gameplay
+    # hands the typed end-state over and the frontend presents PostMatch over the
+    # tree. That presentation is not this test's subject, and it covers the story
+    # surfaces — drain the RETURN host before the Story entry, or the Story
+    # Select's real pointer input is swallowed by the overlay.
+    var return_host: Node = await story.wait_for_post_match(self)
+    if return_host != null:
+        return_host.queue_free()
+        await process_frame
+        await process_frame
     var host = await story.enter(self)
     var story_arena = await story.start_encounter(self, host)
     check(story_arena != null and story_arena.story_state == "playing"
