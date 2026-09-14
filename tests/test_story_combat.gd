@@ -71,8 +71,8 @@ func run():
     var result_host = await story.wait_for_flow(self, launch_host_id)
     check(result_host != null, "the completed encounter returns to the MatchFlow host")
     if result_host != null:
-        check(result_host.entry_mode() == "story" and result_host.active_surface() == "story",
-            "the Story outcome opens the Story surface — never the multiplayer Results (PostMatch)")
+        check(result_host.entry_mode() == "story" and result_host.active_surface() == "story_result",
+            "the Story outcome opens the Story Result surface — never the multiplayer Results (PostMatch)")
         check(not result_host.is_surface_presented("postmatch"),
             "no multiplayer Results surface is presented for a Story outcome")
     if result_host == null:
@@ -82,8 +82,8 @@ func run():
     # The launch handshake frees this host (Doc 02 §5/§6): capture its identity
     # while it is alive — never read it off the freed node (dangling access).
     var result_host_id: int = result_host.get_instance_id()
-    check(str(result_host.story_briefing().title_label().text) == "your pretty cool", "the shipped victory wording is preserved")
-    check(str(result_host.story_briefing().action_button().text) == "REPLAY", "the victory offers REPLAY")
+    check(str(result_host.story_result().title_label().text) == "YOU'RE PRETTY COOL", "the package victory wording is presented")
+    check(str(result_host.story_result().action_button().text) == "REPLAY", "the victory offers REPLAY")
     var replay = await story.start_encounter(self, result_host)
     check(replay != null and replay.story_state == "playing" and replay.player_two.health == 400,
         "Replay launches a fresh encounter and restores HP")
@@ -97,7 +97,7 @@ func run():
     var loss_host = await story.wait_for_flow(self, result_host_id)
     check(loss_host != null, "the loss returns to the Story Result host")
     if loss_host != null:
-        check(str(loss_host.story_briefing().action_button().text) == "RETRY", "the loss offers RETRY")
+        check(str(loss_host.story_result().action_button().text) == "RETRY", "the loss offers RETRY")
         var retry = await story.start_encounter(self, loss_host)
         check(retry != null and retry.player_two.health == 400 and retry.player_one.stocks == 3,
             "Retry restores both fighters")

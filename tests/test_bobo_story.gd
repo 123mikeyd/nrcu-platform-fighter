@@ -41,7 +41,7 @@ func run() -> void:
         var result_host = await story.wait_for_flow(self, launch_host_id)
         check(result_host != null, "the completed encounter returns to the Story Result host")
         if result_host != null:
-            check(str(result_host.story_briefing().action_button().text) == "REPLAY", "the victory offers REPLAY")
+            check(str(result_host.story_result().action_button().text) == "REPLAY", "the victory offers REPLAY")
             var replay = await story.start_encounter(self, result_host)
             check(replay != null and replay.player_two.health == 400 and replay.story_state == "playing",
                 "Replay restores full HP and restarts the Story state")

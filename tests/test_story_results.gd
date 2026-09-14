@@ -1,9 +1,9 @@
 extends SceneTree
-# Story result / lifecycle contract — MIGRATED for WP-0 step 4: the encounter is
-# launched by the MatchFlow host from a story MatchLaunchConfig, gameplay keeps
-# the Story state machine and its cleanup, and the Story Result (shipped wording
-# + REPLAY/RETRY + MAIN MENU) is presented by the host's briefing surface (the
-# standalone Story Result redesign is WP-5).
+# Story result / lifecycle contract — the encounter is launched by the
+# MatchFlow host through the two-step route from a story MatchLaunchConfig,
+# gameplay keeps the Story state machine and its cleanup, and the compact Story
+# Result (package wording + REPLAY/RETRY + MAIN MENU) is the host's own
+# story_result surface — never the multiplayer Results.
 var failures := 0
 var story
 
@@ -72,18 +72,19 @@ func run():
     var cursor_layer = root.get_node_or_null("Cursor")
     check(cursor_layer != null and cursor_layer.hand != null and not cursor_layer.hand.is_carrying(),
         "results cursor does not carry a token")
-    var briefing = result_host.story_briefing()
+    var result = result_host.story_result()
+    check(result_host.active_surface() == "story_result", "the completed encounter lands on the Story Result")
     var token_leak := false
-    for node in briefing.find_children("*", "", true, false):
+    for node in result.find_children("*", "", true, false):
         if not (node is CanvasItem):
             continue
         var named := str(node.name)
         if (named == "StoryToken" or named.begins_with("PlayerToken")) and (node as CanvasItem).is_visible_in_tree():
             token_leak = true
     check(not token_leak, "no StoryToken/PlayerToken state leaks into the Story Result")
-    check(briefing.visible and str(briefing.title_label().text) == "your pretty cool",
-        "victory title is the exact requested lowercase string")
-    check(str(briefing.action_button().text) == "REPLAY" and briefing.back_button().visible,
+    check(result.visible and str(result.title_label().text) == "YOU'RE PRETTY COOL",
+        "victory title is the package wording (Doc 05 §136-159)")
+    check(str(result.action_button().text) == "REPLAY" and result.back_button().visible,
         "victory offers replay and back")
     # --- REPLAY: a fresh encounter ---
     var replay = await story.start_encounter(self, result_host)
@@ -102,8 +103,9 @@ func run():
         var loss_host = await story.wait_for_flow(self, result_host_id)
         check(loss_host != null, "the loss returns to the Story Result host")
         if loss_host != null:
-            check(str(loss_host.story_briefing().title_label().text) != "your pretty cool"
-                and str(loss_host.story_briefing().action_button().text) == "RETRY", "loss offers Retry, not victory")
+            var loss_result = loss_host.story_result()
+            check(str(loss_result.title_label().text) != "YOU'RE PRETTY COOL"
+                and str(loss_result.action_button().text) == "RETRY", "loss offers Retry, not victory")
             var retry = await story.start_encounter(self, loss_host)
             check(retry != null and retry.story_state == "playing"
                 and retry.player_one.stocks == 3 and retry.player_two.stocks == 3, "Retry starts a fresh duel")

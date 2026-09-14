@@ -1,12 +1,12 @@
 extends SceneTree
-# Story selection contract — MIGRATED for WP-0 step 4: the Story Fighter
-# Select/Briefing surface lives in the MatchFlow host (the hidden
+# Story selection contract (Doc 01 §9, Doc 05): the Story Fighter Select /
+# Encounter Briefing route lives in the MatchFlow host (the hidden
 # StoryCharacterSelect OptionButton is superseded by MatchFlowState +
 # StoryEncounterCatalog, Doc 10). The suite keeps its behavioural contracts:
-# the whole playable roster launches, Ready gates input, the HUD identifies the
-# chosen fighter, the shipped result wording + REPLAY/RETRY/MAIN MENU work, Back
-# and re-entry remember the choice, an invalid model resolves to the default,
-# and freeplay stays untouched.
+# the whole playable roster launches through the two-step route, Ready gates
+# input, the HUD identifies the chosen fighter, the compact Story Result
+# (wording + REPLAY/RETRY/MAIN MENU) works, Back and re-entry remember the
+# choice, an invalid model resolves to the default, and freeplay stays untouched.
 var failures := 0
 var story
 
@@ -25,15 +25,15 @@ func run():
     var playable: Array = roster.ids()
     playable.erase("ice_mage")
 
-    # --- the entire playable roster launches through the hosted briefing ---
+    # --- the entire playable roster launches through the two-step route ---
     for index in playable.size():
         var id: String = playable[index]
         var host = await story.enter(self, id)
-        var briefing = host.story_briefing()
-        check(briefing.selected_fighter_id() == id, "the briefing opens on the roster choice: " + id)
-        check(briefing.roster_ids() == playable, "the roster strip holds exactly the playable fighters: " + id)
-        check(not briefing.roster_ids().has("ice_mage"), "prototype absent from the Story choices: " + id)
-        briefing.select_fighter(id)
+        var select = host.story_select()
+        check(select.selected_fighter_id() == id, "the Story Select opens on the roster choice: " + id)
+        check(select.roster_ids() == playable, "the Select roster holds exactly the playable fighters: " + id)
+        check(not select.roster_ids().has("ice_mage"), "prototype absent from the Story choices: " + id)
+        select.select_fighter(id)
         check(host.story_selection_id() == id, "the selection reaches the typed state: " + id)
         var arena = await story.start_encounter(self, host)
         check(arena != null and arena.player_one.character_id == id, "real Start creates chosen " + id)
@@ -54,18 +54,19 @@ func run():
     check(arena != null, "the encounter launches for the result contract")
     if arena != null:
         story.run_ready(arena)
-        # loss: out of stocks -> shipped loss wording, selection locked away
+        # loss: out of stocks -> package loss wording, compact result surface
         for i in 3:
             arena.player_one._handle_blast_zone()
         check(arena.story_state == "lost", "human stock exhaustion shows the loss state")
         var loss_host = await story.wait_for_flow(self, host_id)
         check(loss_host != null, "the loss returns to the Story Result host")
         if loss_host != null:
-            var loss_briefing = loss_host.story_briefing()
-            check(str(loss_briefing.title_label().text) == "TRY AGAIN", "loss wording")
-            check(str(loss_briefing.action_button().text) == "RETRY", "loss offers Retry")
-            var body = loss_briefing.get_node_or_null("ReferenceFrame/BriefingBody")
-            check(body != null and not body.is_visible_in_tree(), "the loss result locks the briefing selection away")
+            check(loss_host.active_surface() == "story_result", "the loss lands on the Story Result surface")
+            var loss_result = loss_host.story_result()
+            check(str(loss_result.title_label().text) == "TRY AGAIN", "loss wording")
+            check(str(loss_result.action_button().text) == "RETRY", "loss offers Retry")
+            check(loss_result.visible and not loss_host.story_briefing().visible,
+                "the compact Story Result replaces the briefing (no selection UI on the loss)")
             check(loss_host.story_selection_id() == chosen, "the loss keeps the played fighter")
             # Retry preserves the selection
             var loss_host_id: int = loss_host.get_instance_id()
@@ -80,13 +81,12 @@ func run():
                 var win_host = await story.wait_for_flow(self, loss_host_id)
                 check(win_host != null, "the win returns to the Story Result host")
                 if win_host != null:
-                    var win_briefing = win_host.story_briefing()
-                    check(str(win_briefing.title_label().text) == "your pretty cool", "literal victory wording")
-                    var win_body = win_briefing.get_node_or_null("ReferenceFrame/BriefingBody")
-                    check(win_body != null and not win_body.is_visible_in_tree(),
-                        "the victory result locks the briefing selection away")
+                    var win_result = win_host.story_result()
+                    check(str(win_result.title_label().text) == "YOU'RE PRETTY COOL", "victory wording from the package")
+                    check(not win_host.story_briefing().visible,
+                        "the victory result is the compact Story Result, never the briefing")
                     # MAIN MENU: the player route Story -> Main, choice remembered
-                    win_briefing.back_button().pressed.emit()
+                    win_result.menu_button().pressed.emit()
                     var home_scene = await story.wait_for_scene(self, "home.tscn")
                     check(home_scene != null, "MAIN MENU returns to the Main route")
                     check(AppState.story_fighter_id == chosen, "the choice is remembered across the Main return")
@@ -94,12 +94,13 @@ func run():
                         home_scene.queue_free()
                     await story.free_hosts(self)
                     var reentry = await story.enter(self)
-                    check(reentry.story_briefing().selected_fighter_id() == chosen, "Back and reentry remember the choice")
+                    check(reentry.story_select().selected_fighter_id() == chosen, "Back and reentry remember the choice")
                     await story.free_hosts(self)
 
     # --- an invalid story model resolves to the story default ---
     for invalid in ["ice_mage", "not_a_character", ""]:
         var bad_host = await story.enter(self)
+        check(await story.open_briefing(self, bad_host), "the encounter briefing is reached before the invalid launch")
         bad_host.flow.slots[0].fighter_id = invalid
         var bad_arena = await story.start_encounter(self, bad_host)
         check(bad_arena != null and bad_arena.player_one.character_id == "turbofit",
@@ -124,5 +125,5 @@ func run():
     direct.queue_free()
     await story.free_hosts(self)
     await process_frame
-    if failures == 0: print("PASS: story selection via MatchFlow (entire roster, Ready, Retry/Replay, Back, fallback, freeplay isolation)")
+    if failures == 0: print("PASS: story selection via MatchFlow (entire roster through the two-step route, Ready, Retry/Replay, Back, fallback, freeplay isolation)")
     quit(1 if failures else 0)
