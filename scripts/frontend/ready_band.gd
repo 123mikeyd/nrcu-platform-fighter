@@ -66,14 +66,34 @@ func _ready() -> void:
 
 func _layout() -> void:
 	var s := size
-	ready_text.position = Vector2(0.0, 0.0)
-	ready_text.size = s
-	_text_rest = Vector2.ZERO
+	# The label IS the wordmark: the measurable rect the optical harness reads
+	# (Gate A "the hand never obscures the target label") must be the box the
+	# glyphs are actually drawn in — 270 x 42 of words — never the whole
+	# 1100.8 x 64 plate. A band-wide label rect made every optical measurement
+	# of this band measure an invisible hit plate, so a hand 362 px clear of
+	# every glyph was reported as obscuring all 2387.09 px2 of it.
+	# CENTER/CENTER alignment is kept, and the box is centred on the band, so
+	# the glyphs land on exactly the pixels they landed on before (the band
+	# centre and the text centre are the same point either way): the
+	# presentation is byte-identical, proven by a zero-pixel diff of the band
+	# region (.verification/readyband-evidence).
+	var box := _wordmark_box(s)
+	ready_text.size = box
+	ready_text.position = Vector2((s.x - box.x) * 0.5, (s.y - box.y) * 0.5)
+	_text_rest = ready_text.position
 	_focus_rule.position = Vector2(0.0, s.y - RAIL_H - 2.0)
 	_focus_rule.size = Vector2(s.x, 2.0)
 	# Action hotspot: right end of the plate, vertically centered.
 	_anchor.place_at(Vector2(maxf(s.x - 48.0, 8.0), s.y * 0.5 - 26.0))
 	queue_redraw()
+
+func _wordmark_box(band: Vector2) -> Vector2:
+	# The Label's own minimum size IS the shaped wordmark (the same box the
+	# label's CENTER alignment centres in): 270 x 42 for "READY TO FIGHT" at
+	# the authored 34 px. Clamped to the plate so a font swap can never push
+	# the rect outside the band it belongs to.
+	var box := ready_text.get_minimum_size()
+	return Vector2(minf(box.x, band.x), minf(box.y, band.y))
 
 # --- focus signal (§6) -------------------------------------------------------
 
@@ -121,6 +141,16 @@ func apply_reference_width(reference_width: float) -> void:
 
 func anchor() -> Control:
 	return _anchor
+
+func painted_surface_rect() -> Rect2:
+	# The harness's own rule (tools/acceptance_support.gd): the actionable
+	# surface is "the control's own drawn rect, ... NEVER a bare full-bleed hit
+	# plate". This band paints its plate + the warm rail itself, in _draw(), so
+	# its own rect IS that drawn surface — the hand lands on the plate's right
+	# end, on the action hotspot. Nothing else draws it: the ReadyText label is
+	# the WORDS, measured separately (its own rect = the 270 x 42 wordmark), and
+	# the hand sits 362 px clear of them.
+	return get_global_rect()
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:

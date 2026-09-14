@@ -139,6 +139,11 @@ func run_css_band(out: String) -> void:
 	print("band_shown   %s visible_in_tree=%s" % [str(band.is_shown()), str(band.is_visible_in_tree())])
 	print("band_rect    %s" % str(band.get_global_rect()))
 	print("label_rect   %s (the ReadyText label = the whole band)" % str(wordmark.get_global_rect()))
+	var font := wordmark.get_theme_font("font")
+	var fs := wordmark.get_theme_font_size("font_size")
+	print("wordmark_min %s (Label minimum size = the glyph box the label must BE)" % str(wordmark.get_minimum_size()))
+	print("font_metrics height=%.3f ascent=%.3f descent=%.3f advance=%.3f" % [
+		font.get_height(fs), font.get_ascent(fs), font.get_descent(fs), glyphs.x])
 	print("wordmark_box [%.1f,%.1f %.1fx%.1f] (the glyphs the player reads, centred in the band)" % [
 		wordmark.get_global_rect().position.x + (band.size.x - glyphs.x) * 0.5,
 		wordmark.get_global_rect().position.y, glyphs.x, glyphs.y])
