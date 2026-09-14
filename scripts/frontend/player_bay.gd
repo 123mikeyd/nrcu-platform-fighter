@@ -9,7 +9,8 @@ extends Control
 # Anatomy (authored in PlayerBay.tscn):
 #   PlayerHeader        P# + kind control (HMN/CPU/EMPTY) + structural player
 #                       color block (Doc 04 §9.1/§9.2)
-#   FighterRenderArea   hosts one FighterRenderView (render-on-change)
+#   FighterRenderArea   hosts one FighterRenderView (LIVE_IDLE while this is
+#                       the active bay, deliberate STATIC_POSE otherwise)
 #   FighterNamePlate    the only place the fighter name appears in the bay
 #   SecondaryControls   Human input readout (Doc 04 §7) XOR CPU difficulty row,
 #                       + team control (teams)
@@ -22,6 +23,7 @@ extends Control
 
 const Tokens = preload("res://scripts/ui_tokens.gd")
 const RenderView = preload("res://scripts/frontend/fighter_render_view.gd")
+const Factory = preload("res://scripts/frontend/fighter_presentation_factory.gd")
 
 const KINDS := ["human", "bot", "empty"]
 const KIND_LABELS := {"human": "HMN", "bot": "CPU", "empty": "EMPTY"}
@@ -184,6 +186,7 @@ func setup(bay_index: int) -> void:
 		_render_view.name = "FighterRenderView"
 		render_area.add_child(_render_view)
 		_render_view.set_profile(RenderView.PROFILE_PLAYER_BAY)
+	_refresh_presentation_mode()
 	_layout()
 
 func set_slot_state(slot_kind: String, fighter_id := "", slot_name := "", slot_difficulty := "normal", slot_team := 0, slot_mode = 0, slot_input := "", slot_input_ok := true) -> void:
@@ -256,6 +259,16 @@ func set_active(active: bool) -> void:
 	bay_plate.add_theme_stylebox_override("panel",
 		Tokens.flat(Tokens.SURFACE_2 if active else Tokens.SURFACE_1, Tokens.RULE, Tokens.STROKE, Tokens.RADIUS_PLATE))
 	notch.visible = active
+	_refresh_presentation_mode()
+
+func _refresh_presentation_mode() -> void:
+	# Presentation lifecycle policy (Doc 07 §3 performance fallback, Doc 04
+	# §12): the active/candidate bay is the ONE deliberately live bay; every
+	# other occupied bay is a deliberate STATIC_POSE. A hidden bay view parks
+	# itself (the view owns that rule), so off-screen bays cost nothing.
+	if _render_view == null or not is_instance_valid(_render_view):
+		return
+	_render_view.set_presentation_mode(Factory.bay_mode(_active))
 
 func is_active() -> bool:
 	return _active

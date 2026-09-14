@@ -14,11 +14,12 @@ extends Control
 # MAIN MENU route), never the multiplayer Results screen.
 #
 # Reuse: roster identity is FighterTile (same component as CSS) and the
-# selected fighter + the enemy are presented through FighterRenderView. The
-# encounter's Bobo is scripts/bobo_fighter.gd + scripts/bobo_visual.gd; the
-# render view spawns the shared fighter script, so the enemy render attempt is
-# VERIFIED at runtime (BoboVisual present) and falls back to a nameplate when
-# the encounter identity cannot be resolved there.
+# selected fighter + the enemy are presented through FighterRenderView, which
+# resolves every subject through FighterPresentationFactory. The encounter's
+# Bobo is scripts/bobo_fighter.gd + scripts/bobo_visual.gd and the factory
+# builds THAT rig for the "bobo" id, so the enemy hero renders in 3D (WP-3:
+# Bobo actually renders; the nameplate below is a defensive fallback only,
+# asserted not to trigger by tests/test_fighter_presentation.gd).
 
 signal chosen(id: String)
 signal exit_finished
@@ -28,6 +29,7 @@ const Roster = preload("res://scripts/roster.gd")
 const PortraitData = preload("res://scripts/frontend/portrait_data.gd")
 const TileScene = preload("res://scenes/components/FighterTile.tscn")
 const RenderViewScript = preload("res://scripts/frontend/fighter_render_view.gd")
+const Factory = preload("res://scripts/frontend/fighter_presentation_factory.gd")
 const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 
 const TILE_W := 90.0
@@ -237,6 +239,10 @@ func _build_enemy() -> void:
     _presentation.add_child(view)
     view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     view.set_profile(RenderViewScript.PROFILE_PLAYER_BAY)
+    # The encounter hero is a live showcase while the briefing is visible
+    # (Doc 07 §3, ledger C-046); Bobo's GLB Idle clip is the approved UI idle
+    # for an encounter subject. Hidden -> the view parks itself (frozen pose).
+    view.set_presentation_mode(RenderViewScript.MODE_LIVE_IDLE)
     view.set_subjects(["bobo"])
     view.request_render()
     var resolved := false
@@ -433,6 +439,9 @@ func _build_render_view_if_needed() -> void:
     _render_holder.add_child(_render_view)
     _render_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _render_view.set_profile(RenderViewScript.PROFILE_PLAYER_BAY)
+    # Doc 07 §3 / ledger C-046: the selected fighter is a live showcase while
+    # the briefing is visible; the view parks itself when hidden.
+    _render_view.set_presentation_mode(Factory.MODE_LIVE_IDLE)
 
 # --- focus graph (roster -> action -> Back, Doc 07 §8 / §20A) ---------------
 func _refresh_focus_graph() -> void:

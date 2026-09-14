@@ -28,6 +28,7 @@ extends Control
 
 const Roster = preload("res://scripts/roster.gd")
 const View = preload("res://scripts/frontend/fighter_render_view.gd")
+const Factory = preload("res://scripts/frontend/fighter_presentation_factory.gd")
 
 const MAX_WAIT_FRAMES := 120
 const MIN_CONTENT_SAMPLES := 40
@@ -56,11 +57,23 @@ func run() -> void:
 	view.name = "PortraitView"
 	add_child(view)
 	view.set_profile(profile)
+	# Deterministic portrait capture (Doc 07 §8): the factory's portrait spec
+	# drives the pipeline — resolve -> STATIC_POSE -> portrait framing -> render
+	# -> export. STATIC_POSE freezes every subject before the first captured
+	# frame, so the same input always yields the same image (no time-dependent
+	# state, no wait-for-a-non-empty-animation-frame).
+	view.set_presentation_mode(Factory.MODE_STATIC_POSE)
 	var size_arg := _arg("size", "")
 	if size_arg != "":
+		# Explicit authored size wins over density (inspection runs).
 		var parts := size_arg.split("x")
 		if parts.size() == 2:
 			view.set_render_size(Vector2i(int(parts[0]), int(parts[1])))
+	else:
+		# Pin the spec size: portrait generation must not depend on the
+		# window's content scale (the offline pipeline is size-deterministic).
+		var cfg: Dictionary = Factory.profile_config(Factory.profile_name(profile))
+		view.set_render_size(cfg["render_size"])
 	await get_tree().process_frame
 	var ids: Array = Roster.ids()
 	var selection := _arg("ids", "")
