@@ -149,7 +149,9 @@ func run():
     check(direct_post != null, "the freeplay teams result reaches the PostMatch surface")
     if direct_post != null:
         check(int(direct_post.post_match_result().winning_team) == 1, "the payload declares TEAM B the winner")
-        check("TEAM B WINS!" in str(direct_post.post_match().outcome_label.text), "freeplay teams vocabulary survives")
+        check(str(direct_post.post_match().outcome_label.text) == "TEAM B"
+            and str(direct_post.post_match().find_child("OutcomeEyebrow", true, false).text) == "WINNER",
+            "winner-first freeplay teams vocabulary survives")
     direct.queue_free()
     await story.free_hosts(self)
     await process_frame
