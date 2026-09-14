@@ -373,13 +373,10 @@ func _layout() -> void:
 	# Authored focus anchor: beside the header's lower-left, so the focus hand
 	# never covers the model or the name (Doc 04 §10).
 	_anchor.place_at(Vector2(INSET, header_px + 8.0))
-	# The nested state controls get their own authored hand targets, placed at
-	# the control's lower-left (measured from the control, so the placement
-	# survives any bay size).
-	_kind_anchor.place_at(Vector2(-8.0, kind_control.size.y - 4.0))
-	_input_anchor.place_at(Vector2(-8.0, input_control.size.y - 4.0))
-	_difficulty_anchor.place_at(Vector2(-8.0, difficulty_control.size.y - 4.0))
-	_team_anchor.place_at(Vector2(team_control.size.x + 8.0, team_control.size.y - 4.0))
+	# The nested state controls carry their own anchors; they run the SHARED
+	# default rule with the control itself as the host (that anchor's parent),
+	# so the fingertip lands on the control's lower-right instead of beside its
+	# left edge — and the placement survives any bay size.
 
 # --- nested state controls (Doc 03 §6/§13) ----------------------------------
 

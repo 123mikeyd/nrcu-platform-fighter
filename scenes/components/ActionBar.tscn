@@ -27,10 +27,6 @@ offset_bottom = 53.0
 mouse_filter = 2
 
 [node name="CursorAnchor" type="Control" parent="Rematch"]
-offset_left = 4.0
-offset_top = 44.0
-offset_right = 4.0
-offset_bottom = 44.0
 mouse_filter = 2
 script = ExtResource("1_anchor")
 
@@ -50,10 +46,6 @@ offset_bottom = 53.0
 mouse_filter = 2
 
 [node name="CursorAnchor" type="Control" parent="ChangeFighters"]
-offset_left = 4.0
-offset_top = 44.0
-offset_right = 4.0
-offset_bottom = 44.0
 mouse_filter = 2
 script = ExtResource("1_anchor")
 
@@ -73,10 +65,6 @@ offset_bottom = 53.0
 mouse_filter = 2
 
 [node name="CursorAnchor" type="Control" parent="ChangeStage"]
-offset_left = 4.0
-offset_top = 44.0
-offset_right = 4.0
-offset_bottom = 44.0
 mouse_filter = 2
 script = ExtResource("1_anchor")
 
@@ -96,9 +84,5 @@ offset_bottom = 53.0
 mouse_filter = 2
 
 [node name="CursorAnchor" type="Control" parent="MainMenu"]
-offset_left = 4.0
-offset_top = 44.0
-offset_right = 4.0
-offset_bottom = 44.0
 mouse_filter = 2
 script = ExtResource("1_anchor")

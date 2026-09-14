@@ -59,9 +59,5 @@ mouse_filter = 2
 
 [node name="CursorAnchor" type="Control" parent="."]
 layout_mode = 0
-offset_left = 8.0
-offset_top = 40.0
-offset_right = 8.0
-offset_bottom = 40.0
 mouse_filter = 2
 script = ExtResource("1_anchor")

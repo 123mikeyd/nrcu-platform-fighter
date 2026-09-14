@@ -27,6 +27,11 @@ const ACCENT_RULE := 2.0           # ONE global-accent lower rule
 const TOKEN_SIZE := 26.0           # PlayerTokenView reference (Doc 04 §13)
 const TOKEN_INSET := 4.0
 const TOKEN_GAP := 3.0
+# How far below the name band the fingertip sits: the drawn hand's own downward
+# reach (CursorAnchor.HAND_REACH_DOWN) plus a 2 px clearance, so the sprite can
+# never touch the fighter's name at any authored tile size.
+const HAND_CLEARANCE := 2.0
+const AnchorScript = preload("res://scripts/frontend/cursor_anchor.gd")
 
 signal tile_pressed(id: String)
 
@@ -154,9 +159,15 @@ func _layout() -> void:
 	fighter_name.add_theme_font_size_override("font_size", clampi(int(roundf(s.y * 0.155)), 10, 15))
 	_tokens.position = portrait.position
 	_tokens.size = portrait.size
-	# Focus hand settles below the tile's lower-left corner: the hand sprite
-	# extends right/down from the anchor, so artwork and name stay uncovered.
-	_anchor.place_at(Vector2(6.0, s.y + 4.0))
+	# Focus hand: the fingertip lands CENTRE-ON-PORTRAIT — the tile IS the
+	# roster cell the player clicks, so the hand reads as direct manipulation
+	# instead of pointing at the tile from the side. It sits high enough that
+	# the hand sprite (which draws DOWN-RIGHT from its tip) ends above the name
+	# band, so the fighter's name stays readable at every authored tile size
+	# (108x82 Character Select, 90x72 Story Briefing, 96x78 How to Play).
+	var portrait_mid := portrait.position.x + portrait.size.x * 0.5
+	_anchor.place_at(Vector2(portrait_mid,
+		maxf(s.y - band - AnchorScript.HAND_REACH_DOWN - HAND_CLEARANCE, 0.0)))
 
 # --- token placement helpers (never over the name band) --------------------
 

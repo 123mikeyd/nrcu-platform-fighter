@@ -29,7 +29,6 @@ const AnchorScript = preload("res://scripts/frontend/cursor_anchor.gd")
 
 const RULE_H := 2.0
 const SEGMENT_H := 34.0
-const ANCHOR_DROP := 44.0           # authored hand target below the segment text
 const ACTIVE_ALPHA := 1.0
 const INACTIVE_ALPHA := 0.45
 
@@ -68,7 +67,12 @@ func setup(entries: Array) -> void:
 		var anchor := AnchorScript.new()
 		anchor.name = "CursorAnchor"
 		anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		anchor.place_at(Vector2(0.0, ANCHOR_DROP))
+		# Authored override on the shared rule: a segment IS its own text, so the
+		# fingertip rests just BELOW the segment's lower-right corner — on the
+		# control's own accent rule — and the option stays fully readable.
+		anchor.x_ratio = 0.80
+		anchor.y_ratio = 1.0
+		anchor.optical_offset = Vector2(0.0, 4.0)
 		label.add_child(anchor)
 		add_child(label)
 		_segments.append(label)

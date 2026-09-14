@@ -181,10 +181,12 @@ func _build_header() -> void:
     _back.pressed.connect(request_back)
     _back.focus_entered.connect(_on_back_focused)
     _content.add_child(_back)
+    # Its CursorAnchor runs the shared default rule (the anchor's parent IS the
+    # button), so the fingertip lands on the button's lower-right — on the
+    # action, clear of its left-aligned text.
     var back_anchor := CursorAnchorScript.new()
     back_anchor.name = "CursorAnchor"
     back_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    back_anchor.place_at(Vector2(-14.0, _back.size.y - 10.0))
     _back.add_child(back_anchor)
 
 func _build_divider() -> void:
@@ -318,12 +320,21 @@ func _build_field() -> void:
         tile.mouse_entered.connect(_on_tile_hovered.bind(i))
         # §13: a focus move IS a preview move — exactly like mouse hover.
         tile.focus_entered.connect(_on_tile_focused.bind(i))
-        # Authored focus-cursor anchor: the focus hand settles at the tile's
-        # lower-left so artwork and caption stay uncovered (Doc 05 §4).
+        # Authored focus-cursor anchor: the caption strip is the tile's only
+        # measured surface and its text must stay readable, so the fingertip
+        # lands at the strip's TRAILING end — on the surface, with the hand
+        # sprite (which draws down-right of the tip) in the quiet gutter beside
+        # the tile instead of over the caption. Without a caption the tile
+        # falls back to the shared default ratio on the tile itself.
+        var caption_right: float = cell.x - TILE_INSET
+        var anchor_at := cell * Vector2(0.80, 0.72)
+        if show_caption:
+            anchor_at = Vector2(caption_right + CursorAnchorScript.HAND_REACH_LEFT + 1.8,
+                    cell.y - TILE_INSET - band + 3.0)
         var anchor := CursorAnchorScript.new()
         anchor.name = "TileAnchor" + str(i)
         anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        anchor.place_at(Vector2(12.0, cell.y - 12.0))
+        anchor.place_at(anchor_at)
         tile.add_child(anchor)
         _tile_anchors.append(anchor)
         _content.add_child(tile)

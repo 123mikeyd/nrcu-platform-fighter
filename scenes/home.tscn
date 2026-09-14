@@ -211,18 +211,12 @@ mouse_filter = 2
 
 [node name="AnchorStay" type="Control" parent="ReferenceFrame/QuitOverlay/Plate"]
 layout_mode = 0
-offset_left = 6.0
-offset_top = 126.0
-offset_right = 6.0
-offset_bottom = 126.0
 mouse_filter = 2
 script = ExtResource("3_anchor")
+host_path = NodePath("../ActionStay")
 
 [node name="AnchorQuit" type="Control" parent="ReferenceFrame/QuitOverlay/Plate"]
 layout_mode = 0
-offset_left = 206.0
-offset_top = 126.0
-offset_right = 206.0
-offset_bottom = 126.0
 mouse_filter = 2
 script = ExtResource("3_anchor")
+host_path = NodePath("../ActionQuit")

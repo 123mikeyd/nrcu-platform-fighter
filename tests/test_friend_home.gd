@@ -17,6 +17,7 @@ const Tokens = preload("res://scripts/ui_tokens.gd")
 
 const LABELS: Array = ["PLAY", "STORY MODE", "HOW TO PLAY", "QUIT"]
 const HAND_REACH := 46.0   # pointing hand art is ~45 px wide from its tip
+const HAND_DROP := 53.0    # ... and ~53 px tall below it (hand_point.png @ 0.33)
 
 var failures := 0
 
@@ -169,12 +170,28 @@ func run() -> void:
     for i in rows.size():
         var label := label_of(rows[i])
         var anchor := anchor_of(rows[i])
-        check(anchor.anchor_position().x + HAND_REACH <= label.get_global_rect().position.x,
-            "the focus hand never covers the first glyph of row %d" % i)
+        # The hand is a ~45x53 px body drawn DOWN-RIGHT of its fingertip (the
+        # anchor). The honest invariant is therefore measured against the GLYPHS
+        # the player reads — the label's own text extent, which is what "the
+        # hand never covers the row" means — not against the label's whole
+        # authored box (a 400 px box whose trailing 2/3 is empty background).
+        var font := label.get_theme_font("font")
+        var font_size := label.get_theme_font_size("font_size")
+        var text_w: float = font.get_string_size(str(label.text), HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
+        var label_rect := label.get_global_rect()
+        var text_rect := Rect2(label_rect.position, Vector2(text_w, label_rect.size.y))
+        var tip: Vector2 = anchor.anchor_position()
+        var hand_body := Rect2(tip - Vector2(5.0, 1.0), Vector2(HAND_REACH, HAND_DROP))
+        check(not hand_body.intersects(text_rect),
+            "the focus hand never covers row %d's text" % i)
+        # The fingertip itself sits ON the row's own surface band: the row (its
+        # HitArea) IS the authored "Selection Rail" action, so the anchor has to
+        # land inside it — never out at the far margin (the rejected pose) and
+        # never in the 12-20 px left-of-label slot either.
+        var row_rect: Rect2 = (rows[i] as Control).get_global_rect()
+        check(row_rect.has_point(tip),
+            "row %d's focus anchor lands on the row's own surface (not at a margin)" % i)
         if i != home.selected_index():
-            var font := label.get_theme_font("font")
-            var font_size := label.get_theme_font_size("font_size")
-            var text_w: float = font.get_string_size(str(label.text), HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
             var quiet: Panel = rows[i].get_node("QuietRail")
             check(quiet.get_global_rect().position.x >= label.get_global_rect().position.x + text_w + 8.0,
                 "the quiet fragment stays clear of row %d's label" % i)
