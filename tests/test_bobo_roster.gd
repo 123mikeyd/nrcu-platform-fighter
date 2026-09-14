@@ -1,7 +1,8 @@
 extends SceneTree
-# Bobo roster contract — MIGRATED for WP-0 step 4: every playable Story fighter
-# launches the encounter through the MatchFlow story route (the roster strip of
-# the hosted briefing selects; the frontend freezes the config).
+# Bobo roster contract — every playable Story fighter launches the encounter
+# through the TWO-STEP MatchFlow story route: the Story Fighter Select commits
+# the fighter, Continue steps into the Briefing, and the frontend freezes the
+# config.
 var failures := 0
 var story
 func _initialize(): call_deferred("run")
@@ -34,8 +35,8 @@ func run():
     for id in playable:
         var chosen := str(id)
         var host = await story.enter(self, chosen)
-        var briefing = host.story_briefing()
-        check(briefing.selected_fighter_id() == chosen, "the briefing opens on the roster choice " + chosen)
+        var select = host.story_select()
+        check(select.selected_fighter_id() == chosen, "the Story Select opens on the roster choice " + chosen)
         var arena = await story.start_encounter(self, host)
         if arena == null:
             check(false, "the encounter launches for " + chosen)
