@@ -70,6 +70,10 @@ var buttons: Dictionary = {}
 var _rows: Array = []
 var _selected := 0
 var _modal_open := false
+var _modal_origin := ""
+var _modal_focus: Control = null
+var _modal_cancel_dismissed := false
+var _modal_tween: Tween = null
 var _exiting := false
 var _help_page: Control = null
 var _row_tweens: Dictionary = {}
@@ -318,7 +322,7 @@ func _on_semantic_cancel() -> void:
     if _exiting or not is_visible_in_tree():
         return
     if _modal_open:
-        _dismiss_modal()
+        _dismiss_modal(true)
     elif state == "help":
         FrontendEvents.emit_back("help")
         show_page("home")
@@ -328,16 +332,20 @@ func _on_semantic_cancel() -> void:
 func _open_quit_modal() -> void:
     if _exiting or _modal_open:
         return
-    if state == "help":
-        show_page("home")
+    # Global confirmation overlays its caller. In particular, How to Play stays
+    # mounted behind the modal so STAY can return to the exact Help context.
+    _modal_origin = state
+    _modal_focus = get_viewport().gui_get_focus_owner()
     _modal_open = true
     state = "quit"
     _set_rows_focusable(false)
     _set_modal_focus(true)
+    if _modal_tween != null and _modal_tween.is_valid():
+        _modal_tween.kill()
     _overlay.show()
     _overlay.modulate.a = 0.0
-    var fade := create_tween()
-    fade.tween_property(_overlay, "modulate:a", 1.0, _sec(OVERLAY_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    _modal_tween = create_tween()
+    _modal_tween.tween_property(_overlay, "modulate:a", 1.0, _sec(OVERLAY_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
     _refresh_targets()
     _action_stay.grab_focus()
     var hand = _hand()
@@ -345,28 +353,61 @@ func _open_quit_modal() -> void:
         hand.set_focus_target(_anchor_stay)
     _ensure_focus_alive()
 
-func _dismiss_modal() -> void:
+func _dismiss_modal(from_cancel := false) -> void:
     if not _modal_open:
         return
+    var origin := _modal_origin
+    var caller_focus := _modal_focus
+    _modal_origin = ""
+    _modal_focus = null
     _close_modal()
+    if from_cancel:
+        _modal_cancel_dismissed = true
+        call_deferred("_clear_modal_cancel_dismissed")
     FrontendEvents.emit_back("main")
+    if origin == "help" and _help_page != null and is_instance_valid(_help_page):
+        # The modal was global, but the caller remains the Help page.
+        state = "help"
+        _nav.visible = false
+        _set_rows_focusable(false)
+        _refresh_targets()
+        _restore_modal_caller(origin, caller_focus)
+        return
     state = "home"
     _set_rows_focusable(true)
     _refresh_targets()
-    if _rows.size() > 0:
-        _rows[_selected]["hit"].grab_focus()
+    _restore_modal_caller("home", caller_focus)
+
+func _restore_modal_caller(origin: String, caller_focus: Control) -> void:
+    var target: Control = caller_focus if caller_focus != null and is_instance_valid(caller_focus) else null
+    if target == null or not target.is_inside_tree() or target.focus_mode == Control.FOCUS_NONE:
+        target = null
+    if target == null and origin == "help" and _help_page != null and is_instance_valid(_help_page):
+        target = _help_page.find_child("HelpBack", true, false) as Control
+    if target == null and origin == "home" and not _rows.is_empty():
+        target = _rows[_selected]["hit"] as Control
+    if target != null:
+        target.grab_focus()
     var hand = _hand()
-    if hand != null and hand.mode == 1:
-        hand.set_focus_target(_rows[_selected]["anchor"])
+    if hand != null and hand.mode == 1 and target != null:
+        var anchor: Control = null
+        if origin == "help" and _help_page != null and _help_page.has_method("focus_anchor_for"):
+            anchor = _help_page.focus_anchor_for(target)
+        if anchor == null:
+            anchor = focus_anchor_for(target)
+        if anchor != null:
+            hand.set_focus_target(anchor)
 
 func _close_modal() -> void:
+    if _modal_tween != null and _modal_tween.is_valid():
+        _modal_tween.kill()
     if not _modal_open:
         _overlay.hide()
         return
     _modal_open = false
-    var fade := create_tween()
-    fade.tween_property(_overlay, "modulate:a", 0.0, _sec(OVERLAY_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    fade.tween_callback(_overlay.hide)
+    _modal_tween = create_tween()
+    _modal_tween.tween_property(_overlay, "modulate:a", 0.0, _sec(OVERLAY_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    _modal_tween.tween_callback(_overlay.hide)
 
 func _set_modal_focus(stay_focused: bool) -> void:
     _stay_rail.visible = stay_focused
@@ -390,6 +431,12 @@ func menu_rows() -> Array:
 
 func is_quit_modal_open() -> bool:
     return _modal_open
+
+func quit_modal_cancel_dismissed() -> bool:
+    return _modal_cancel_dismissed
+
+func _clear_modal_cancel_dismissed() -> void:
+    _modal_cancel_dismissed = false
 
 func quit_modal_rect() -> Rect2:
     return _plate.get_global_rect()

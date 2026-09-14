@@ -454,8 +454,25 @@ func _wire_back() -> void:
     _back.focus_exited.connect(_on_back_unfocused)
 
 func _on_semantic_cancel() -> void:
+    # Home owns the global Quit modal while this page stays mounted behind it.
+    # Do not let the page's Back subscriber consume the same ui_cancel that
+    # dismisses STAY/cancel on the modal.
+    if _quit_modal_is_open():
+        return
     if is_visible_in_tree():
         _on_back_pressed()
+
+func _quit_modal_is_open() -> bool:
+    var owner: Node = get_parent()
+    while owner != null:
+        if owner.has_method("is_quit_modal_open"):
+            if bool(owner.is_quit_modal_open()):
+                return true
+            if owner.has_method("quit_modal_cancel_dismissed"):
+                return bool(owner.quit_modal_cancel_dismissed())
+            return false
+        owner = owner.get_parent()
+    return false
 
 func _on_back_pressed() -> void:
     FrontendEvents.emit_back("help")
