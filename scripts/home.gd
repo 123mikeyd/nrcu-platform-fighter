@@ -43,6 +43,11 @@ const ROW_NODES: Array = ["MenuRow_Play", "MenuRow_Story", "MenuRow_Help", "Menu
 
 # The rail's authored length (832 px: x 112 -> 944 at 1280x720) is read from
 # the MenuRow component; home.gd never decides composition geometry.
+# The three UNSELECTED rows keep one QuietRail each: it starts after that
+# row's own label and every one of them ends FLUSH at the same authored right
+# edge (row-local x 368 = frame-local 432, owner corrective pass — the line the
+# two long destinations always reached; PLAY/QUIT used to stop 98/116 px short
+# of it, which read as "die Linien enden nicht bündig").
 const RAIL_LEAD := 72.0          # exit-transition lead extension (reach 1016)
 const QUIET_ALPHA := 0.55
 const LABEL_SHIFT := 9.0

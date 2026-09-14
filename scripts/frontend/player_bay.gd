@@ -12,8 +12,10 @@ extends Control
 #   FighterRenderArea   hosts one FighterRenderView (LIVE_IDLE while this is
 #                       the active bay, deliberate STATIC_POSE otherwise)
 #   FighterNamePlate    the only place the fighter name appears in the bay
-#   SecondaryControls   Human input readout (Doc 04 §7) XOR CPU difficulty row,
-#                       + team control (teams)
+#   SecondaryControls   the human's device VALUE chip (Doc 04 §7 — the word
+#                       "INPUT" is gone, owner pass) XOR the CPU difficulty
+#                       VALUE chip, + the team control (teams). The footer
+#                       carries VALUES only: the header already says HMN/CPU/EMPTY.
 #   ActivePlayerMarker  slight material lift + ONE small warm notch — never a
 #                       full amber perimeter (Doc 04 §10)
 #   CursorAnchor        near the player header, not over the model/name
@@ -56,6 +58,12 @@ const HEADER_BLOCK_W := 12.0
 const INSET := 8.0
 const NOTCH_W := 22.0
 const NOTCH_H := 3.0
+# The footer value chips (owner corrective pass): the words INPUT/CPU are gone,
+# so each value owns its half of the strip. A value whose minimum width does not
+# fit its field (CONNECT CONTROLLER is the shipped long one) steps its type down
+# — the player reads the whole instruction, and a readout can never reach into
+# the team control next to it.
+const READOUT_MIN_SIZE := 10
 
 signal bay_activated(index: int)
 signal kind_clicked(index: int)
@@ -74,10 +82,8 @@ signal input_clicked(index: int)
 @onready var fighter_name: Label = $FighterNamePlate/FighterName
 @onready var secondary: Control = $SecondaryControls
 @onready var input_row: Control = $SecondaryControls/InputRow
-@onready var input_label: Label = $SecondaryControls/InputRow/InputLabel
 @onready var input_control: Button = $SecondaryControls/InputRow/InputControl
 @onready var difficulty_row: Control = $SecondaryControls/DifficultyRow
-@onready var difficulty_label: Label = $SecondaryControls/DifficultyRow/DifficultyLabel
 @onready var difficulty_control: Button = $SecondaryControls/DifficultyRow/DifficultyControl
 @onready var team_control: Button = $SecondaryControls/TeamControl
 @onready var notch: Panel = $ActiveNotch
@@ -100,6 +106,7 @@ var input_valid := true           # false = the Human slot cannot ready
 var _active := false
 var _render_view = null
 var _focus_rule: Panel = null
+var _value_cell_w := 0.0          # the footer readout's own field width (last layout)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -128,10 +135,6 @@ func _ready() -> void:
 	_style_state_button(input_control, Tokens.T_META)
 	_style_state_button(difficulty_control, Tokens.T_META)
 	_style_state_button(team_control, Tokens.T_META)
-	input_label.add_theme_font_size_override("font_size", Tokens.T_META)
-	input_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
-	difficulty_label.add_theme_font_size_override("font_size", Tokens.T_META)
-	difficulty_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
 	notch.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
 	# §6 control emphasis: the bay is a custom Control, so its focus signal is a
 	# dedicated 2 px structural edge (never a color-only state).
@@ -288,8 +291,8 @@ func team_control_visible() -> bool:
 func _refresh_state() -> void:
 	# Doc 04 §6: kind transitions own their controls, and never a hidden
 	# processor keeps focus (Doc 03 §6).
-	#   HMN   -> quiet input readout (Doc 04 §7 device assignment);
-	#   CPU   -> difficulty row visible, input assignment hidden;
+	#   HMN   -> value-only device readout (Doc 04 §7 device assignment);
+	#   CPU   -> difficulty value chip visible, input assignment hidden;
 	#   EMPTY -> neither (the bay recedes).
 	# A Human slot whose device assignment is invalid (P3/P4 with no connected
 	# pad, or a disconnected pad) explicitly reads CONNECT CONTROLLER and stays
@@ -302,9 +305,11 @@ func _refresh_state() -> void:
 	input_control.add_theme_color_override("font_hover_color", input_color)
 	input_control.add_theme_color_override("font_pressed_color", input_color)
 	input_control.add_theme_color_override("font_focus_color", input_color)
+	_fit_readout(input_control)
 	difficulty_row.visible = kind == "bot"
 	difficulty_control.focus_mode = Control.FOCUS_ALL if difficulty_row.visible else Control.FOCUS_NONE
 	difficulty_control.text = difficulty.to_upper()
+	_fit_readout(difficulty_control)
 	team_control.visible = mode == 1 and kind != "empty"
 	team_control.focus_mode = Control.FOCUS_ALL if team_control.visible else Control.FOCUS_NONE
 	team_control.text = "TEAM " + ("A" if team == 0 else "B")
@@ -333,6 +338,23 @@ func presentation_share() -> float:
 
 func render_area_rect() -> Rect2:
 	return Rect2(render_area.position, render_area.size)
+
+func _fit_readout(button: Button) -> void:
+	# Owner corrective pass / Doc 04 §7: the footer's word IS the value, so the
+	# value's field decides the type. CONNECT CONTROLLER is an instruction the
+	# player reads — never an ellipsis and never a word running into the team
+	# control — so a value whose own MINIMUM width (glyphs + the chip's authored
+	# stylebox padding) would exceed the field steps its size down in integer
+	# steps to the legibility floor. Every shipped common value (KEYBOARD 1/2,
+	# NORMAL, EASY, HARD, PAD n) fits T_META and is untouched.
+	if button == null or not is_instance_valid(button):
+		return
+	var field := maxf(_value_cell_w, 24.0)
+	var size := Tokens.T_META
+	button.add_theme_font_size_override("font_size", size)
+	while size > READOUT_MIN_SIZE and button.get_combined_minimum_size().x > field:
+		size -= 1
+		button.add_theme_font_size_override("font_size", size)
 
 func _layout() -> void:
 	var s := size
@@ -365,18 +387,23 @@ func _layout() -> void:
 	secondary.position = Vector2(INSET, s.y - secondary_h_px - 2.0)
 	secondary.size = Vector2(maxf(s.x - INSET * 2.0, 24.0), secondary_h_px)
 	var half := maxf((secondary.size.x - 6.0) * 0.5, 40.0)
+	# The value chips own the strip: each one fills its own half (the word that
+	# used to sit in front of the value is gone), and the team control keeps the
+	# authored right half. The old collision — INPUT running into the chip's
+	# border — cannot come back, because there is no word in front of the chip
+	# and the value's own type is fitted to the field before the size is set
+	# (a Button can never be smaller than its own text + padding).
+	_value_cell_w = half
+	_fit_readout(input_control)
+	_fit_readout(difficulty_control)
 	input_row.position = Vector2.ZERO
 	input_row.size = Vector2(half, secondary_h_px)
-	input_label.position = Vector2(0.0, (secondary_h_px - 18.0) * 0.5)
-	input_label.size = Vector2(38.0, 18.0)
-	input_control.position = Vector2(40.0, 1.0)
-	input_control.size = Vector2(maxf(half - 40.0, 40.0), secondary_h_px - 2.0)
+	input_control.position = Vector2(0.0, 1.0)
+	input_control.size = Vector2(half, secondary_h_px - 2.0)
 	difficulty_row.position = Vector2.ZERO
 	difficulty_row.size = Vector2(half, secondary_h_px)
-	difficulty_label.position = Vector2(0.0, (secondary_h_px - 18.0) * 0.5)
-	difficulty_label.size = Vector2(38.0, 18.0)
-	difficulty_control.position = Vector2(40.0, 1.0)
-	difficulty_control.size = Vector2(maxf(half - 40.0, 40.0), secondary_h_px - 2.0)
+	difficulty_control.position = Vector2(0.0, 1.0)
+	difficulty_control.size = Vector2(half, secondary_h_px - 2.0)
 	team_control.position = Vector2(secondary.size.x - half, 1.0)
 	team_control.size = Vector2(half, secondary_h_px - 2.0)
 	notch.position = Vector2((s.x - NOTCH_W) * 0.5, 0.0)

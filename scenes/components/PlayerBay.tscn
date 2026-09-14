@@ -32,9 +32,6 @@ text = "HMN"
 
 [node name="InputRow" type="Control" parent="SecondaryControls"]
 
-[node name="InputLabel" type="Label" parent="SecondaryControls/InputRow"]
-text = "INPUT"
-
 [node name="InputControl" type="Button" parent="SecondaryControls/InputRow"]
 text = "KEYBOARD 1"
 
@@ -44,9 +41,6 @@ mouse_filter = 2
 script = ExtResource("2_anchor")
 
 [node name="DifficultyRow" type="Control" parent="SecondaryControls"]
-
-[node name="DifficultyLabel" type="Label" parent="SecondaryControls/DifficultyRow"]
-text = "CPU"
 
 [node name="DifficultyControl" type="Button" parent="SecondaryControls/DifficultyRow"]
 text = "NORMAL"

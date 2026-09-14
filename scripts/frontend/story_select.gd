@@ -20,9 +20,17 @@ const RenderViewScript = preload("res://scripts/frontend/fighter_render_view.gd"
 const Factory = preload("res://scripts/frontend/fighter_presentation_factory.gd")
 const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 
-const TILE_W := 108.0
+const TILE_W := 108.0      # authored MAXIMUM tile size (the strip never exceeds it)
 const TILE_H := 86.0
 const TILE_GAP := 12.0
+# Owner corrective pass (Story composition): the roster strip is a FIXED column
+# (authored 640 px wide). The authored six-fighter roster at the 108+12 pitch
+# reached x 764 and the last tile — plate, portrait and its own name band —
+# crossed into the preview zone where the "SELECTED FIGHTER" / fighter-name
+# block starts (no gutter at all). The strip now FITS its column: the pitch
+# shrinks to the widest pitch that keeps the whole row inside the strip (never
+# past the authored maximum), and the tile keeps the reference aspect.
+const TILE_MIN := 24.0
 const EXIT_SECONDS := 13.0 / 60.0
 const ENTER_SECONDS := 10.0 / 60.0
 const EXIT_LOCK := 0.5
@@ -174,13 +182,21 @@ func build(playable_ids: Array = []) -> void:
 		if is_instance_valid(tile):
 			tile.queue_free()
 	_tiles.clear()
+	# The strip's own column decides the row: the widest pitch that ends the
+	# last tile at the strip's right edge, never wider than the authored one.
+	var strip_w: float = _roster_strip.size.x
+	if strip_w < 24.0:
+		strip_w = 640.0                      # authored width before the layout ran
+	var pitch: float = minf(TILE_W + TILE_GAP, (strip_w + TILE_GAP) / float(maxi(_ids.size(), 1)))
+	var tile_w: float = maxf(pitch - TILE_GAP, TILE_MIN)
+	var tile_h: float = maxf(tile_w * TILE_H / TILE_W, TILE_MIN)
 	for i in _ids.size():
 		var id := _ids[i]
 		var tile = TileScene.instantiate()
 		tile.name = "FighterTile%d" % i
-		tile.position = Vector2(i * (TILE_W + TILE_GAP), 0.0)
+		tile.position = Vector2(i * pitch, 0.0)
 		_roster_strip.add_child(tile)
-		tile.set_tile_size(Vector2(TILE_W, TILE_H))
+		tile.set_tile_size(Vector2(tile_w, tile_h))
 		tile.setup(id, Roster.display_name(id).to_upper(), PortraitData.portrait_texture(id))
 		tile.focus_mode = Control.FOCUS_ALL
 		tile.tile_pressed.connect(_select_by_id)

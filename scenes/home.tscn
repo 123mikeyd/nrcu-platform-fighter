@@ -101,7 +101,7 @@ offset_bottom = 289.0
 
 [node name="QuietRail" parent="ReferenceFrame/Navigation/MenuRow_Play" index="3"]
 offset_left = 142.0
-offset_right = 270.0
+offset_right = 368.0
 
 [node name="MenuRow_Story" parent="ReferenceFrame/Navigation" instance=ExtResource("2_row")]
 layout_mode = 0
@@ -134,7 +134,7 @@ offset_bottom = 529.0
 
 [node name="QuietRail" parent="ReferenceFrame/Navigation/MenuRow_Quit" index="3"]
 offset_left = 142.0
-offset_right = 252.0
+offset_right = 368.0
 
 [node name="PageLayer" type="Control" parent="ReferenceFrame"]
 layout_mode = 0

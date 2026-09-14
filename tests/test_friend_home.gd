@@ -123,13 +123,29 @@ func run() -> void:
     check(active.size() == 1, "exactly one row owns the active rail")
     check(int(active[0]) == home.selected_index(), "the selected row is the active one")
     check(plate_of(rows[int(active[0])]).visible, "the active row owns the plate")
+    # --- every inactive quiet fragment ends FLUSH ---------------------------
+    # Owner corrective pass: the quiet rules "enden nicht bündig" — PLAY/QUIT
+    # stopped short of the line STORY MODE / HOW TO PLAY always reached. The
+    # locked rule is now: each fragment starts just after its own label and
+    # every fragment ends on ONE common right edge (frame-local x 432, the
+    # authored flush line, 64 px row origin + 368 px row-local).
+    var flush_x := -1.0
     for i in rows.size():
         var quiet: Panel = rows[i].get_node("QuietRail")
         if i == home.selected_index():
             check(not quiet.visible, "the active row hides its quiet fragment")
         else:
-            check(quiet.visible and quiet.size.x >= 80.0 and quiet.size.x <= 130.0,
-                "inactive row %d keeps one short quiet fragment" % i)
+            check(quiet.visible, "inactive row %d keeps its quiet fragment" % i)
+            var end_x: float = quiet.get_global_rect().end.x
+            if flush_x < 0.0:
+                flush_x = end_x
+            else:
+                check(absf(end_x - flush_x) <= 0.01,
+                    "inactive row %d's quiet fragment ends flush with the common right edge (%.1f vs %.1f)" % [i, end_x, flush_x])
+            check(absf(end_x - 432.0) <= 1.0,
+                "inactive row %d's quiet fragment ends at the authored flush line (%.1f)" % [i, end_x])
+            check(quiet.size.x >= 100.0,
+                "inactive row %d keeps a readable quiet fragment (%.1f px)" % [i, quiet.size.x])
 
     # --- authored geometry bands, layout stability across selection --------
     var bounds: Array = []
