@@ -51,6 +51,31 @@ func run():
         fail("start prompt missing"); return
     if not title.has_method("begin"):
         fail("title must expose begin()"); return
+    if title.prompt_alpha() >= 0.1:
+        fail("the prompt is pulse-written early instead of staying hidden during entry"); return
+    for i in 20: await process_frame
+    if title.prompt_alpha() <= 0.4:
+        fail("the prompt did not enter its restrained idle range after the entry tween"); return
+    # A key held before Title activation blocks arming until its real release;
+    # the route must not rely on an arbitrary post-entry timer.
+    var held := InputEventKey.new()
+    held.keycode = KEY_F
+    held.pressed = true
+    Input.parse_input_event(held)
+    var blocked = load("res://scenes/title.tscn").instantiate()
+    root.add_child(blocked)
+    await create_timer(0.5).timeout
+    if blocked.is_armed() or blocked._leaving:
+        fail("a held carry-over key skipped Title release-arming"); return
+    var released := InputEventKey.new()
+    released.keycode = KEY_F
+    released.pressed = false
+    Input.parse_input_event(released)
+    for i in 3: await process_frame
+    if not blocked.is_armed():
+        fail("Title did not arm after the held input was released"); return
+    blocked.queue_free()
+    await process_frame
     # begin() is the callable the key/click/pad path uses: no error, and it
     # reaches the main menu.
     title.begin()
@@ -65,6 +90,27 @@ func run():
     if locked._leaving:
         fail("title skipped instantly, entry lock is not armed"); return
     await create_timer(0.5).timeout
+    # Other pad buttons are not controller confirm/Start actions.
+    var pad_other := InputEventJoypadButton.new()
+    pad_other.button_index = JOY_BUTTON_X
+    pad_other.pressed = true
+    locked._unhandled_input(pad_other)
+    if locked._leaving:
+        fail("a non-confirm pad button incorrectly activated Title"); return
+    # Modifier-only input is not a Start even though the visible copy accepts
+    # broad non-modifier keyboard input.
+    var modifier := InputEventKey.new()
+    modifier.keycode = KEY_SHIFT
+    modifier.physical_keycode = KEY_SHIFT
+    modifier.pressed = true
+    locked._unhandled_input(modifier)
+    if locked._leaving:
+        fail("modifier-only key incorrectly activated Title"); return
+    locked._unhandled_input(start_event())
+    if not locked._leaving:
+        fail("fresh key did not activate the armed Title"); return
+    if locked.start_count() != 1:
+        fail("repeated activation was not latched to one Start")
     var menu = root.get_node_or_null("Home")
     locked._unhandled_input(start_event())
     routed = await route_to_menu(menu)

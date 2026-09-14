@@ -24,12 +24,15 @@ const Tokens = preload("res://scripts/ui_tokens.gd")
 const MENU_SCENE := "res://scenes/home.tscn"
 const PROMPT_TEXT := "CLICK OR PRESS ANY KEY"
 const OVERSCAN := 48.0
-const ARM_SECONDS := 0.35
+const ENTRY_GUARD_SECONDS := 0.35
 const ENTRY_SETTLE_PX := 10.0
 const EXIT_SECONDS := 14.0 / 60.0
 const PROMPT_PERIOD := 2.9
 const PROMPT_MIN := 0.60
 const PROMPT_MAX := 0.95
+const PROMPT_ENTRY_DELAY := 10.0 / 60.0
+const PROMPT_ENTRY_FADE := 10.0 / 60.0
+const PROMPT_PRESS_SECONDS := 0.12
 
 signal start_accepted()
 
@@ -47,7 +50,12 @@ signal start_accepted()
 var _t := 0.0
 var _drift := Vector2.ZERO
 var _frozen := false
+var _entry_guard_remaining := ENTRY_GUARD_SECONDS
+var _arming_checked := false
+var _blocked_by_held_input := false
 var _armed := false
+var _prompt_entry_elapsed := 0.0
+var _prompt_press_remaining := 0.0
 var _leaving := false
 var _starts := 0
 
@@ -57,6 +65,7 @@ func _ready() -> void:
     _style_nodes()
     _layout_start_region()
     _entry_animation()
+    _update_prompt_alpha()
     var cursor := get_node_or_null("/root/Cursor")
     if cursor != null and cursor.hand != null:
         var hand = cursor.hand
@@ -105,16 +114,20 @@ func _entry_animation() -> void:
     var tween := create_tween().set_parallel()
     tween.tween_property(_title_group, "modulate:a", 1.0, 22.0 / 60.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
     tween.tween_property(_title_group, "position:y", _title_group.position.y - ENTRY_SETTLE_PX, 22.0 / 60.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    _prompt.modulate.a = 0.0
     _left_rule.modulate.a = 0.0
     _right_rule.modulate.a = 0.0
-    var prompt_tween := create_tween().set_parallel()
-    prompt_tween.tween_property(_prompt, "modulate:a", PROMPT_MIN, 10.0 / 60.0).set_delay(10.0 / 60.0)
-    prompt_tween.tween_property(_left_rule, "modulate:a", 0.55, 10.0 / 60.0).set_delay(10.0 / 60.0)
-    prompt_tween.tween_property(_right_rule, "modulate:a", 0.55, 10.0 / 60.0).set_delay(10.0 / 60.0)
+    # Prompt opacity has one owner: _update_prompt_alpha(). The rules may use
+    # their own entry tween because they have no idle pulse writer.
+    var rules_tween := create_tween().set_parallel()
+    rules_tween.tween_property(_left_rule, "modulate:a", 0.55, 10.0 / 60.0).set_delay(10.0 / 60.0)
+    rules_tween.tween_property(_right_rule, "modulate:a", 0.55, 10.0 / 60.0).set_delay(10.0 / 60.0)
 
 func _process(delta: float) -> void:
     var vp := get_viewport_rect().size
+    if _entry_guard_remaining > 0.0:
+        _entry_guard_remaining = maxf(_entry_guard_remaining - delta, 0.0)
+    if not _armed:
+        _update_start_arming()
     if not _frozen:
         _t += delta
         _drift = Vector2(
@@ -125,11 +138,47 @@ func _process(delta: float) -> void:
     # constant — no per-frame rescaling, no shimmer.
     _bg.position = Vector2(-OVERSCAN, -OVERSCAN) + _drift
     _bg.size = vp + Vector2(OVERSCAN, OVERSCAN) * 2.0
-    if not _armed and _t >= ARM_SECONDS:
+    if _leaving:
+        _prompt_press_remaining = maxf(_prompt_press_remaining - delta, 0.0)
+    else:
+        _prompt_entry_elapsed += delta
+    _update_prompt_alpha()
+
+func _update_start_arming() -> void:
+    # The short entry guard protects the Title from the previous route's event,
+    # but it is not the arming decision. Once the guard is over, a held input
+    # blocks until the engine reports its actual release.
+    if _entry_guard_remaining > 0.0:
+        return
+    if not _arming_checked:
+        _arming_checked = true
+        _blocked_by_held_input = _relevant_input_held()
+        if not _blocked_by_held_input:
+            _armed = true
+    elif _blocked_by_held_input and not _relevant_input_held():
         _armed = true
-    if not _leaving:
-        var wave := 0.5 + 0.5 * sin(TAU * _t / PROMPT_PERIOD)
-        _prompt.modulate.a = PROMPT_MIN + (PROMPT_MAX - PROMPT_MIN) * wave
+
+func _relevant_input_held() -> bool:
+    # Input.is_anything_pressed() covers keyboard and controller buttons; the
+    # explicit mouse query keeps the accepted left-click path deterministic on
+    # render backends that do not include mouse buttons in that aggregate.
+    return Input.is_anything_pressed() or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+
+func _update_prompt_alpha() -> void:
+    # This is the sole writer of the prompt's opacity. Entry reveal owns the
+    # base alpha first; only after it completes does the idle pulse participate.
+    if _leaving:
+        _prompt.modulate.a = clampf(_prompt_press_remaining / PROMPT_PRESS_SECONDS, 0.0, 1.0)
+        return
+    if _prompt_entry_elapsed < PROMPT_ENTRY_DELAY:
+        _prompt.modulate.a = 0.0
+        return
+    var reveal := clampf((_prompt_entry_elapsed - PROMPT_ENTRY_DELAY) / PROMPT_ENTRY_FADE, 0.0, 1.0)
+    if reveal < 1.0:
+        _prompt.modulate.a = PROMPT_MIN * reveal
+        return
+    var wave := 0.5 + 0.5 * sin(TAU * _t / PROMPT_PERIOD)
+    _prompt.modulate.a = PROMPT_MIN + (PROMPT_MAX - PROMPT_MIN) * wave
 
 # --- input ---------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:
@@ -141,11 +190,17 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _is_fresh_start(event: InputEvent) -> bool:
     if event is InputEventKey:
-        return event.pressed and not event.echo and event.keycode != KEY_NONE
+        var key := event as InputEventKey
+        if not key.pressed or key.echo or key.keycode == KEY_NONE:
+            return false
+        # The copy promises ANY KEY, but a modifier by itself is not a Start.
+        return key.keycode not in [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META] \
+            and key.physical_keycode not in [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META]
     if event is InputEventMouseButton:
         return event.pressed and event.button_index == MOUSE_BUTTON_LEFT
     if event is InputEventJoypadButton:
-        return event.pressed
+        var button := event as InputEventJoypadButton
+        return button.pressed and (button.button_index == JOY_BUTTON_A or button.button_index == JOY_BUTTON_START)
     return false
 
 func begin() -> void:
@@ -158,9 +213,8 @@ func begin() -> void:
     FrontendEvents.emit_confirm("title_start")
     start_accepted.emit()
     # Prompt: tiny immediate press response, then fade.
-    _prompt.modulate.a = 1.0
+    _prompt_press_remaining = PROMPT_PRESS_SECONDS
     var press := create_tween()
-    press.tween_property(_prompt, "modulate:a", 0.0, 0.12).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
     press.parallel().tween_property(_start_region, "scale", Vector2(0.98, 0.96), 0.10)
     # Title group exits as one unit over ~12-18 frames.
     var exit := create_tween().set_parallel()
