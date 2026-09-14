@@ -156,6 +156,9 @@ var _render_view: Control = null
 @onready var _footer_help: Label = $ReferenceFrame/Footer/FooterHelp
 
 func _ready() -> void:
+
+    if not FrontendInput.cancel_pressed.is_connected(_on_semantic_cancel):
+        FrontendInput.cancel_pressed.connect(_on_semantic_cancel)
     theme = Tokens.make_theme()
     name = "HowToPlay"
     _style()
@@ -449,6 +452,10 @@ func _wire_back() -> void:
     _back.pressed.connect(_on_back_pressed)
     _back.focus_entered.connect(_on_back_focused)
     _back.focus_exited.connect(_on_back_unfocused)
+
+func _on_semantic_cancel() -> void:
+    if is_visible_in_tree():
+        _on_back_pressed()
 
 func _on_back_pressed() -> void:
     FrontendEvents.emit_back("help")

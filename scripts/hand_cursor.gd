@@ -24,10 +24,19 @@ extends Control
 # asked for pointer control) with a short pose settle, never a slow fly.
 #
 # Pose semantics: point = ordinary navigation; press = click/confirm; carry =
-# the clean grab/pinch pose (hand_grab) + a separate PlayerTokenView owned by
-# the screen and attached into this layer (`set_carry`). The baked hand_carry
-# sprite is RETIRED from the carry path (Doc 01 §5, ledger C-008, G-031): the
-# carry pose and the per-player token are separate objects.
+# the artist's TOP-LEFT grip pose (the one that HOLDS an object) with the baked
+# coin MASKED OUT — hand_hold.png, cut from hand_carry.png — plus a separate
+# PlayerTokenView owned by the screen and attached into this layer
+# (`set_carry`). The carry pose and the per-player token are separate objects:
+# no player identity is baked into hand art (Doc 01 §5, ledger C-008, G-031),
+# which is exactly why the baked coin (a red disc labelled "P1") had to go.
+#
+# hover = the artist's EMPTY PINCH (sheet cell 2 of hand_sheet_v3.png,
+# hand_hover.png, HOVER_TIP) — a hand hovering over a token it does not yet
+# hold. It is kept loaded and anchored for that future use and is NOT drawn by
+# the carry path any more.
+#
+# hand_grab.png stays available but is unused by the carry path.
 #
 # Hover arming (§3): a stationary pointer does not drive semantic hover on a
 # newly entered screen or under a newly appearing control until genuine mouse
@@ -68,22 +77,39 @@ const HAND_SCALE := 0.33
 const TIP_POINT := Vector2(15.5, 1.0)
 const TIP_GRAB := Vector2(50.0, 1.0)
 const TIP_PRESS := Vector2(49.0, 22.0)
-# Where the carried token sits relative to the hotspot (local space, i.e. the
-# same space `_hand.position`/`_token_slot.position` live in). The carry pose
-# is the CLEAN grab/pinch hand (hand_grab) and the token is a SEPARATE
-# per-player PlayerTokenView the screen owns (Doc 01 §5 "the hand art and the
-# token are separate"; Doc 04 §4 token ownership: TokenHomeLayer /
-# CursorCarryLayer / FighterTile token layer). No player identity is baked into
-# hand art (forensic ledger C-008).
+# --- the CARRY pose (hand_hold.png = the TOP-LEFT grip, baked coin masked off)
+# Source: assets/ui/hand_carry.png, the artist's top-left grip pose
+# (hand_sheet_v3.png top-left cell, 370x467, scaled to a 124x157 content box at
+# (4,3) of a 129x160 canvas). That sprite is the grip that HOLDS an object; it
+# shipped with a per-player token baked in (a red disc labelled "P1"), which
+# tools/mask_carry_coin.py removes (fill + rim + label) while keeping the
+# finger line-art that curls over the coin. Canvas and content placement are
+# byte-identical to hand_carry.png, so the anchor below stays exact.
 #
-# Derivation: in the approved carry reference composition the coin's centre
-# sits in the pinch pocket of the grab pose, at texture (50.5, 32.5) of
-# hand_grab.png, i.e. (0.5, 31.5) texture px from the pose anchor TIP_GRAB
-# (50.0, 1.0); x 0.33 (HAND_SCALE) is the on-screen offset of the token's
-# CENTRE from the hotspot. The token slot is a sibling BELOW the hand node, so
-# the gripping fingers draw over the token exactly like the reference
-# (fingers in front of the coin), never the token over the fingers.
-const CARRY_CENTER := Vector2(0.17, 10.4)
+# TIP_CARRY is the cursor anchor of that pose: the point of the texture that
+# lands on the logical hotspot.
+const TIP_CARRY := Vector2(67.5, 32.0)
+# The baked coin's centre inside that texture, MEASURED on hand_carry.png (a
+# RANSAC circle fit on the red-fill boundary: 366 inlier boundary points,
+# mean residual 0.28 px) -> (34.41, 33.45) with a fill radius of 30.67 px and
+# an outermost coin pixel at radius 31.06 (mean over the unoccluded arc).
+# The previously recorded value was (35.5, 34.0), 1.16 px away; the artist's
+# chroma disc on the sheet would map to (36.9, 36.5) r 33.3.
+const CHIP_TEX_POS := Vector2(34.45, 33.46)
+# Where the carried token's CENTRE sits relative to the hotspot, in screen px:
+# the coin's centre minus the anchor tip, at the hand's scale, so the token
+# lands exactly on the texture pixel the baked coin occupied. The fingers of
+# the glove draw OVER the token's near edge because the token slot is a sibling
+# BELOW the hand node (fingers in front, exactly like the baked sprite).
+const CARRY_CENTER := (CHIP_TEX_POS - TIP_CARRY) * HAND_SCALE
+# --- the HOVER pose (hand_hover.png = sheet cell 2, the EMPTY pinch) --------
+# The same grip with nothing in it: the hand hovering over a token it does not
+# yet hold. Kept loaded and anchored for that future use; the CARRY path never
+# draws it.
+const HOVER_TEX := "res://assets/ui/hand_hover.png"
+# The empty pocket between the two pinching digits spans x 8.6..37.6,
+# y 33.9..56.0 of that 147x160 sprite, so its centre is (23.1, 45.0).
+const HOVER_TIP := Vector2(23.1, 45.0)
 
 var targets: Array[Control] = []
 var hovered: Control = null
@@ -112,7 +138,9 @@ var _carry_offset := Vector2.ZERO
 
 var _tex_point: Texture2D
 var _tex_grab: Texture2D
+var _tex_hold: Texture2D
 var _tex_press: Texture2D
+var _tex_hover: Texture2D
 var _hand: Control
 var _token_slot: Control
 
@@ -133,7 +161,9 @@ func _ready() -> void:
     add_child(_hand)
     _tex_point = load("res://assets/ui/hand_point.png")
     _tex_grab = load("res://assets/ui/hand_grab.png")
+    _tex_hold = load("res://assets/ui/hand_hold.png")
     _tex_press = load("res://assets/ui/hand_press.png")
+    _tex_hover = load(HOVER_TEX)
     var vp := get_viewport()
     if vp != null:
         _mouse = vp.get_mouse_position()
@@ -392,7 +422,7 @@ func _apply_hand_position() -> void:
 
 # --- drawing -------------------------------------------------------------
 func _tex_ready() -> bool:
-    return _tex_point != null and _tex_grab != null
+    return _tex_point != null and _tex_hold != null
 
 func is_pressing() -> bool:
     return _press_held or _press > 0.0
@@ -400,18 +430,31 @@ func is_pressing() -> bool:
 func active_texture() -> Texture2D:
     if is_pressing() and _tex_press != null:
         return _tex_press
-    if visual == Visual.CARRY and _tex_grab != null:
-        # The carry pose is the clean grab/pinch hand; the per-player token is
-        # the separate object in the CursorCarryLayer (Doc 01 §5).
-        return _tex_grab
+    if visual == Visual.CARRY and _tex_hold != null:
+        # The carry pose is the artist's TOP-LEFT grip (the one that holds an
+        # object) with the baked coin masked out; the per-player token is the
+        # separate object in the CursorCarryLayer. The empty-pinch sprite is
+        # the HOVER pose (hover_texture()) and no carry path draws it.
+        return _tex_hold
     return _tex_point
+
+func hover_texture() -> Texture2D:
+    # The HOVER pose: the artist's empty pinch (hand_hover.png). Kept reachable
+    # for the "hand over a token it does not yet hold" state; not the carry.
+    return _tex_hover
 
 func active_tip() -> Vector2:
     if is_pressing():
         return TIP_PRESS
     if visual == Visual.CARRY:
-        return TIP_GRAB
+        return TIP_CARRY
     return TIP_POINT
+
+func carry_pinch_point() -> Vector2:
+    # Screen-space position the carried token's CENTRE must land on: the anchor
+    # hotspot plus the measured coin offset at the hand's scale, i.e. the point
+    # of the drawn sprite the baked coin occupied.
+    return hotspot + CARRY_CENTER
 
 func _draw_hand() -> void:
     if not _tex_ready():

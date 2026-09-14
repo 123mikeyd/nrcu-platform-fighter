@@ -25,6 +25,10 @@ func arg_value(key: String, fallback: String) -> String:
             return a.substr(key.length() + 3)
     return fallback
 
+const CARRY_INDEX := 2   # the tile the csscarry state carries from
+
+var _carry_screen: Control = null
+
 func run() -> void:
     var screen := arg_value("screen", "css")
     var out := arg_value("out", "")
@@ -44,7 +48,8 @@ func run() -> void:
         "css":
             shot_root = await _make_css(_roster_cards(Roster.ids()), hover)
         "csscarry":
-            shot_root = await _make_css(_roster_cards(Roster.ids()), 2, true)
+            shot_root = await _make_css(_roster_cards(Roster.ids()), CARRY_INDEX)
+            _carry_screen = shot_root
         "css30":
             var cards: Array = []
             for i in 30:
@@ -64,6 +69,11 @@ func run() -> void:
             get_tree().quit(1)
             return
     for i in 90: await get_tree().process_frame
+    # The carry is driven only now: the screen's adaptive composition moves the
+    # roster while it settles, so the tile rects read before that are stale.
+    if _carry_screen != null:
+        await _drive_carry(_carry_screen, CARRY_INDEX)
+        _report_carry()
     if hover >= 0 and shot_root.has_method("hover_slot"):
         shot_root.hover_slot(hover)
         for i in 30: await get_tree().process_frame
@@ -96,7 +106,7 @@ func _stage_slots(count: int) -> Array:
         slots.append({"id": id if i < 3 else "synth%d" % i, "name": label, "tex": tex[id]})
     return slots
 
-func _make_css(cards: Array, hover: int, carry := false) -> Control:
+func _make_css(cards: Array, hover: int) -> Control:
     var css = load("res://scenes/character_select.tscn").instantiate()
     css.name = "EvidenceCSS"
     add_child(css)
@@ -106,15 +116,59 @@ func _make_css(cards: Array, hover: int, carry := false) -> Control:
     if cards.size() >= 7:
         state.slots[0]["character"] = str(cards[0]["id"])
     css.open_with(state)
-    if carry and cards.size() > 2:
-        var hand = get_node_or_null("/root/Cursor").hand
-        if hand != null:
-            var motion := InputEventMouseMotion.new()
-            motion.position = Vector2(640.0, 200.0)
-            motion.relative = Vector2(30.0, 0.0)
-            hand._input(motion)
-        css._on_tile_entered(hover)
     return css
+
+
+func _drive_carry(css: Control, index: int) -> void:
+    # Drive the live carry the way a real pointer resting on a roster tile does:
+    # the hotspot sits ON the tile (a carry only survives while the
+    # authoritative hotspot is inside the populated roster envelope — ledger
+    # C-004/C-005; parking it anywhere else photographs the cancelled state:
+    # pointing pose, no token), and it is re-asserted every frame so a windowed
+    # run's own pointer events cannot re-authorise it away.
+    var hand = get_node_or_null("/root/Cursor").hand
+    for i in 12:
+        var at: Vector2 = (css.get_tiles()[index] as Control).get_global_rect().get_center()
+        Input.warp_mouse(at)
+        var motion := InputEventMouseMotion.new()
+        motion.position = at
+        motion.relative = Vector2(30.0, 0.0)
+        hand._input(motion)
+        if i == 0:
+            css._on_tile_entered(index)
+        await get_tree().process_frame
+
+func _report_carry() -> void:
+    # Print the geometry the very next frame will photograph, so the PNG and the
+    # carried state are read off the SAME run (evidence chain, not inference).
+    var hand = get_node_or_null("/root/Cursor").hand
+    if hand == null:
+        print("carry report: no hand")
+        return
+    var token: Control = hand.carried_token()
+    print("carry report: carrying=%s texture=%s tip=%s hotspot=%s" % [
+        str(hand.is_carrying()),
+        str(hand.active_texture().resource_path if hand.active_texture() else "-"),
+        str(hand.active_tip()), str(hand.hotspot)])
+    var pinch: Vector2 = hand.carry_pinch_point()
+    print("carry report: carry_center=%s (chip_tex_pos - tip_carry) * scale=%s"
+        % [str(hand.CARRY_CENTER), str(hand.HAND_SCALE)])
+    print("carry report: expected token centre = hotspot + carry_center = %s" % str(pinch))
+    if token == null:
+        print("carry report: NO TOKEN")
+        return
+    var centre: Vector2 = token.global_position + token.size * 0.5
+    print("carry report: token=%s parent=%s visible=%s in_tree=%s centre=%s err_px=%.3f" % [
+        token.name, str(token.get_parent().name), str(token.visible),
+        str(token.is_visible_in_tree()), str(centre), centre.distance_to(pinch)])
+    var tex_point: Vector2 = hand.active_tip() + (centre - hand.hotspot) / hand.HAND_SCALE
+    print("carry report: token centre in sprite px=%s vs coin position %s (err %.2f tex px)"
+        % [str(tex_point), str(hand.CHIP_TEX_POS), tex_point.distance_to(hand.CHIP_TEX_POS)])
+    print("carry report: hand_global=%s token_global=%s z_index(hand=%d slot=%d)" % [
+        str(hand.get_global_position()), str(token.get_global_position()),
+        hand.get_node("HandVisual").z_index,
+        hand.get_node("CursorCarryLayer").z_index])
+
 
 func _make_sss(slots: Array, hover: int) -> Control:
     var sss = load("res://scripts/stage_select.gd").new()

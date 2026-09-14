@@ -63,6 +63,7 @@ var _consume_confirm := Callable()
 var _entry_device := ENTRY_MOUSE_KEYBOARD
 
 func _ready() -> void:
+	_ensure_pad_mappings()
 	process_mode = Node.PROCESS_MODE_ALWAYS   # Pause keeps Esc/Start reachable
 
 # --- classification (shared with the cursor internals) --------------------
@@ -194,6 +195,24 @@ func _handle_stick(event: InputEventJoypadMotion) -> void:
 		_claim_focus()
 		nav_action.emit(action)
 
+func _ensure_pad_mappings() -> void:
+	# Doc 03 §7: the semantic actions must carry the real pad buttons. Godot's
+	# default InputMap maps the D-pad/stick for ui_* directions but NOT A/B for
+	# ui_accept/ui_cancel, so a focused Button could never confirm and cancel
+	# never reached pad users. Idempotent.
+	_add_pad_event("ui_accept", JOY_BUTTON_A)
+	_add_pad_event("ui_cancel", JOY_BUTTON_B)
+
+func _add_pad_event(action: String, button: int) -> void:
+	if not InputMap.has_action(action):
+		return
+	for e in InputMap.action_get_events(action):
+		if e is InputEventJoypadButton and (e as InputEventJoypadButton).button_index == button:
+			return
+	var ev := InputEventJoypadButton.new()
+	ev.button_index = button
+	InputMap.action_add_event(action, ev)
+
 func _claim_focus() -> void:
 	var hand := _hand()
 	if hand != null:
@@ -207,14 +226,25 @@ func _emit_confirm(pressed: bool, source: String) -> void:
 		confirm_released.emit()
 		return
 	_confirm_source = source
-	confirm_pressed.emit()
+	# 1) An active surface may claim this confirm BEFORE the GUI stage (Results
+	# completes its reveal with the first confirm and must not also activate the
+	# button under it). One input, one action.
 	if _consume_confirm.is_valid() and bool(_consume_confirm.call(source)):
-		# The active surface claimed this confirm BEFORE the GUI stage (Results
-		# completes its reveal with the first confirm and must not also activate
-		# the button under it). One input, one action.
 		var viewport := get_viewport()
 		if viewport != null:
 			viewport.set_input_as_handled()
+		return
+	# 2) Doc 03 §7: a focused BaseButton is activated by the viewport's own
+	# ui_accept handling (which now carries the real pad A). Emitting the semantic
+	# confirm too would act twice on one press. Custom controls -- fighter tiles,
+	# player bays, Ready, roster modal rows -- have no button handling and use
+	# the signal below.
+	var fo: Node = null
+	if is_inside_tree():
+		fo = get_viewport().gui_get_focus_owner()
+	if fo is BaseButton:
+		return
+	confirm_pressed.emit()
 
 func confirm_source() -> String:
 	# §8: which device produced the last confirm press ("mouse"/"keyboard"/"pad").
