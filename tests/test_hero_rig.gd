@@ -47,11 +47,23 @@ func run():
         motion.relative = Vector2(40.0, 12.0)
         hand._input(motion)
         check(hand.is_mouse_active(), "genuine mouse motion activates the pointer")
+        # MIGRATED (Doc 03 §2, WP-1a): FOCUS is claimed only by MEANINGFUL
+        # frontend input — KEY_TAB used to claim it via the blanket
+        # "any key => focus" rule, which the locked contract rejects.
+        # A meaningful ui_* navigation key still hands authority back.
         var key := InputEventKey.new()
-        key.keycode = KEY_TAB
+        key.keycode = KEY_DOWN
         key.pressed = true
         hand._input(key)
         check(not hand.is_mouse_active(), "keyboard navigation hands authority back")
+        # §2 counter-proof: a modifier-only key never claims FOCUS. The hand is
+        # already in focus mode here, so the claim check is the mode itself.
+        var modifier := InputEventKey.new()
+        modifier.keycode = KEY_SHIFT
+        modifier.pressed = true
+        hand.set_mode(0)
+        hand._input(modifier)
+        check(hand.mode == 0, "a modifier-only key never claims FOCUS")
     layer.queue_free()
     await process_frame
     if failures == 0: print("PASS: hero rig and cursor mouse-intent contract")

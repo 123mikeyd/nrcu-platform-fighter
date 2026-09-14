@@ -103,11 +103,14 @@ func run():
     # --- focus anchors (Step 0): authored tile anchors, no mouse warp ------
     var anchor_one: Control = stage.get_tile_anchor(1)
     check(anchor_one != null, "every tile exposes an authored CursorAnchor")
+    # MIGRATED (Doc 03 §2, WP-1a): focus is claimed by MEANINGFUL navigation
+    # input only. KEY_TAB relied on the rejected blanket "any key => focus"
+    # rule; ui_down is a semantic frontend action and claims FOCUS.
     var key := InputEventKey.new()
-    key.keycode = KEY_TAB
+    key.keycode = KEY_DOWN
     key.pressed = true
     hand._input(key)
-    check(hand.mode == 1, "keyboard input switches the cursor to focus mode")
+    check(hand.mode == 1, "semantic keyboard navigation switches the cursor to focus mode")
     var mouse_before: Vector2 = hand._mouse
     var stage_slot2: int = stage._index_of(stage.get_hovered_id())
     stage.hover_slot(1 if stage_slot2 != 1 else 2)
