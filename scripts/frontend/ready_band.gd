@@ -34,6 +34,7 @@ signal ready_pressed()
 var _shown := false
 var _entrance := 0
 var _text_rest := Vector2.ZERO
+var _focus_rule: Panel = null
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -45,6 +46,15 @@ func _ready() -> void:
 	ready_text.add_theme_color_override("font_color", Tokens.CREAM)
 	ready_text.text = "READY TO FIGHT"
 	_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# §6 control emphasis: the band is a custom Control, so it carries its own
+	# structural focus signal (a 2 px accent edge) instead of relying on a
+	# Button style it does not have.
+	_focus_rule = Panel.new()
+	_focus_rule.name = "FocusRule"
+	_focus_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_focus_rule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
+	_focus_rule.visible = false
+	add_child(_focus_rule)
 	resized.connect(_layout)
 	_layout()
 	set_process(false)
@@ -55,9 +65,20 @@ func _layout() -> void:
 	ready_text.position = Vector2(0.0, 0.0)
 	ready_text.size = s
 	_text_rest = Vector2.ZERO
+	_focus_rule.position = Vector2(0.0, s.y - RAIL_H - 2.0)
+	_focus_rule.size = Vector2(s.x, 2.0)
 	# Action hotspot: right end of the plate, vertically centered.
 	_anchor.place_at(Vector2(maxf(s.x - 48.0, 8.0), s.y * 0.5 - 26.0))
 	queue_redraw()
+
+# --- focus signal (§6) -------------------------------------------------------
+
+func set_focus_signal(on: bool) -> void:
+	if _focus_rule != null:
+		_focus_rule.visible = on
+
+func focus_signal_visible() -> bool:
+	return _focus_rule != null and _focus_rule.visible
 
 # --- state ------------------------------------------------------------------
 
@@ -77,6 +98,7 @@ func hide_band() -> void:
 	set_process(false)
 	modulate.a = 1.0
 	visible = false
+	set_focus_signal(false)
 
 func is_shown() -> bool:
 	return _shown

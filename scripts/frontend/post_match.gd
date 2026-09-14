@@ -52,6 +52,10 @@ func _ready() -> void:
     result_screen.setup_requested.connect(_on_action.bind("change_fighters"))
     result_screen.stage_requested.connect(_on_action.bind("change_stage"))
     result_screen.menu_requested.connect(_on_action.bind("menu"))
+    # Doc 03 §7/§11: cancel arrives from the semantic input service, not from a
+    # raw device decode here (this also makes controller B reach the route).
+    if not FrontendInput.cancel_pressed.is_connected(_on_semantic_cancel):
+        FrontendInput.cancel_pressed.connect(_on_semantic_cancel)
     hide()
 
 # --- presentation -----------------------------------------------------------
@@ -104,14 +108,12 @@ func _on_action(action_id: String) -> void:
 
 # --- cancel (Doc 01 §14) ----------------------------------------------------
 
-func _input(event: InputEvent) -> void:
-    # Runs before the GUI stage, mirroring result_screen.gd. The
-    # is_visible_in_tree() guard is required: the host keeps the surface
-    # mounted while it is not presented, and a hidden surface must neither
-    # consume nor answer input.
+func _on_semantic_cancel() -> void:
+    # The semantic ui_cancel (Esc / controller B) reaches this surface as a
+    # route decision. The is_visible_in_tree() guard is required: the host
+    # keeps the surface mounted while it is not presented, and a hidden surface
+    # must neither consume nor answer input.
     if not is_visible_in_tree() or result_screen == null:
-        return
-    if not _is_cancel_press(event):
         return
     if result_screen.is_revealing():
         if result_screen.reveal_tick() < ResultScreenScript.SAFETY_TICKS:
@@ -127,15 +129,6 @@ func _input(event: InputEvent) -> void:
     # After reveal safety: same semantic route as the visible MAIN MENU action.
     get_viewport().set_input_as_handled()
     _on_action("menu")
-
-func _is_cancel_press(event: InputEvent) -> bool:
-    if event is InputEventKey:
-        return event.pressed and not event.echo and event.keycode == KEY_ESCAPE
-    if event is InputEventJoypadButton:
-        # ui_cancel on this surface is the documented Back button (Doc 03 §11);
-        # gameplay owns B as Special, the frontend does not.
-        return event.pressed and InputMap.event_is_action(event, "ui_cancel")
-    return false
 
 # --- reads (tests / evidence) ----------------------------------------------
 

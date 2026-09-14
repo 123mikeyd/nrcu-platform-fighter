@@ -28,6 +28,7 @@ const Roster = preload("res://scripts/roster.gd")
 const PortraitData = preload("res://scripts/frontend/portrait_data.gd")
 const TileScene = preload("res://scenes/components/FighterTile.tscn")
 const RenderViewScript = preload("res://scripts/frontend/fighter_render_view.gd")
+const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 
 const TILE_W := 90.0
 const TILE_H := 72.0
@@ -158,11 +159,41 @@ func _wire() -> void:
     _action.pressed.connect(_on_action_pressed)
     _action.focus_entered.connect(_on_action_focused)
     _action.focus_exited.connect(_on_action_unfocused)
+    # Doc 03 §7: activation and cancel reach this screen through the semantic
+    # input service — never through ad-hoc key decoding.
+    if not FrontendInput.confirm_pressed.is_connected(_on_semantic_accept):
+        FrontendInput.confirm_pressed.connect(_on_semantic_accept)
+    if not FrontendInput.cancel_pressed.is_connected(_on_semantic_cancel):
+        FrontendInput.cancel_pressed.connect(_on_semantic_cancel)
+
+func _on_semantic_accept() -> void:
+    # §7: the roster tiles are CUSTOM Controls, so the semantic accept must
+    # reach them here (the engine cannot activate a FighterTile by itself).
+    # Enter / Space / controller A on a focused tile performs exactly the same
+    # selection as a mouse click on it.
+    if not is_visible_in_tree() or not _ready_state or _exiting:
+        return
+    if FrontendInput.confirm_source() == FrontendInput.SOURCE_MOUSE:
+        return
+    var focused := FrontendInput.focus_owner()
+    var index: int = _tiles.find(focused)
+    if index >= 0:
+        _select_by_id(_ids[index])
+        return
+    # Back and START ENCOUNTER are native Buttons: their own semantic
+    # ui_accept path owns them.
+
+func _on_semantic_cancel() -> void:
+    # §11 Back matrix: the briefing's ui_cancel takes the visible Back route.
+    if not is_visible_in_tree() or _exiting:
+        return
+    _on_back_pressed()
 
 func _on_back_pressed() -> void:
     FrontendEvents.emit_back("story")
 
 func _on_back_focused() -> void:
+    FocusGraph.track(self, _back)
     _back_rail.show()
     _back.add_theme_color_override("font_color", Tokens.CREAM)
     var hand = _hand()
@@ -184,6 +215,7 @@ func _on_action_pressed() -> void:
 func _on_action_focused() -> void:
     # Structural focus signal (never color alone): a 2 px accent rule caps the
     # plate while the rail/action owns focus.
+    FocusGraph.track(self, _action)
     _action_top_rule.show()
     var hand = _hand()
     if hand != null and hand.mode == 1:
@@ -336,6 +368,7 @@ func show_result(won: bool) -> void:
     var hand = _hand()
     if hand != null and hand.mode == 1:
         hand.set_focus_target(_anchor_action)
+    _ensure_focus_alive()
 
 func set_selected_id(id: String) -> void:
     if id != "" and not _ids.has(id):
@@ -358,6 +391,9 @@ func _select_by_id(id: String) -> void:
         chosen.emit(id)
 
 func _on_tile_focused(index: int) -> void:
+    if index < 0 or index >= _tiles.size():
+        return
+    FocusGraph.track(self, _tiles[index])
     if not _ready_state:
         return
     _select_by_id(_ids[index])
@@ -424,6 +460,33 @@ func _refresh_focus_graph() -> void:
         _back.focus_neighbor_left = _back.get_path_to(_tiles[_tiles.size() - 1])
         _action.focus_neighbor_top = _action.get_path_to(_tiles[0])
     _back.focus_neighbor_bottom = _back.get_path_to(_action)
+    # §6 recovery: the body/result swap hides a whole zone; a hidden control
+    # never keeps the focus and the hand retargets immediately.
+    _ensure_focus_alive()
+
+func _ensure_focus_alive() -> void:
+    if not is_inside_tree():
+        return
+    var before := FrontendInput.focus_owner()
+    var owner := FocusGraph.recover(get_viewport(), self, func() -> Control:
+        return _action if not _ready_state else _back)
+    if owner != null and owner != before:
+        var hand = _hand()
+        if hand != null and hand.mode == 1:
+            var anchor := focus_anchor_for(owner)
+            if anchor != null:
+                hand.set_focus_target(anchor)
+
+func focus_anchor_for(control: Control) -> Control:
+    # The authored hand target of a focusable control on this screen (Doc 03 §6).
+    if control == _action:
+        return _anchor_action
+    if control == _back:
+        return $ReferenceFrame/Header/AnchorBack
+    var index: int = _tiles.find(control)
+    if index >= 0:
+        return _tiles[index].anchor()
+    return FocusGraph.anchor_of(control)
 
 # --- exit choreography -------------------------------------------------------
 func play_exit() -> void:

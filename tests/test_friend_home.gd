@@ -274,7 +274,9 @@ func run() -> void:
     for row in rows:
         check(hit_of(row).focus_mode == Control.FOCUS_NONE,
             "modal focus cannot move behind the overlay")
-    home._unhandled_input(key_event(KEY_ESCAPE))
+    # WALK-UP (Doc 08 §2 public input): the modal dismiss is driven by a real
+    # ui_cancel event through the tree, not by calling the screen's handler.
+    Input.parse_input_event(key_event(KEY_ESCAPE))
     await settle(12)
     check(not home.is_quit_modal_open(), "Esc dismisses the confirmation")
     check(home.state == "home", "dismissing returns to Main")

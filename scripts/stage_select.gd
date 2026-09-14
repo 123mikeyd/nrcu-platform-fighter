@@ -45,6 +45,7 @@ signal exit_finished
 
 const Tokens = preload("res://scripts/ui_tokens.gd")
 const CursorAnchorScript = preload("res://scripts/frontend/cursor_anchor.gd")
+const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 
 const FPS := 60.0
 
@@ -125,6 +126,10 @@ func _ready() -> void:
     var root = get_node_or_null("/root/Cursor")
     if root != null:
         cursor = root.hand
+    # Doc 03 §7/§11: Back and cancel route through the semantic service, never
+    # through ad-hoc key decoding (a JoypadButton never reaches such a handler).
+    if not FrontendInput.cancel_pressed.is_connected(_on_semantic_cancel):
+        FrontendInput.cancel_pressed.connect(_on_semantic_cancel)
 
 func build(slots: Array) -> void:
     # Re-entrant: rebuilding with a different stage list replaces the old
@@ -151,6 +156,8 @@ func build(slots: Array) -> void:
     _build_preview()
     _build_field()
     _build_footer()
+    _wire_focus_graph()
+    _ensure_focus_alive()
     if cursor != null:
         cursor.add_target(_back)
 
@@ -162,7 +169,8 @@ func _build_header() -> void:
     subtitle.position = Vector2(Tokens.MARGIN + 2.0, HEADER_SUBTITLE_Y)
     subtitle.modulate = Color(1, 1, 1, 0.62)
     _content.add_child(subtitle)
-    # BACK is always visible: the page is never a trap.
+    # BACK is always visible: the page is never a trap. It owns an authored
+    # CursorAnchor like every other focusable control here (Doc 03 §6).
     _back = Button.new()
     _back.name = "StageBack"
     _back.text = "BACK"
@@ -171,7 +179,13 @@ func _build_header() -> void:
     _back.add_theme_font_size_override("font_size", Tokens.T_ACTION)
     Tokens.apply_styles(_back, Tokens.row_styles())
     _back.pressed.connect(request_back)
+    _back.focus_entered.connect(_on_back_focused)
     _content.add_child(_back)
+    var back_anchor := CursorAnchorScript.new()
+    back_anchor.name = "CursorAnchor"
+    back_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    back_anchor.place_at(Vector2(-14.0, _back.size.y - 10.0))
+    _back.add_child(back_anchor)
 
 func _build_divider() -> void:
     # One quiet vertical rule: the field and the preview read as two regions.
@@ -302,6 +316,8 @@ func _build_field() -> void:
             tile.add_child(label)
         tile.pressed.connect(_on_tile_pressed.bind(i))
         tile.mouse_entered.connect(_on_tile_hovered.bind(i))
+        # §13: a focus move IS a preview move — exactly like mouse hover.
+        tile.focus_entered.connect(_on_tile_focused.bind(i))
         # Authored focus-cursor anchor: the focus hand settles at the tile's
         # lower-left so artwork and caption stay uncovered (Doc 05 §4).
         var anchor := CursorAnchorScript.new()
@@ -610,10 +626,81 @@ func _process(delta: float) -> void:
     if _phase == Phase.CONFIRMING and _lock <= 0.0:
         play_exit()
 
-func _unhandled_key_input(event: InputEvent) -> void:
-    if not is_visible_in_tree():
+# --- focus topology + semantic path (Doc 03 §6/§7/§11/§13) -----------------
+func _wire_focus_graph() -> void:
+    # Explicit grid graph: no dependence on automatic tree-order focus. The
+    # authored field is a 3x3 reserve grid at the production stage count (and a
+    # wider grid packs more stages), so the graph is derived from the real
+    # columns/rows: in-row left/right, up to the row above (Back on the top
+    # row), down to the row below (nothing below the last row — no wrap).
+    if _tiles.is_empty():
         return
-    if event is InputEventKey and event.pressed and not event.echo:
-        if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
-            confirm()
-            get_viewport().set_input_as_handled()
+    var count := _tiles.size()
+    var cols := _columns(count)
+    for i in count:
+        var tile: Button = _tiles[i]
+        var col := i % cols
+        var row := i / cols
+        FocusGraph.clear(tile, [&"top", &"bottom", &"left", &"right"])
+        if col > 0:
+            FocusGraph.wire(tile, _tiles[i - 1], [&"left"])
+        if col < cols - 1 and i + 1 < count:
+            FocusGraph.wire(tile, _tiles[i + 1], [&"right"])
+        if row > 0:
+            FocusGraph.wire(tile, _tiles[i - cols], [&"top"])
+        else:
+            FocusGraph.wire(tile, _back, [&"top"])
+        if i + cols < count:
+            FocusGraph.wire(tile, _tiles[i + cols], [&"bottom"])
+    # Back sits above the field: down enters the first tile, left reaches the
+    # top row's last tile, and Tab order runs Back -> tiles -> Back.
+    FocusGraph.wire(_back, _tiles[0], [&"bottom"])
+    FocusGraph.wire(_back, _tiles[mini(cols - 1, count - 1)], [&"left"])
+    var chain: Array = [_back]
+    chain.append_array(_tiles)
+    FocusGraph.chain(chain, true)
+
+func _on_tile_focused(index: int) -> void:
+    # §13: focus updates the preview exactly like mouse hover — the selection
+    # plate, the stage name/index and the preview image all follow the focused
+    # tile. §6: the focus-enter is atomic, so the hand is retargeted even when
+    # the tile was already the hovered one (the spring must still settle here).
+    if index < 0 or index >= _tiles.size():
+        return
+    FocusGraph.track(self, _tiles[index])
+    if _phase != Phase.IDLE:
+        return
+    hover_slot(index)
+    if cursor != null and cursor.mode == 1 and index < _tile_anchors.size():
+        cursor.set_focus_target(_tile_anchors[index])
+
+func _on_back_focused() -> void:
+    FocusGraph.track(self, _back)
+    if cursor != null and cursor.mode == 1:
+        cursor.set_focus_target(FocusGraph.anchor_of(_back))
+
+func focus_anchor_for(control: Control) -> Control:
+    # The authored hand target of a focusable control on this screen (Doc 03 §6).
+    var index: int = _tiles.find(control)
+    if index >= 0 and index < _tile_anchors.size():
+        return _tile_anchors[index]
+    return FocusGraph.anchor_of(control)
+
+func _ensure_focus_alive() -> void:
+    # §6: a control that disappears (a rebuilt field) or becomes unreachable
+    # never keeps the focus; the hand retargets immediately.
+    if not is_inside_tree():
+        return
+    var before := FrontendInput.focus_owner()
+    var owner := FocusGraph.recover(get_viewport(), self, func() -> Control:
+        return _tiles[0] if not _tiles.is_empty() else _back)
+    if owner != null and owner != before and cursor != null and cursor.mode == 1:
+        var anchor := focus_anchor_for(owner)
+        if anchor != null:
+            cursor.set_focus_target(anchor)
+
+func _on_semantic_cancel() -> void:
+    # §11 Back matrix: SSS (pre-match and from Results) ui_cancel returns.
+    if not is_visible_in_tree() or _phase == Phase.CONFIRMING or _phase == Phase.EXITING or _lock > 0.0:
+        return
+    request_back()

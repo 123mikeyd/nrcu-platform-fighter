@@ -221,7 +221,8 @@ func _help_route_and_quit_modal() -> void:
         "Main stays mounted behind the confirmation")
     var focus = home.get_viewport().gui_get_focus_owner()
     check(focus != null and str(focus.name) == "ActionStay", "the default modal focus is STAY")
-    home._unhandled_input(key_event(KEY_ESCAPE))
+    # WALK-UP (Doc 08 §2 public input): dismiss through a real ui_cancel event.
+    Input.parse_input_event(key_event(KEY_ESCAPE))
     await settle(12)
     check(not home.is_quit_modal_open() and home.state == "home", "Esc dismisses the confirmation")
     home.get_window().close_requested.emit()

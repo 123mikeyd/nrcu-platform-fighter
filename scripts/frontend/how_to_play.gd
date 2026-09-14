@@ -28,11 +28,17 @@ const Roster = preload("res://scripts/roster.gd")
 const PortraitData = preload("res://scripts/frontend/portrait_data.gd")
 const TileScene = preload("res://scenes/components/FighterTile.tscn")
 const RenderViewScript = preload("res://scripts/frontend/fighter_render_view.gd")
+const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 
 const SECTIONS: Array = ["BASICS", "FIGHTERS"]
 const PROFILES: Array = ["P1_KEYBOARD", "P2_KEYBOARD", "CONTROLLER"]
 const PROFILE_BUTTONS: Dictionary = {
     "P1_KEYBOARD": "ProfileP1", "P2_KEYBOARD": "ProfileP2", "CONTROLLER": "ProfileCtrl",
+}
+# The authored hand targets of the input-profile segments (Doc 03 §6): the
+# scene owns the anchors, this screen owns pointing at them.
+const PROFILE_ANCHORS: Dictionary = {
+    "P1_KEYBOARD": "AnchorP1", "P2_KEYBOARD": "AnchorP2", "CONTROLLER": "AnchorCtrl",
 }
 const TAB_NODES: Dictionary = {"BASICS": "SectionBasics", "FIGHTERS": "SectionFighters"}
 
@@ -202,6 +208,7 @@ func _style() -> void:
             "focus": Tokens.flat(Color(0, 0, 0, 0)),
         })
         hit.pressed.connect(_on_tab_pressed.bind(section))
+        hit.focus_entered.connect(_on_tab_focused.bind(section))
         (root.get_node("Rail") as Panel).add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
         (root.get_node("Quiet") as Panel).add_theme_stylebox_override("panel", Tokens.flat(Tokens.RULE_WARM))
         var label: Label = root.get_node("Label")
@@ -288,6 +295,7 @@ func _build_profile_controls() -> void:
         button.add_theme_font_override("font", Tokens.font("medium"))
         button.add_theme_font_size_override("font_size", 15)
         button.pressed.connect(set_profile.bind(profile))
+        button.focus_entered.connect(_on_profile_focused.bind(profile))
         _labels[button] = button
         _add_focus_marker(button, _profile_control, button, Vector2(button.position.x, button.position.y - 4.0))
     _apply_profile_state()
@@ -351,6 +359,9 @@ func _build_fighters() -> void:
         _add_focus_marker(tile, _roster_strip, null, Vector2(tile.position.x, tile.position.y + tile.size.y + 4.0))
 
 func _on_tile_focused(index: int) -> void:
+    if index < 0 or index >= _tiles.size():
+        return
+    FocusGraph.track(self, _tiles[index])
     _select_fighter(index)
     var hand = _hand()
     if hand != null and hand.mode == 1:
@@ -444,6 +455,7 @@ func _on_back_pressed() -> void:
     closed.emit()
 
 func _on_back_focused() -> void:
+    FocusGraph.track(self, _back)
     _back_rail.show()
     _back.add_theme_color_override("font_color", Tokens.CREAM)
     var hand = _hand()
@@ -560,6 +572,69 @@ func _refresh_focus_graph() -> void:
     _back.focus_neighbor_left = _back.get_path_to(_tab_band.get_node(str(TAB_NODES["FIGHTERS"]) + "/HitArea"))
     if chain.size() > 3:
         _back.focus_neighbor_bottom = _back.get_path_to(chain[2])
+    # §6: a section switch hides a whole zone (profile segments / roster), so
+    # the recovery runs with the new topology in place.
+    _ensure_focus_alive()
+
+# --- focus hand targets + recovery (Doc 03 §6) ------------------------------
+func profile_anchor(profile: String) -> Control:
+    return _profile_control.get_node_or_null(str(PROFILE_ANCHORS.get(profile, "")))
+
+func tab_anchor(section: String) -> Control:
+    var root: Control = _tab_band.get_node_or_null(str(TAB_NODES.get(section, "")))
+    return root.get_node_or_null("Anchor") if root != null else null
+
+func _on_tab_focused(section: String) -> void:
+    var root: Control = _tab_band.get_node_or_null(str(TAB_NODES.get(section, "")))
+    if root != null:
+        FocusGraph.track(self, root.get_node_or_null("HitArea"))
+    var hand = _hand()
+    if hand != null and hand.mode == 1:
+        var anchor := tab_anchor(section)
+        if anchor != null:
+            hand.set_focus_target(anchor)
+
+func _on_profile_focused(profile: String) -> void:
+    var button: Control = _profile_control.get_node_or_null(str(PROFILE_BUTTONS.get(profile, "")))
+    if button != null:
+        FocusGraph.track(self, button)
+    var hand = _hand()
+    if hand != null and hand.mode == 1:
+        var anchor := profile_anchor(profile)
+        if anchor != null:
+            hand.set_focus_target(anchor)
+
+func focus_anchor_for(control: Control) -> Control:
+    # The authored hand target of a focusable control on this screen (Doc 03 §6).
+    if control == null:
+        return null
+    for profile in PROFILES:
+        if _profile_control.get_node_or_null(str(PROFILE_BUTTONS[profile])) == control:
+            return profile_anchor(profile)
+    for section in SECTIONS:
+        var root: Control = _tab_band.get_node_or_null(str(TAB_NODES[section]))
+        if root != null and root.get_node_or_null("HitArea") == control:
+            return tab_anchor(section)
+    if control == _back:
+        return $ReferenceFrame/Header/AnchorBack
+    var index: int = _tiles.find(control)
+    if index >= 0:
+        return _tiles[index].anchor()
+    return FocusGraph.anchor_of(control)
+
+func _ensure_focus_alive() -> void:
+    if not is_inside_tree():
+        return
+    var before := FrontendInput.focus_owner()
+    var owner := FocusGraph.recover(get_viewport(), self, func() -> Control:
+        var chain := focus_chain()
+        return chain[0] if not chain.is_empty() else _back)
+    if owner != null and owner != before:
+        var hand = _hand()
+        if hand != null and hand.mode == 1:
+            var anchor := focus_anchor_for(owner)
+            if anchor != null:
+                hand.set_focus_target(anchor)
 
 # --- focus markers (structural focus signal, never color alone) --------------
 func _add_focus_marker(control: Control, parent: Control, label, at: Vector2) -> void:

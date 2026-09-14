@@ -67,11 +67,17 @@ func run():
     check(post != null, "the MatchFlow host owns a PostMatch surface")
     check(not post.visible and not host.is_surface_presented("postmatch"),
         "PostMatch stays unpresented while merely configuring")
+    # WALK-UP (Doc 08 §2 public input): a real pointer click through the tree
+    # proves the hidden surface neither answers nor routes anything.
     var probe_click := InputEventMouseButton.new()
+    probe_click.button_index = MOUSE_BUTTON_LEFT
     probe_click.pressed = true
     probe_click.position = Vector2(640.0, 300.0)
-    post._input(probe_click)
-    check(not post.get_viewport().is_input_handled(), "hidden result screen does not eat clicks")
+    Input.parse_input_event(probe_click)
+    await frames(3)
+    check(not post.visible and host.active_surface() == "css",
+        "a hidden result screen does not answer clicks (surface unchanged)")
+    check(rematch_emits == 0, "a hidden results surface never routes an action")
 
     # ---------------------------------------------------------------------
     # FFA: the real resolution path hands the payload over, PostMatch presents it
@@ -182,7 +188,10 @@ func run():
     check(not rs.is_row_revealed(3), "later rows still staggered")
     check(not rs.is_interactive(), "action bar still resolving at ~16f")
     # One fresh confirm finishes the reveal and must NOT trigger an action.
-    rs._input(make_key(KEY_ENTER))
+    # WALK-UP (Doc 08 §2 public input): the confirm is a real keyboard accept
+    # event through the tree; the reveal guard is answered on the semantic path.
+    Input.parse_input_event(make_key(KEY_ENTER))
+    await frames(3)
     check(rs.is_interactive(), "a fresh confirm finishes the reveal immediately")
     check(rematch_emits == 0, "the finishing input did not trigger Rematch")
     check(post.visible and host.active_surface() == "postmatch", "no action fired from the finishing input")

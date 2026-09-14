@@ -1,8 +1,9 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/char_select.gd" id="1_css"]
 [ext_resource type="PackedScene" path="res://scenes/components/PlayerBay.tscn" id="2_bay"]
 [ext_resource type="PackedScene" path="res://scenes/components/ReadyBand.tscn" id="3_ready"]
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="4_anchor"]
 
 [node name="CharacterSelect" type="Control"]
 layout_mode = 3
@@ -151,3 +152,30 @@ offset_left = 90.0
 offset_top = 366.0
 offset_right = 1191.0
 offset_bottom = 430.0
+
+[node name="CursorAnchor" type="Control" parent="ReferenceFrame/Header/BackAction"]
+layout_mode = 0
+offset_left = -14.0
+offset_top = 30.0
+offset_right = -14.0
+offset_bottom = 30.0
+mouse_filter = 2
+script = ExtResource("4_anchor")
+
+[node name="CursorAnchor" type="Control" parent="ReferenceFrame/Header/ModeControl/ModeFree"]
+layout_mode = 0
+offset_left = 0.0
+offset_top = 44.0
+offset_right = 0.0
+offset_bottom = 44.0
+mouse_filter = 2
+script = ExtResource("4_anchor")
+
+[node name="CursorAnchor" type="Control" parent="ReferenceFrame/Header/ModeControl/ModeTeams"]
+layout_mode = 0
+offset_left = 250.0
+offset_top = 44.0
+offset_right = 250.0
+offset_bottom = 44.0
+mouse_filter = 2
+script = ExtResource("4_anchor")

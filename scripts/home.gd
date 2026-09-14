@@ -23,6 +23,8 @@ extends Control
 
 const Tokens = preload("res://scripts/ui_tokens.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
+# Doc 03 §6/§13: authored anchors + authored topology + recovery.
+const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 
 const MATCH_SCENE := "res://scenes/main.tscn"
 # WP-0 step 3 route switch (Doc 02 §1/§10.3): the player-facing VS route enters
@@ -82,6 +84,7 @@ var _row_tweens: Dictionary = {}
 @onready var _stay_rail: Panel = $ReferenceFrame/QuitOverlay/Plate/StayRail
 @onready var _quit_rail: Panel = $ReferenceFrame/QuitOverlay/Plate/QuitRail
 @onready var _anchor_stay: Control = $ReferenceFrame/QuitOverlay/Plate/AnchorStay
+@onready var _anchor_quit: Control = $ReferenceFrame/QuitOverlay/Plate/AnchorQuit
 
 func _ready() -> void:
     get_window().title = "NRCU — Friend Demo"
@@ -91,6 +94,13 @@ func _ready() -> void:
     _collect_rows()
     _style_nodes()
     _wire_modal()
+    # §9: Main is a frontend surface — entering it (from Title or after a match)
+    # restores the frontend scope on the one authority.
+    FrontendInput.set_scope(FrontendInput.SCOPE_FRONTEND)
+    # §7/§11: cancel (Esc / controller B) and the modal's own confirm arrive
+    # through the semantic service, never through raw key decoding.
+    if not FrontendInput.cancel_pressed.is_connected(_on_semantic_cancel):
+        FrontendInput.cancel_pressed.connect(_on_semantic_cancel)
     show_page("home")
     var hand = _hand()
     if hand != null:
@@ -257,6 +267,63 @@ func _wire_modal() -> void:
     _action_quit.pressed.connect(func() -> void: get_tree().quit())
     _action_stay.focus_entered.connect(_set_modal_focus.bind(true))
     _action_quit.focus_entered.connect(_set_modal_focus.bind(false))
+    # §6/§13: each modal action owns an authored anchor (the plate-level
+    # AnchorStay / AnchorQuit the scene authors) and the two are wired to each
+    # other explicitly — no tree-order fallback, no dead end.
+    _action_stay.focus_entered.connect(_on_modal_action_focused.bind(_action_stay))
+    _action_quit.focus_entered.connect(_on_modal_action_focused.bind(_action_quit))
+    FocusGraph.chain([_action_stay, _action_quit], false)
+    FocusGraph.wire(_action_stay, _action_quit, [&"right", &"bottom"])
+    FocusGraph.wire(_action_quit, _action_stay, [&"left", &"top"])
+
+func _on_modal_action_focused(control: Control) -> void:
+    FocusGraph.track(self, control)
+    var hand = _hand()
+    if hand != null and hand.mode == 1:
+        var anchor := focus_anchor_for(control)
+        if anchor != null:
+            hand.set_focus_target(anchor)
+
+func focus_anchor_for(control: Control) -> Control:
+    # The authored hand target of a focusable control on this screen (Doc 03 §6).
+    if control == null:
+        return null
+    if control == _action_stay:
+        return _anchor_stay
+    if control == _action_quit:
+        return _anchor_quit
+    for entry in _rows:
+        if entry["hit"] == control:
+            return entry["anchor"]
+    return FocusGraph.anchor_of(control)
+
+func _ensure_focus_alive() -> void:
+    # §6: the modal toggles the rows' focusability; a row that just became
+    # unfocusable must not keep the focus.
+    if not is_inside_tree():
+        return
+    var before := FrontendInput.focus_owner()
+    var owner := FocusGraph.recover(get_viewport(), self, func() -> Control:
+        return _action_stay if _modal_open else _rows[_selected]["hit"])
+    if owner != null and owner != before:
+        var hand = _hand()
+        if hand != null and hand.mode == 1:
+            var anchor := focus_anchor_for(owner)
+            if anchor != null:
+                hand.set_focus_target(anchor)
+
+func _on_semantic_cancel() -> void:
+    # §11 Back matrix for Main: Quit modal -> dismiss, How to Play -> Main,
+    # Main -> the Quit modal. Nothing else consumes cancel on this surface.
+    if _exiting or not is_visible_in_tree():
+        return
+    if _modal_open:
+        _dismiss_modal()
+    elif state == "help":
+        FrontendEvents.emit_back("help")
+        show_page("home")
+    elif state == "home":
+        _open_quit_modal()
 
 func _open_quit_modal() -> void:
     if _exiting or _modal_open:
@@ -276,6 +343,7 @@ func _open_quit_modal() -> void:
     var hand = _hand()
     if hand != null and hand.mode == 1:
         hand.set_focus_target(_anchor_stay)
+    _ensure_focus_alive()
 
 func _dismiss_modal() -> void:
     if not _modal_open:
@@ -390,6 +458,7 @@ func _kill_row_tweens(index: int) -> void:
 func _on_row_focus(index: int) -> void:
     if _modal_open or state != "home" or index < 0 or index >= _rows.size():
         return
+    FocusGraph.track(self, _rows[index]["hit"])
     select_row(index)
     var hand = _hand()
     # Keyboard/pad focus moves the hand to the authored anchor; a mouse click
@@ -497,20 +566,12 @@ func _destination_scene(mode: String) -> String:
     return MATCH_FLOW_SCENE
 
 # --- input -----------------------------------------------------------------
-func _unhandled_input(event: InputEvent) -> void:
-    if event.is_action_pressed("ui_cancel"):
-        get_viewport().set_input_as_handled()
-        if _modal_open:
-            _dismiss_modal()
-        elif state == "help":
-            FrontendEvents.emit_back("help")
-            show_page("home")
-        elif state == "home" and not _exiting:
-            _open_quit_modal()
-        return
+func _unhandled_key_input(event: InputEvent) -> void:
+    # Developer route only (F10 is a keyboard-only debug shortcut, never a
+    # semantic frontend action). Everything player-facing goes through the
+    # semantic service above.
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F10 \
             and OS.is_debug_build() and state == "home" and not _modal_open and not _exiting:
-        # Developer route: the legacy monolithic setup stays reachable.
         get_viewport().set_input_as_handled()
         _leave_to_match("debug")
 

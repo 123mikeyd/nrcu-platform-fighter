@@ -28,6 +28,8 @@ const PortraitData = preload("res://scripts/frontend/portrait_data.gd")
 const TileScene = preload("res://scenes/components/FighterTile.tscn")
 const TokenScene = preload("res://scenes/components/PlayerTokenView.tscn")
 const TokenView = preload("res://scripts/frontend/player_token_view.gd")
+# Doc 03 §6/§13: authored anchors + authored topology + focus recovery.
+const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 
 const COLS := 10                 # Doc 04 §5.1: 10 columns, up to 3 rows
 const TILE_W := 108.0            # Doc 04 §5.2 reference tile
@@ -59,6 +61,7 @@ var _carried_by := -1
 var _seeding_focus := false
 var _phase: Phase = Phase.ENTERING
 var _guard := 0.0
+var _focus_rules: Dictionary = {}     # header control -> structural focus signal
 
 @onready var _frame: Control = $ReferenceFrame
 @onready var _field_panel: Panel = $Field
@@ -93,6 +96,12 @@ func _ready() -> void:
     _mode_teams.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _set_mode(1))
     _mode_free.focus_mode = Control.FOCUS_ALL
     _mode_teams.focus_mode = Control.FOCUS_ALL
+    # Header destinations: each one owns an authored anchor and a structural
+    # focus signal, so the atomic focus-enter holds here too (Doc 03 §6).
+    _build_header_focus_rules()
+    for control in [_back, _mode_free, _mode_teams]:
+        (control as Control).focus_entered.connect(_on_header_focused.bind(control))
+        (control as Control).focus_exited.connect(_on_header_unfocused.bind(control))
     _field.mouse_entered.connect(func(): pass)
     _field.mouse_exited.connect(_leave_field)
     # Token layer: tokens live here while placed on tiles; the cursor layer
@@ -115,16 +124,26 @@ func _ready() -> void:
         bay.setup(i)
         bay.focus_mode = Control.FOCUS_ALL
         bay.focus_entered.connect(_on_bay_focused.bind(i))
+        bay.focus_exited.connect(_on_bay_unfocused.bind(i))
         bay.bay_activated.connect(_on_bay_activated)
         bay.kind_clicked.connect(_on_kind_clicked)
         bay.difficulty_clicked.connect(_on_difficulty_clicked)
         bay.team_clicked.connect(_on_team_clicked)
+        # Nested state controls: each one reports focus so the atomic
+        # focus-enter (logical focus + control emphasis + hand target) holds
+        # for them too (Doc 03 §6).
+        for role in ["kind", "difficulty", "team"]:
+            var state_control: Button = bay.state_control(role)
+            if state_control != null:
+                state_control.focus_entered.connect(_on_bay_state_focused.bind(i, role))
+                state_control.focus_exited.connect(_on_bay_unfocused.bind(i))
         _bays.append(bay)
         if cursor != null:
             cursor.add_target(bay)
     _ready_band.ready_pressed.connect(_on_ready_pressed)
     _ready_band.focus_mode = Control.FOCUS_ALL
     _ready_band.focus_entered.connect(_on_ready_band_focused)
+    _ready_band.focus_exited.connect(_on_ready_band_unfocused)
     _ready_band.apply_reference_width(Tokens.DESIGN.x)
     _ready_band.position.x = (Tokens.DESIGN.x - _ready_band.size.x) * 0.5
     _ready_band.hide_band()
@@ -133,6 +152,13 @@ func _ready() -> void:
         cursor.add_target(_ready_band)
         cursor.add_target(_mode_free)
         cursor.add_target(_mode_teams)
+    # Doc 03 §7/§11: the screen activates through the semantic input service —
+    # never through ad-hoc key decoding in _unhandled_key_input() (which cannot
+    # see a JoypadButton event at all).
+    if not FrontendInput.confirm_pressed.is_connected(_on_semantic_accept):
+        FrontendInput.confirm_pressed.connect(_on_semantic_accept)
+    if not FrontendInput.cancel_pressed.is_connected(_on_semantic_cancel):
+        FrontendInput.cancel_pressed.connect(_on_semantic_cancel)
 
 func build(cards: Array = []) -> void:
     # Roster data (id/name, optional texture). Empty = the real roster.
@@ -233,6 +259,9 @@ func play_exit() -> void:
     if _phase == Phase.EXITING:
         return
     _phase = Phase.EXITING
+    # The Ready state is gone with the screen: the approved Start shortcut goes
+    # with it (Doc 03 §2).
+    FrontendInput.set_controller_start_approved(false)
     _clear_carry()
     _ready_band.hide_band()
     var tween := create_tween()
@@ -297,6 +326,14 @@ func _refresh() -> void:
     else:
         _ready_band.hide_band()
         _wire_ready_neighbors(false)
+    # §2: controller Start is an approved FOCUS shortcut only while READY is
+    # actually valid on this screen (the same validity the band shows).
+    FrontendInput.set_controller_start_approved(ready_allowed() and _ready_band.is_shown())
+    # §13: the bay-internal topology depends on which state controls survive in
+    # this configuration, and §6 recovery runs after every state change so a
+    # control that just disappeared never keeps the focus.
+    _wire_bay_state_graph()
+    _ensure_focus_alive()
 
 func _recompute_tokens() -> void:
     # UNASSIGNED players hide their token; committed players rest on their tile.
@@ -358,6 +395,9 @@ func _on_tile_entered(index: int) -> void:
 func _on_tile_focused(index: int) -> void:
     # Keyboard/controller parity: focus on a tile means candidate + focus hand
     # at the authored anchor + the active player's token in carry presentation.
+    if index < 0 or index >= _tiles.size():
+        return
+    FocusGraph.track(self, _tiles[index])
     if cursor == null or cursor.mode != 1:
         return  # mouse clicks may focus too; that path is _on_tile_entered
     if _phase != Phase.IDLE or _state == null:
@@ -382,9 +422,16 @@ func _on_modality_changed(is_mouse: bool) -> void:
     _seed_focus()
 
 func _on_ready_band_focused() -> void:
+    FocusGraph.track(self, _ready_band)
+    if _ready_band != null:
+        _ready_band.set_focus_signal(true)
     if cursor == null or cursor.mode != 1:
         return
     cursor.set_focus_target(_ready_band.anchor())
+
+func _on_ready_band_unfocused() -> void:
+    if _ready_band != null:
+        _ready_band.set_focus_signal(false)
 
 func _wire_ready_neighbors(band_shown: bool) -> void:
     # Doc 04 19/20A: the ready transition is keyboard/controller reachable.
@@ -407,10 +454,27 @@ func _wire_ready_neighbors(band_shown: bool) -> void:
         _ready_band.focus_neighbor_bottom = _ready_band.get_path_to(_bays[0])
 
 func _on_bay_focused(index: int) -> void:
+    if index < 0 or index >= _bays.size():
+        return
+    FocusGraph.track(self, _bays[index])
+    _bays[index].set_focus_signal(true)
     if cursor == null or cursor.mode != 1:
         return
-    if index < _bays.size():
-        cursor.set_focus_target(_bays[index].anchor())
+    cursor.set_focus_target(_bays[index].anchor())
+
+func _on_bay_unfocused(index: int) -> void:
+    # Only when focus really left the bay: moving between a bay's own nested
+    # controls must not flicker its focus signal.
+    if index < 0 or index >= _bays.size():
+        return
+    var bay = _bays[index]
+    var focused := FrontendInput.focus_owner()
+    if focused == bay:
+        return
+    for role in ["kind", "difficulty", "team"]:
+        if bay.state_control(role) == focused:
+            return
+    bay.set_focus_signal(false)
 
 func _begin_carry(player: int) -> void:
     if _carried_by == player:
@@ -530,7 +594,7 @@ func _process(delta: float) -> void:
     if _phase == Phase.ENTERING and _guard <= 0.0:
         _phase = Phase.IDLE
 
-# --- keyboard / controller ----------------------------------------------
+# --- keyboard / controller: the semantic path (Doc 03 §7/§11/§13) ---------
 func _wire_focus_graph() -> void:
     var n := _tiles.size()
     if n == 0:
@@ -559,46 +623,162 @@ func _wire_focus_graph() -> void:
         bay.focus_neighbor_top = bay.get_path_to(_tiles[mini(i, n - 1)])
     _back.focus_neighbor_bottom = _back.get_path_to(_tiles[n - 1])
     _back.focus_neighbor_left = _back.get_path_to(_mode_teams)
+    _back.focus_neighbor_right = NodePath()
     _mode_free.focus_neighbor_right = _mode_free.get_path_to(_mode_teams)
+    _mode_free.focus_neighbor_left = NodePath()
+    _mode_free.focus_neighbor_top = NodePath()
     _mode_teams.focus_neighbor_left = _mode_teams.get_path_to(_mode_free)
     _mode_teams.focus_neighbor_right = _mode_teams.get_path_to(_back)
+    _mode_teams.focus_neighbor_top = NodePath()
     _mode_free.focus_neighbor_bottom = _mode_free.get_path_to(_tiles[n - 1])
     _mode_teams.focus_neighbor_bottom = _mode_teams.get_path_to(_tiles[n - 1])
+    # §13: explicit Tab order too — the header destinations, then the roster,
+    # then the stations. Never the engine's tree order.
+    var chain: Array = [_mode_free, _mode_teams, _back]
+    chain.append_array(_tiles)
+    chain.append_array(_bays)
+    FocusGraph.chain(chain, true)
 
-func _unhandled_key_input(event: InputEvent) -> void:
-    if not is_visible_in_tree():
+func _wire_bay_state_graph() -> void:
+    # §13 "child bay controls stay within that bay until a directional exit":
+    # a bay's kind/difficulty/team controls cycle among themselves (up/down),
+    # and every boundary direction exits into the bay control itself. Which
+    # controls participate depends on the current configuration (CPU difficulty
+    # row, teams), so the graph is re-authored on every refresh.
+    for i in _bays.size():
+        var bay = _bays[i]
+        var controls: Array = bay.state_controls()
+        if controls.is_empty():
+            FocusGraph.clear(bay, [&"bottom"])
+            continue
+        var count := controls.size()
+        for j in count:
+            var control: Control = controls[j]
+            var up_target: Control = controls[j - 1] if j > 0 else bay
+            var down_target: Control = controls[j + 1] if j + 1 < count else bay
+            FocusGraph.wire(control, up_target, [&"top", &"previous"])
+            FocusGraph.wire(control, down_target, [&"bottom", &"next"])
+            FocusGraph.wire(control, bay, [&"left", &"right"])
+        # Entry/exit through the bay control: down enters the bay's controls,
+        # the first control's up (above) leaves them again.
+        FocusGraph.wire(bay, controls[0], [&"bottom"])
+
+func _on_bay_state_focused(index: int, role: String) -> void:
+    # §6 atomic focus-enter for a nested state control: the logical focus is
+    # the engine's (the control owns it), the emphasis is the control's own
+    # focus style and the hand target is its authored CursorAnchor.
+    if index < 0 or index >= _bays.size():
         return
-    var confirm := false
-    if event is InputEventKey and event.pressed and not event.echo:
-        confirm = event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER or event.keycode == KEY_SPACE
-    elif event is InputEventJoypadButton and event.pressed:
-        confirm = event.button_index == JOY_BUTTON_A
-    if not confirm:
+    var bay = _bays[index]
+    FocusGraph.track(self, bay.state_control(role))
+    bay.set_focus_signal(true)
+    if cursor != null and cursor.mode == 1:
+        cursor.set_focus_target(bay.state_anchor(role))
+
+func _build_header_focus_rules() -> void:
+    # Structural focus signal for the header destinations that are Labels
+    # (Doc 07 §8 / Doc 03 §6: never color alone). The BackAction is a Button and
+    # already carries its own focus style.
+    _focus_rules.clear()
+    for control in [_mode_free, _mode_teams]:
+        var rule := Panel.new()
+        rule.name = "FocusRule"
+        rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        rule.position = Vector2(control.position.x, 42.0)
+        rule.size = Vector2(maxf(control.size.x, 32.0), 2.0)
+        rule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
+        rule.visible = false
+        _mode_free.get_parent().add_child(rule)
+        _focus_rules[control] = rule
+
+func _on_header_focused(control: Control) -> void:
+    FocusGraph.track(self, control)
+    for key in _focus_rules.keys():
+        (_focus_rules[key] as Panel).visible = key == control
+    var anchor := FocusGraph.anchor_of(control)
+    if anchor != null and cursor != null and cursor.mode == 1:
+        cursor.set_focus_target(anchor)
+
+func _on_header_unfocused(control: Control) -> void:
+    var rule = _focus_rules.get(control, null)
+    if rule != null and is_instance_valid(rule):
+        (rule as Panel).visible = false
+
+func _ensure_focus_alive() -> void:
+    # §6: if the focused control disappears or gets disabled, focus moves to the
+    # correct surviving semantic neighbour and the hand retargets immediately.
+    if not is_inside_tree():
         return
-    # Focused control wins over the screen-level READY (Doc 04 §19/§20A).
-    var focused := get_viewport().gui_get_focus_owner()
-    if focused != null:
-        var t: int = _tiles.find(focused)
-        if t >= 0 and _phase == Phase.IDLE:
-            _on_tile_pressed(str(_tiles[t].fighter_id))
-            get_viewport().set_input_as_handled()
-            return
-        var b: int = _bays.find(focused)
-        if b >= 0 and _phase == Phase.IDLE:
-            _on_bay_activated(b)
-            get_viewport().set_input_as_handled()
-            return
-        if focused == _ready_band and ready_allowed():
-            _on_ready_pressed()
-            get_viewport().set_input_as_handled()
-            return
-        if focused == _mode_free or focused == _mode_teams:
-            _set_mode(1 if focused == _mode_teams else 0)
-            get_viewport().set_input_as_handled()
-            return
-    if ready_allowed() and _phase != Phase.EXITING:
-        ready_requested.emit()
-        get_viewport().set_input_as_handled()
+    var before := FrontendInput.focus_owner()
+    var owner := FocusGraph.recover(get_viewport(), self, func() -> Control:
+        if ready_allowed() and _ready_band.is_shown():
+            return _ready_band
+        if not _tiles.is_empty():
+            return _tiles[clampi(_active, 0, _tiles.size() - 1)]
+        return _back)
+    if owner != null and owner != before and cursor != null and cursor.mode == 1:
+        var anchor := focus_anchor_for(owner)
+        if anchor != null:
+            cursor.set_focus_target(anchor)
+
+func focus_anchor_for(control: Control) -> Control:
+    # The authored hand target of a focusable control on this screen (Doc 03 §6).
+    # Icons: the control's own CursorAnchor, with the bay state controls and the
+    # bay/roster/band components resolved through their components.
+    if control == null:
+        return null
+    for i in _bays.size():
+        var bay = _bays[i]
+        for role in ["kind", "difficulty", "team"]:
+            if bay.state_control(role) == control:
+                return bay.state_anchor(role)
+    if control == _ready_band:
+        return _ready_band.anchor()
+    var t: int = _tiles.find(control)
+    if t >= 0:
+        return _tiles[t].anchor()
+    var b: int = _bays.find(control)
+    if b >= 0:
+        return _bays[b].anchor()
+    return FocusGraph.anchor_of(control)
+
+func _on_semantic_accept() -> void:
+    # §7: the focused control is activated through the semantic action path.
+    # A mouse confirm is skipped here — the control's own mouse path owns it,
+    # and this handler only exists so keyboard/pad accepts reach the CUSTOM
+    # controls (FighterTile / PlayerBay / ReadyBand / ModeChoice), which the
+    # engine cannot activate by itself.
+    if not is_visible_in_tree() or _state == null or _phase == Phase.EXITING:
+        return
+    if FrontendInput.confirm_source() == FrontendInput.SOURCE_MOUSE:
+        return
+    var focused := FrontendInput.focus_owner()
+    if focused == null:
+        if ready_allowed():
+            ready_requested.emit()
+        return
+    var t: int = _tiles.find(focused)
+    if t >= 0 and _phase == Phase.IDLE:
+        _on_tile_pressed(str(_tiles[t].fighter_id))
+        return
+    var b: int = _bays.find(focused)
+    if b >= 0 and _phase == Phase.IDLE:
+        _on_bay_activated(b)
+        return
+    if focused == _ready_band and ready_allowed():
+        _on_ready_pressed()
+        return
+    if focused == _mode_free or focused == _mode_teams:
+        _set_mode(1 if focused == _mode_teams else 0)
+        return
+    # Everything else (BackAction, the nested state controls) is a native
+    # Button: it activates through the engine's own semantic ui_accept path.
+
+func _on_semantic_cancel() -> void:
+    # §11 Back matrix: CSS ui_cancel -> Main.
+    if not is_visible_in_tree() or _phase == Phase.EXITING:
+        return
+    _on_back_pressed()
 
 # --- test surface --------------------------------------------------------
 func get_tiles() -> Array:

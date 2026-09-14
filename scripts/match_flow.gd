@@ -970,7 +970,12 @@ func _release_flow() -> void:
 # Input scope (Doc 02 §5: one owner knows the active surface and the scope)
 # ---------------------------------------------------------------------------
 func set_input_scope(scope: String) -> void:
+    # Doc 03 §9: ONE active scope, owned by the ONE semantic service. Every
+    # centralized transition (stage confirm, story start, results rematch and
+    # the returns) passes through this function, so the service can never
+    # disagree with the router about who owns input.
     _scope = str(scope)
+    FrontendInput.set_scope(_scope)
 
 func input_scope() -> String:
     return _scope

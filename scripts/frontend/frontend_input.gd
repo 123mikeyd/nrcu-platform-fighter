@@ -34,6 +34,14 @@ signal scope_changed(scope: String)
 const SCOPE_FRONTEND := "frontend"
 const SCOPE_GAMEPLAY := "gameplay"
 
+# §8: every confirm press records WHERE it came from. Screens that own a
+# semantic action for a custom control must not double-fire it for a mouse
+# click (the control's own mouse path owns that), and a keyboard/pad accept is
+# the only source that activates the focused custom control.
+const SOURCE_MOUSE := "mouse"
+const SOURCE_KEYBOARD := "keyboard"
+const SOURCE_PAD := "pad"
+
 const AnalogNavGate := preload("res://scripts/frontend/analog_nav_gate.gd")
 
 const NAV_ACTIONS := [&"ui_up", &"ui_down", &"ui_left", &"ui_right"]
@@ -44,6 +52,8 @@ var _scope := SCOPE_FRONTEND
 var _start_approved := false
 var _gate = AnalogNavGate.new()
 var _stick := Vector2.ZERO
+var _confirm_source := SOURCE_KEYBOARD
+var _consume_confirm := Callable()
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS   # Pause keeps Esc/Start reachable
@@ -94,14 +104,14 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
 		if mouse.button_index == MOUSE_BUTTON_LEFT:
-			_emit_confirm(mouse.pressed)
+			_emit_confirm(mouse.pressed, SOURCE_MOUSE)
 		return
 	if event is InputEventKey:
 		var key := event as InputEventKey
 		if key.echo:
 			return
 		if InputMap.event_is_action(event, "ui_accept"):
-			_emit_confirm(key.pressed)
+			_emit_confirm(key.pressed, SOURCE_KEYBOARD)
 		elif key.pressed and InputMap.event_is_action(event, "ui_cancel"):
 			cancel_pressed.emit()
 		if key.pressed and is_meaningful_frontend_input(event):
@@ -110,7 +120,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton:
 		var button := event as InputEventJoypadButton
 		if button.button_index == JOY_BUTTON_A:
-			_emit_confirm(button.pressed)
+			_emit_confirm(button.pressed, SOURCE_PAD)
 		elif button.pressed and button.button_index == JOY_BUTTON_B:
 			cancel_pressed.emit()
 		elif button.pressed and button.button_index == JOY_BUTTON_START:
@@ -164,14 +174,44 @@ func _claim_focus() -> void:
 	if hand != null:
 		hand.claim_focus()
 
-func _emit_confirm(pressed: bool) -> void:
+func _emit_confirm(pressed: bool, source: String) -> void:
 	var hand := _hand()
 	if hand != null:
 		hand.press_visual(pressed)                 # §8: one shared press pose
-	if pressed:
-		confirm_pressed.emit()
-	else:
+	if not pressed:
 		confirm_released.emit()
+		return
+	_confirm_source = source
+	confirm_pressed.emit()
+	if _consume_confirm.is_valid() and bool(_consume_confirm.call(source)):
+		# The active surface claimed this confirm BEFORE the GUI stage (Results
+		# completes its reveal with the first confirm and must not also activate
+		# the button under it). One input, one action.
+		var viewport := get_viewport()
+		if viewport != null:
+			viewport.set_input_as_handled()
+
+func confirm_source() -> String:
+	# §8: which device produced the last confirm press ("mouse"/"keyboard"/"pad").
+	# A screen that owns a semantic action for a CUSTOM control uses this to
+	# avoid double-firing on a mouse click (the control's mouse path owns it).
+	return _confirm_source
+
+func set_confirm_consumer(consumer: Callable) -> void:
+	# §7: the semantic confirm reaches the GUI after this service. A surface
+	# that must answer the confirm itself (and swallow it) registers here.
+	_consume_confirm = consumer
+
+func clear_confirm_consumer(consumer: Callable = Callable()) -> void:
+	if consumer.is_valid() and _consume_confirm != consumer:
+		return
+	_consume_confirm = Callable()
+
+func focus_owner() -> Control:
+	# The engine's current GUI focus owner — the ONE logical focus (§6). Read
+	# only; the screens never set it behind the semantic path.
+	var viewport := get_viewport()
+	return viewport.gui_get_focus_owner() if viewport != null else null
 
 # --- scope (§9) ------------------------------------------------------------
 func set_scope(next_scope: String) -> void:

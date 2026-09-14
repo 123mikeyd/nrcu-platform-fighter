@@ -45,3 +45,18 @@ text = "TEAM A"
 
 [node name="CursorAnchor" type="Control" parent="."]
 script = ExtResource("2_anchor")
+
+[node name="CursorAnchor" type="Control" parent="PlayerHeader/KindControl"]
+layout_mode = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+
+[node name="CursorAnchor" type="Control" parent="SecondaryControls/DifficultyRow/DifficultyControl"]
+layout_mode = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+
+[node name="CursorAnchor" type="Control" parent="SecondaryControls/TeamControl"]
+layout_mode = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")

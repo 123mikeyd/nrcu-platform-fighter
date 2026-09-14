@@ -29,6 +29,8 @@ const FighterRenderViewScript = preload("res://scripts/frontend/fighter_render_v
 const Roster = preload("res://scripts/roster.gd")
 const ResultRowScene = preload("res://scenes/components/ResultRow.tscn")
 const ActionBarScene = preload("res://scenes/components/ActionBar.tscn")
+# Doc 03 §6/§13: authored anchors + explicit topology + recovery.
+const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 
 const FPS := 60.0
 
@@ -131,6 +133,9 @@ func _ready() -> void:
         set_process(false)
     else:
         set_process(true)   # defensive: run the timeline off _process at 60 Hz
+    # §7: the reveal guard is answered on the semantic confirm path, not by
+    # decoding raw device events here.
+    FrontendInput.set_confirm_consumer(_consume_semantic_confirm)
     var frame := Tokens.make_reference_frame(self)
     _build_header(frame)
     _build_hero(frame)
@@ -349,6 +354,66 @@ func _apply_actions() -> void:
         spec["underline"].visible = false
         var button: Button = spec["button"]
         button.add_theme_color_override("font_color", Tokens.CREAM if bool(spec["primary"]) else Tokens.CREAM_DIM)
+    _wire_action_graph()
+    _ensure_focus_alive()
+
+func _wire_action_graph() -> void:
+    # Doc 03 §13: REMATCH <-> CHANGE FIGHTERS <-> CHANGE STAGE <-> MAIN MENU,
+    # explicitly wired, NO wrap. When CHANGE STAGE is absent (the stage is not
+    # swappable in this match) the chain simply closes up around it, and a
+    # hidden or disabled action is not focusable at all.
+    var chain: Array = []
+    for spec in ACTIONS:
+        var id := str(spec["id"])
+        if not _actions.has(id):
+            continue
+        var button: Button = _actions[id]["button"]
+        var reachable: bool = button.visible and not button.disabled
+        button.focus_mode = Control.FOCUS_ALL if reachable else Control.FOCUS_NONE
+        FocusGraph.clear(button, [&"top", &"bottom", &"left", &"right"])
+        if reachable:
+            chain.append(button)
+    FocusGraph.chain(chain, false)
+    for i in chain.size():
+        var button: Button = chain[i]
+        if i > 0:
+            FocusGraph.wire(button, chain[i - 1], [&"left"])
+        if i + 1 < chain.size():
+            FocusGraph.wire(button, chain[i + 1], [&"right"])
+
+func action_chain() -> Array:
+    # The surviving action chain in authored order (read surface for the
+    # traversal manifest and the route tests).
+    var out: Array = []
+    for spec in ACTIONS:
+        var id := str(spec["id"])
+        if not _actions.has(id):
+            continue
+        var button: Button = _actions[id]["button"]
+        if button.visible and button.focus_mode != Control.FOCUS_NONE:
+            out.append(button)
+    return out
+
+func focus_anchor_for(control: Control) -> Control:
+    # The authored hand target of a focusable control on this screen (Doc 03 §6).
+    for id in _actions:
+        if _actions[id]["button"] == control:
+            return _actions[id]["anchor"]
+    return FocusGraph.anchor_of(control)
+
+func _ensure_focus_alive() -> void:
+    # §6: Change Stage may disappear (or every action may be disabled during the
+    # reveal); focus must move to the surviving semantic neighbour at once.
+    if not is_inside_tree():
+        return
+    var before := FrontendInput.focus_owner()
+    var owner := FocusGraph.recover(get_viewport(), self, func() -> Control:
+        var chain := action_chain()
+        return chain[0] if not chain.is_empty() else null)
+    if owner != null and owner != before and _cursor != null and _cursor.mode == 1:
+        var anchor := focus_anchor_for(owner)
+        if anchor != null:
+            _cursor.set_focus_target(anchor)
 
 func _apply_hero() -> void:
     for view in _hero_views:
@@ -518,6 +583,11 @@ func _reset_for_show() -> void:
         button.disabled = true
         button.mouse_filter = Control.MOUSE_FILTER_IGNORE
         _actions[id]["underline"].visible = false
+    # A disabled action is not focusable: re-author the chain and release a
+    # focus that a previously shown reveal had placed on an action (Doc 03 §6).
+    _wire_action_graph()
+    _ensure_focus_alive()
+    _seed_focus()
 
 func _apply_final_states() -> void:
     _eyebrow.modulate.a = 1.0
@@ -549,6 +619,10 @@ func _enable_actions() -> void:
         button.mouse_filter = Control.MOUSE_FILTER_STOP
         if _cursor != null:
             _cursor.add_target(button)
+    # The actions became reachable: re-author the chain (the disabled ones were
+    # not part of it) and seed the authored default focus.
+    _wire_action_graph()
+    _seed_focus()
 
 func _seed_focus() -> void:
     # Controller/keyboard focus seeds REMATCH through its authored anchor; a
@@ -581,6 +655,7 @@ func _on_action_pressed(action_id: String) -> void:
 func _on_action_focus(action_id: String, focused: bool) -> void:
     _focus_action = action_id if focused else ("" if _focus_action == action_id else _focus_action)
     if focused and _cursor != null and _cursor.mode == 1:
+        FocusGraph.track(self, _actions[action_id]["button"])
         _cursor.set_focus_target(_actions[action_id]["anchor"])
     _refresh_action_emphasis()
 
@@ -599,30 +674,24 @@ func _refresh_action_emphasis() -> void:
         spec["underline"].visible = emphasized
         button.add_theme_color_override("font_color", Tokens.CREAM if (emphasized or bool(spec["primary"])) else Tokens.CREAM_DIM)
 
-# --- input -----------------------------------------------------------------
+# --- semantic input (Doc 03 §7 / Doc 06 §16 reveal guard) -------------------
 
-func _input(event: InputEvent) -> void:
-    # Runs before the GUI stage. CRITICAL: guard on is_visible_in_tree() — the
-    # node's own `visible` stays true while the parent panel is hidden, and
-    # consuming events then would swallow every GUI click in the whole game
-    # (this exact regression was caught in a live check).
+func _consume_semantic_confirm(_source: String) -> bool:
+    # The first confirm after the safety window completes the reveal. It is
+    # claimed through the semantic service BEFORE the GUI stage, so one event
+    # can never both finish the reveal and activate an action (RESULT_REVEAL_
+    # GUARD). Mouse-left, keyboard accept and controller A all reach here —
+    # the same single path for all three devices.
     if not is_visible_in_tree():
-        return
+        return false
     if not _reveal_active or _reveal_tick < SAFETY_TICKS:
-        return
-    if not _is_confirm_press(event):
-        return
+        return false
     finish_reveal()
-    get_viewport().set_input_as_handled()
+    return true
 
-func _is_confirm_press(event: InputEvent) -> bool:
-    if event is InputEventMouseButton:
-        return event.pressed and event.button_index == MOUSE_BUTTON_LEFT
-    if event is InputEventKey:
-        return event.pressed and not event.echo and event.keycode in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]
-    if event is InputEventJoypadButton:
-        return event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]
-    return false
+func _exit_tree() -> void:
+    if FrontendInput != null:
+        FrontendInput.clear_confirm_consumer(_consume_semantic_confirm)
 
 # --- helpers ---------------------------------------------------------------
 

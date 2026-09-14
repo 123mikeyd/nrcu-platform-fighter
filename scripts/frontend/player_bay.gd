@@ -54,6 +54,12 @@ signal team_clicked(index: int)
 @onready var team_control: Button = $SecondaryControls/TeamControl
 @onready var notch: Panel = $ActiveNotch
 @onready var _anchor: Control = $CursorAnchor
+# Nested state controls carry their OWN authored anchors (Doc 03 §6): the
+# kind/difficulty/team readouts are focusable Buttons, so each one must have a
+# hand target of its own instead of falling back to the bay's anchor.
+@onready var _kind_anchor: Control = $PlayerHeader/KindControl/CursorAnchor
+@onready var _difficulty_anchor: Control = $SecondaryControls/DifficultyRow/DifficultyControl/CursorAnchor
+@onready var _team_anchor: Control = $SecondaryControls/TeamControl/CursorAnchor
 
 var index := 0
 var kind := "human"
@@ -62,6 +68,7 @@ var team := 0
 var mode := 0
 var _active := false
 var _render_view = null
+var _focus_rule: Panel = null
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -92,6 +99,14 @@ func _ready() -> void:
 	difficulty_label.add_theme_font_size_override("font_size", Tokens.T_META)
 	difficulty_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
 	notch.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
+	# §6 control emphasis: the bay is a custom Control, so its focus signal is a
+	# dedicated 2 px structural edge (never a color-only state).
+	_focus_rule = Panel.new()
+	_focus_rule.name = "FocusRule"
+	_focus_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_focus_rule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
+	_focus_rule.visible = false
+	header.add_child(_focus_rule)
 	kind_control.pressed.connect(func() -> void: kind_clicked.emit(index))
 	difficulty_control.pressed.connect(func() -> void: difficulty_clicked.emit(index))
 	team_control.pressed.connect(func() -> void: team_clicked.emit(index))
@@ -187,9 +202,14 @@ func team_control_visible() -> bool:
 func _refresh_state() -> void:
 	# CPU difficulty row: only for CPU. Team control: only in Team mode.
 	# An empty bay shows neither (Doc 04 §9.5/§9.6/§23).
+	# A hidden state control is NOT focusable (Doc 03 §6: nothing keeps focus on
+	# a control the player can no longer see); the screen's focus recovery then
+	# moves the logical focus to the surviving neighbour.
 	difficulty_row.visible = kind == "bot"
+	difficulty_control.focus_mode = Control.FOCUS_ALL if difficulty_row.visible else Control.FOCUS_NONE
 	difficulty_control.text = difficulty.to_upper()
 	team_control.visible = mode == 1 and kind != "empty"
+	team_control.focus_mode = Control.FOCUS_ALL if team_control.visible else Control.FOCUS_NONE
 	team_control.text = "TEAM " + ("A" if team == 0 else "B")
 	team_control.add_theme_color_override("font_color", Tokens.CREAM)
 	render_area.modulate = Color(1, 1, 1, 0.5) if kind == "empty" else Color(1, 1, 1, 1)
@@ -234,6 +254,65 @@ func _layout() -> void:
 	team_control.size = Vector2(half, SECONDARY_H - 2.0)
 	notch.position = Vector2((s.x - NOTCH_W) * 0.5, 0.0)
 	notch.size = Vector2(NOTCH_W, NOTCH_H)
+	_focus_rule.position = Vector2(0.0, HEADER_H - 2.0)
+	_focus_rule.size = Vector2(s.x, 2.0)
 	# Authored focus anchor: beside the header's lower-left, so the focus hand
 	# never covers the model or the name (Doc 04 §10).
 	_anchor.place_at(Vector2(INSET, HEADER_H + 8.0))
+	# The nested state controls get their own authored hand targets, placed at
+	# the control's lower-left (measured from the control, so the placement
+	# survives any bay size).
+	_kind_anchor.place_at(Vector2(-8.0, kind_control.size.y - 4.0))
+	_difficulty_anchor.place_at(Vector2(-8.0, difficulty_control.size.y - 4.0))
+	_team_anchor.place_at(Vector2(team_control.size.x + 8.0, team_control.size.y - 4.0))
+
+# --- nested state controls (Doc 03 §6/§13) ----------------------------------
+
+func state_control(role: String) -> Button:
+	# The bay's own semantic controls, addressed by role.
+	match role:
+		"kind":
+			return kind_control
+		"difficulty":
+			return difficulty_control
+		"team":
+			return team_control
+	return null
+
+func state_anchor(role: String) -> Control:
+	match role:
+		"kind":
+			return _kind_anchor
+		"difficulty":
+			return _difficulty_anchor
+		"team":
+			return _team_anchor
+	return null
+
+func state_controls() -> Array:
+	# Surviving (visible) state controls in authored visual order: the bay's
+	# internal focus chain is built from exactly this list, so a hidden control
+	# can never be a neighbour.
+	var out: Array = []
+	for role in ["kind", "difficulty", "team"]:
+		var control := state_control(role)
+		if control != null and control.visible:
+			out.append(control)
+	return out
+
+func state_roles() -> Array:
+	var out: Array = []
+	for role in ["kind", "difficulty", "team"]:
+		var control := state_control(role)
+		if control != null and control.visible:
+			out.append(role)
+	return out
+
+# --- focus signal (§6) -------------------------------------------------------
+
+func set_focus_signal(on: bool) -> void:
+	if _focus_rule != null:
+		_focus_rule.visible = on
+
+func focus_signal_visible() -> bool:
+	return _focus_rule != null and _focus_rule.visible
