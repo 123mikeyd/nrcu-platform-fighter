@@ -68,6 +68,13 @@ func _ready() -> void:
 	backplate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	backplate.add_theme_stylebox_override("panel", Tokens.flat(Tokens.SURFACE_1, Tokens.RULE, Tokens.STROKE, Tokens.RADIUS_PLATE))
 	portrait_frame.clip_contents = true      # real mask, not a drawn-over border
+	# The tile root is the ONE pointer target (hover entry + the semantic click
+	# that commits / de-selects): a child frame left on the default STOP filter
+	# swallows real pointer input over the portrait area — hover entries and
+	# left clicks never reached this tile's `_gui_input`, while the harness's
+	# direct-call convention hid it. Every child is IGNORE, exactly like the
+	# backplate/overlay/name children below.
+	portrait_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	portrait_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	portrait_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED

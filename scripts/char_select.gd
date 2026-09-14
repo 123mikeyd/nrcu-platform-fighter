@@ -18,10 +18,14 @@ extends Control
 #   * candidate fighter != committed fighter. Hover/focus only changes the
 #     candidate; only a confirm (click / semantic accept) edits the state.
 #   * THE ONE LIFT RULE (Doc 01 §5 / Doc 04 §12): a chip leaves its tile for the
-#     hand ONLY through the owner's explicit actions —
-#       (a) A on its own tile      -> a no-op (the same id is re-written);
-#       (b) A on a DIFFERENT tile  -> the commit MOVES (re-pick);
-#       (c) ui_cancel / Back (B)   -> the staged take-back.
+#     hand ONLY through the owner's explicit actions, and every one of them ends
+#     in ONE implementation and ONE end state —
+#       (a) A / left-click on its own tile -> DE-SELECT: the pick is TAKEN BACK
+#           into the hand through _take_back_committed (the staged cancel's
+#           stage 2). Owner requirement; this deliberately supersedes the
+#           former explicit no-op on this path;
+#       (b) A / left-click on a DIFFERENT tile  -> the commit MOVES (re-pick);
+#       (c) ui_cancel / Back (B)                -> the staged take-back.
 #     Hover (the tile's own mouse entry), the candidate preview, focus browsing,
 #     the modality switch and the roster envelope may only cancel an IN-FLIGHT
 #     carry: they never lift a committed chip (owner report: hovering another
@@ -802,11 +806,12 @@ func _begin_carry(player: int) -> void:
 	# THE ONE LIFT RULE (Doc 01 §5 / Doc 04 §12) — this is the ONLY place a chip
 	# can leave a tile for the hand, so the gate lives here and every lift path
 	# (tile mouse entry / focus browse / entry or modality seeding) inherits it:
-	# a player who already owns a COMMITTED pick has no liftable chip. The two
-	# sanctioned lifts are (b) A on another tile, handled by _on_tile_pressed as a
-	# direct re-place, and (c) the staged take-back in _take_back_committed, which
-	# clears the commit BEFORE asking here. Hover / candidate preview / focus
-	# browsing may only cancel an IN-FLIGHT carry of an UNCOMMITTED chip.
+	# a player who already owns a COMMITTED pick has no liftable chip. The
+	# sanctioned lifts are (a) the own-tile DE-SELECT and (c) the staged
+	# take-back — both take the commit back in _take_back_committed, which clears
+	# the commit BEFORE asking here — and (b) A / left-click on another tile,
+	# handled by _on_tile_pressed as a direct re-place. Hover / candidate preview
+	# / focus browsing may only cancel an IN-FLIGHT carry of an UNCOMMITTED chip.
 	if _has_committed_pick(player):
 		return
 	if _carried_by >= 0:
@@ -1082,11 +1087,15 @@ func _on_tile_pressed(id: String) -> void:
 	if tile_index < 0:
 		return
 	var was_placed: bool = _token_state[player] == TokenView.State.PLACED
-	# (a) A on the tile that already owns this player's committed chip: the
-	# commit already holds this fighter and the chip is already on the tile, so
-	# the action is a NO-OP — never a lift and never a placement nudge. The chip
-	# stays PLACED and nothing is re-homed.
-	if str(slot.get("character", "")) == id and _carried_by != player and was_placed:
+	# (a) A / LEFT-CLICK on the tile that already owns this player's committed
+	# chip: DE-SELECT. The pick is TAKEN BACK into the hand through the SAME
+	# implementation as the staged cancel's stage 2 (_take_back_committed), so
+	# A on the own tile, the left-click on the own tile and B end in exactly ONE
+	# end state: the commit is undone, the chip rides the carry layer, the tile
+	# stays the candidate and the screen stays put (owner requirement — it
+	# deliberately supersedes the former explicit no-op on this path).
+	if _has_committed_pick(player) and str(slot.get("character", "")) == id and _carried_by != player:
+		_take_back_committed(player)
 		return
 	slot["character"] = id           # THE commit: candidate -> committed
 	var from_carry: bool = _carried_by == player
@@ -1259,10 +1268,11 @@ func _has_committed_pick(player: int) -> bool:
 	# THE single source of the COMMITTED-pick question, and therefore of the ONE
 	# lift rule: a non-EMPTY player with a fighter in the persistent state owns a
 	# committed chip, and no hover / candidate preview / focus browse / modality
-	# switch / roster envelope may take it off its tile. Both the staged cancel
-	# (stage 2, _take_back_committed) and the carry gate in _begin_carry read
-	# THIS, so "is this chip liftable?" can never be answered two different ways.
-	# A candidate is only a preview and never counts (Doc 04 §12).
+	# switch / roster envelope may take it off its tile. Every explicit de-select
+	# path — the staged cancel (stage 2, _take_back_committed) and the own-tile
+	# A / left-click (a, _on_tile_pressed) — and the carry gate in _begin_carry
+	# read THIS, so "is this chip liftable?" can never be answered two different
+	# ways. A candidate is only a preview and never counts (Doc 04 §12).
 	if _state == null or player < 0 or player >= _state.slots.size():
 		return false
 	var slot: Dictionary = _state.slots[player]
@@ -1271,9 +1281,12 @@ func _has_committed_pick(player: int) -> bool:
 	return str(slot.get("character", "")) != ""
 
 func _take_back_committed(player: int) -> void:
-	# Stage 2: UNDO the commit and put the chip back in the hand — the token
-	# FSM's carry presentation over the taken-back fighter, with that tile left
-	# as the candidate so the player can re-place it or keep browsing. The
+	# THE one de-select — the staged cancel's stage 2 AND the own-tile DE-SELECT
+	# (a: A / left-click on the tile that owns this player's committed chip) both
+	# route here, so every way to unselect ends in exactly one implementation and
+	# one end state: UNDO the commit and put the chip back in the hand — the
+	# token FSM's carry presentation over the taken-back fighter, with that tile
+	# left as the candidate so the player can re-place it or keep browsing. The
 	# screen NEVER leaves on this stage (the stage-4 route owns that).
 	if _state == null or player < 0 or player != _active:
 		return

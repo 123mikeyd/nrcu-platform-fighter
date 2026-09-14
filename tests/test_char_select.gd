@@ -11,8 +11,8 @@ extends SceneTree
 #   * Ready is decided by the ONE validation authority (>= 2 active, >= 1
 #     Human, valid devices, both teams) — never a rule set in the screen.
 #
-# The three suites at the END of this file are the OWNER-directed ones and each
-# drives the REAL path the finding came from:
+# The owner-directed suites at the END of this file each drive the REAL path the
+# finding came from:
 #   * real_route_entry_suite   (1) the pose in the first visible CSS frame after
 #                              the shipped Main PLAY route — pad accept and
 #                              mouse click — asserted before any input reaches
@@ -23,7 +23,11 @@ extends SceneTree
 #                              extent, on EVERY tile;
 #   * hover_pose_gate_suite    (3) the pinch belongs to the chip's OWN tile —
 #                              hovering any other fighter while a chip is
-#                              committed draws the ordinary pointer.
+#                              committed draws the ordinary pointer;
+#   * deselect_committed_suite (4) A / left-click on the COMMITTED tile
+#                              DE-SELECTS — the pick goes back into the hand
+#                              through the same take-back the staged cancel uses
+#                              (one end state for A, the pointer and B).
 #
 # Composition/geometry invariants live in tests/test_css_composition.gd; the
 # Doc 08 §4 public-input state matrices live in tests/test_css_state.gd.
@@ -358,6 +362,10 @@ func run():
     await hover_pose_gate_suite(vs, hand)
     await roster_tile_anchor_suite(vs, hand)
     await real_route_entry_suite(vs, hand)
+    # --- (4) the OWNER requirement: A / left-click on the committed tile
+    # DE-SELECTS through the SAME implementation as the staged cancel's
+    # take-back (one end state for A, the pointer and B).
+    await deselect_committed_suite(vs, hand)
 
     # --- Back cancels a carried token (fresh host: the route itself is a scene
     # change owned by the flow, so only the local contract is asserted)
@@ -567,8 +575,11 @@ func browse_survival_suite(vs, hand) -> void:
 # _has_committed_pick gate inside _begin_carry, the ONE place a chip can leave a
 # tile for the hand): a committed chip leaves its tile ONLY through the owner's
 # explicit actions —
-#   (a) A on its own tile      -> a no-op (the same id is re-written);
-#   (b) A on a DIFFERENT tile  -> the commit MOVES (re-pick, _on_tile_pressed);
+#   (a) A / left-click on its own tile -> DE-SELECT (the take-back, the SAME
+#       implementation as the staged cancel's stage 2; owner requirement, which
+#       supersedes the former explicit no-op on this path);
+#   (b) A / left-click on a DIFFERENT tile -> the commit MOVES (re-pick,
+#       _on_tile_pressed);
 #   (c) B / ui_cancel          -> the staged take-back (_take_back_committed,
 #                                 which clears the commit BEFORE asking to lift).
 # Hover, the candidate preview, focus browsing, the modality switch and the
@@ -682,16 +693,27 @@ func committed_chip_hover_suite(vs, hand) -> void:
         % [int(css.get_carried_by()), css.token_state(0)])
     check(bays[0].presented_fighter() == "ggb", "hover lift (own tile): the active bay still shows the committed fighter")
 
-    # --- (a) A on the chip's OWN tile is a no-op ---------------------------
-    var slot_before: Vector2 = css.token_view(0).position
+    # --- (a) A / left-click on the chip's OWN tile DE-SELECTS (owner
+    # requirement): the pick is taken back into the hand through the SAME
+    # implementation as the staged cancel's stage 2 — this supersedes the former
+    # explicit no-op on this path. ---
     await pointer_click(hand, tiles[ggb], tiles[ggb].get_global_rect().get_center())
     await create_timer(0.3).timeout
-    check(str(state.slots[0]["character"]) == "ggb", "hover lift (A on its own tile): the commit is unchanged")
-    check(int(css.get_carried_by()) == -1 and css.token_state(0) == PLACED
-        and css.token_view(0).get_parent() == tiles[ggb].token_layer(),
-        "hover lift (A on its own tile): the chip is not lifted or re-homed (state %d)" % css.token_state(0))
-    check(css.token_view(0).position.is_equal_approx(slot_before),
-        "hover lift (A on its own tile): the chip keeps its exact slot")
+    check(str(state.slots[0]["character"]) == "",
+        "hover lift (A on its own tile): the commit is TAKEN BACK (no character selected)")
+    check(int(css.get_carried_by()) == 0 and css.token_state(0) == CARRIED and hand.is_carrying(),
+        "hover lift (A on its own tile): the chip is back IN THE HAND (carried_by %d, state %d)"
+        % [int(css.get_carried_by()), css.token_state(0)])
+    check(str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "hover lift (A on its own tile): the taken-back chip rides the carry layer")
+    # …and the same tile re-commits the fighter through the same pointer path
+    # (the chip is in the hand, so the press PLACES it): the journey below starts
+    # from a committed chip again.
+    await hover_tile_mouse(hand, css, ggb)
+    await pointer_click(hand, tiles[ggb], tiles[ggb].get_global_rect().get_center())
+    await create_timer(0.4).timeout
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED,
+        "hover lift (re-pick): the same tile commits the fighter again (state %d)" % css.token_state(0))
 
     # --- the pointer leaving the roster keeps the commit --------------------
     await pointer_motion(hand, Vector2(640.0, 30.0))
@@ -1310,3 +1332,229 @@ func real_route_entry_mouse(vs, hand) -> void:
     check(not hand.is_carrying() and int(css.get_carried_by()) == -1,
         "real route (mouse): nothing is carried by a pointer that never entered the roster")
     await cleanup_real_route(host, home)
+
+# --- (4) A / LEFT-CLICK on the committed tile DE-SELECTS (owner requirement) --
+#
+# THE REQUIREMENT: with a character COMMITTED for the active player, pressing A
+# (controller) or LEFT-CLICKING (mouse) on that SAME tile takes the pick back —
+# the chip goes back into the hand, the player ends in the "no character
+# selected" state, stays in the Character Select and may pick again. It
+# deliberately overrides the former explicit no-op (cf26ba1) and routes BOTH
+# input paths through the SAME implementation as the staged cancel's stage 2
+# (char_select._take_back_committed), so the three ways to unselect — A on the
+# own tile, the left-click on the own tile and B — end in EXACTLY one end state
+# (asserted equal below). A on a DIFFERENT tile still MOVES the chip; hovering
+# still never lifts anything.
+#
+# Every pad press below is a REAL device event delivered through the engine's
+# own dispatch (Input.parse_input_event) with the tile holding the engine's own
+# focus — the D-pad walk between tiles is real focus navigation; every click is
+# a REAL left click pushed into the viewport's GUI hit test at the tile's own
+# rect (never control._gui_input directly).
+
+func deselect_signature(css, hand, state) -> Array:
+    # The end state EVERY de-select path must produce identically (A on the own
+    # tile / left-click on the own tile / B): no character selected, the chip in
+    # the hand's carry layer, the taken-back tile still the candidate, the
+    # active player unchanged and the screen still up.
+    var token = css.token_view(0)
+    return [
+        str(state.slots[0]["character"]),
+        int(css.get_carried_by()),
+        int(css.token_state(0)),
+        str(token.get_parent().name) if token != null and token.get_parent() != null else "",
+        int(css.get_active()),
+        int(css.get_candidate()),
+        bool(hand.is_carrying()),
+    ]
+
+func real_left_click(hand, control: Control) -> void:
+    # A REAL left click on a roster tile: genuine pointer motion onto the tile
+    # (arms the MOUSE modality, re-records the authoritative hotspot), then a
+    # press + release pushed into the viewport's GUI hit test at the tile's own
+    # rect — the dispatch a windowed run performs, never a private call.
+    var at: Vector2 = control.get_global_rect().get_center()
+    await pointer_motion(hand, at)
+    check(control.get_global_rect().has_point(hand.hotspot),
+        "de-select: the pointer hotspot really sits on the clicked tile (%s)" % str(hand.hotspot))
+    root.push_input(Support.mouse_button_event(at, true), true)
+    root.push_input(Support.mouse_button_event(at, false), true)
+    await process_frame
+    await process_frame
+
+func deselect_committed_suite(vs, hand) -> void:
+    arm_mouse(hand, Vector2(640.0, 20.0))
+    var host = await vs.enter(self)
+    var css = host.char_select()
+    if css == null or not await vs.wait_css_ready(host, self):
+        check(false, "de-select: a CSS is mounted and idle")
+        return
+    var state = host.selection_state
+    var tiles: Array = css.get_tiles()
+    var bays: Array = css.get_bays()
+    var ggb: int = css._tile_index_of("ggb")
+    var third: int = css._tile_index_of("turbofit")
+    var other: int = css._tile_index_of("mephisto")
+    check(ggb >= 0 and third >= 0 and other >= 0 and third != ggb and other != ggb and other != third,
+        "de-select: three distinct roster tiles are available (%d/%d/%d)" % [ggb, third, other])
+    await create_timer(0.4).timeout
+
+    # --- the ACTIVE station commits through the REAL pointer path -----------
+    await hover_tile_mouse(hand, css, ggb)
+    await real_left_click(hand, tiles[ggb])
+    await create_timer(0.4).timeout
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED,
+        "de-select (precondition): P1's chip is COMMITTED and PLACED (state %d)" % css.token_state(0))
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "de-select (precondition): nothing is in the hand after the commit")
+
+    # --- (d) HOVER on the committed tile still does NOTHING -----------------
+    await hover_tile_mouse(hand, css, ggb)
+    check(int(css.get_candidate()) == ggb and str(state.slots[0]["character"]) == "ggb",
+        "de-select (d): hovering the committed tile keeps the commit and the candidate")
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying() and css.token_state(0) == PLACED,
+        "de-select (d): hover NEVER lifts the committed chip (carried_by %d, state %d)"
+        % [int(css.get_carried_by()), css.token_state(0)])
+    check(css.token_view(0).get_parent() == tiles[ggb].token_layer(),
+        "de-select (d): the chip is still owned by its committed tile after the hover")
+
+    # --- (b) a REAL left click on the committed tile DE-SELECTS -------------
+    var cancels := [0]
+    connect_cancel_counter(cancels)
+    await real_left_click(hand, tiles[ggb])
+    await create_timer(0.3).timeout
+    var click_sig := deselect_signature(css, hand, state)
+    check(str(state.slots[0]["character"]) == "",
+        "de-select (click): the commit is TAKEN BACK — no character selected")
+    check(int(css.get_carried_by()) == 0 and css.token_state(0) == CARRIED and hand.is_carrying(),
+        "de-select (click): the chip is back IN THE HAND (carried_by %d, state %d)"
+        % [int(css.get_carried_by()), css.token_state(0)])
+    check(str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "de-select (click): the taken-back chip rides the cursor carry layer")
+    check(int(css.get_active()) == 0 and int(css.get_phase()) != 2,
+        "de-select (click): the active player is unchanged (%d) and the screen is not exiting (phase %d)"
+        % [int(css.get_active()), int(css.get_phase())])
+    check(host.is_surface_presented("css") and css.is_visible_in_tree(),
+        "de-select (click): the screen STILL IS the Character Select")
+    check(int(css.get_candidate()) == ggb,
+        "de-select (click): the taken-back fighter stays the candidate (%d)" % int(css.get_candidate()))
+    check(cancels[0] == 0, "de-select (click): a pointer de-select never reaches the cancel signal")
+
+    # …and the player really is in the "no character selected" state: when the
+    # pointer leaves the roster the carry cancels home and the bay is BLANK —
+    # nothing committed is left to present.
+    await pointer_motion(hand, Vector2(640.0, 30.0))
+    css.get_node("ReferenceFrame/RosterField").mouse_exited.emit()
+    await create_timer(0.35).timeout
+    check(int(css.get_carried_by()) == -1 and int(css.get_candidate()) == -1,
+        "de-select (state): leaving the roster cancels the taken-back carry and the candidate")
+    check(css.token_state(0) == UNASSIGNED and css.token_view(0).get_parent() == css.token_home_layer(),
+        "de-select (state): the uncommitted chip went home (state %d)" % css.token_state(0))
+    check(str(state.slots[0]["character"]) == "" and bays[0].presented_fighter() == "",
+        "de-select (state): nothing is committed and the active bay is BLANK (unselected)")
+
+    # --- (e) de-select then RE-PICK the SAME fighter (real pointer path) ----
+    await hover_tile_mouse(hand, css, ggb)
+    await real_left_click(hand, tiles[ggb])
+    await create_timer(0.4).timeout
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED
+        and css.token_view(0).get_parent() == tiles[ggb].token_layer(),
+        "de-select (re-pick): the SAME fighter can be picked again (state %d)" % css.token_state(0))
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "de-select (re-pick): the re-pick places the chip instead of keeping it in the hand")
+
+    # --- (a) REAL pad A on the committed tile DE-SELECTS -------------------
+    # FOCUS is claimed the way §2 prescribes, the focused tile is reached by the
+    # engine's own D-pad navigation from the row start, and the A press itself
+    # is a real parsed pad event.
+    var backs := [0]
+    css.back_requested.connect(func() -> void: backs[0] += 1)
+    hand.claim_focus()
+    await process_frame
+    tiles[0].grab_focus()
+    await create_timer(0.08).timeout
+    for step in ggb:
+        await pad_nav(JOY_BUTTON_DPAD_RIGHT)
+    await create_timer(0.08).timeout
+    check(Support.focus_owner(self) == tiles[ggb],
+        "de-select (pad): the D-pad walk lands the focus on the committed tile")
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED,
+        "de-select (pad): browsing to the committed tile did not lift the chip (state %d)" % css.token_state(0))
+    await pad_nav(JOY_BUTTON_A)
+    await create_timer(0.3).timeout
+    var pad_sig := deselect_signature(css, hand, state)
+    check(str(state.slots[0]["character"]) == "",
+        "de-select (pad A): the commit is TAKEN BACK — no character selected")
+    check(int(css.get_carried_by()) == 0 and css.token_state(0) == CARRIED and hand.is_carrying(),
+        "de-select (pad A): the chip is back IN THE HAND (carried_by %d, state %d)"
+        % [int(css.get_carried_by()), css.token_state(0)])
+    check(str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "de-select (pad A): the taken-back chip rides the cursor carry layer")
+    check(int(css.get_active()) == 0 and host.is_surface_presented("css") and css.is_visible_in_tree(),
+        "de-select (pad A): the active player is unchanged (%d) and the screen is STILL the Character Select"
+        % int(css.get_active()))
+    check(backs[0] == 0, "de-select (pad A): the de-select never requests the BACK route")
+    check(pad_sig == click_sig,
+        "de-select (equivalence): the pad-A take-back ends in EXACTLY the left-click end state (%s vs %s)"
+        % [str(pad_sig), str(click_sig)])
+
+    # --- pad A with the chip IN the hand PLACES it (the same tile) ----------
+    await pad_nav(JOY_BUTTON_A)
+    await create_timer(0.4).timeout
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED,
+        "de-select (pad A re-pick): A on the same tile with the chip in the hand places it again (state %d)"
+        % css.token_state(0))
+
+    # --- (equivalence) B takes the same chip back through the same end state -
+    await press_pad_b()
+    await create_timer(0.2).timeout
+    var b_sig := deselect_signature(css, hand, state)
+    check(str(state.slots[0]["character"]) == "" and int(css.get_carried_by()) == 0,
+        "de-select (equivalence B): the staged take-back leaves the same unselected state")
+    check(b_sig == click_sig,
+        "de-select (equivalence): A, the pointer and B end in ONE end state (%s vs %s)"
+        % [str(b_sig), str(click_sig)])
+
+    # --- (c) A on a DIFFERENT tile still MOVES the chip --------------------
+    await pad_nav(JOY_BUTTON_A)          # the chip is in the hand: A places it again
+    await create_timer(0.4).timeout
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED,
+        "de-select (move precondition): the chip is committed to its own tile again")
+    for step in (other - ggb):
+        await pad_nav(JOY_BUTTON_DPAD_RIGHT)
+    check(Support.focus_owner(self) == tiles[other],
+        "de-select (move): the D-pad walk focuses another fighter's tile (%s)"
+        % str(Support.focus_owner(self).get_path() if Support.focus_owner(self) != null else "-"))
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED
+        and css.token_view(0).get_parent() == tiles[ggb].token_layer(),
+        "de-select (move): browsing another tile never lifts or moves the committed chip")
+    await pad_nav(JOY_BUTTON_A)
+    await create_timer(0.5).timeout
+    check(str(state.slots[0]["character"]) == "mephisto",
+        "de-select (move): A on a DIFFERENT tile still MOVES the commit (got '%s')"
+        % str(state.slots[0]["character"]))
+    check(css.token_state(0) == PLACED and css.token_view(0).get_parent() == tiles[other].token_layer(),
+        "de-select (move): the chip moved onto the new tile (state %d)" % css.token_state(0))
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "de-select (move): the move is a direct re-place, never through the hand")
+
+    # --- (e) de-select then re-pick ANOTHER fighter (real pointer path) ----
+    await pad_nav(JOY_BUTTON_A)          # the focused tile owns the committed chip: de-select
+    await create_timer(0.3).timeout
+    check(str(state.slots[0]["character"]) == "" and int(css.get_carried_by()) == 0
+        and css.token_state(0) == CARRIED,
+        "de-select (pad A, other fighter): the second take-back ends in the same unselected state")
+    await hover_tile_mouse(hand, css, third)
+    await real_left_click(hand, tiles[third])
+    await create_timer(0.5).timeout
+    check(str(state.slots[0]["character"]) == "turbofit",
+        "de-select (re-pick): a DIFFERENT fighter can be picked after the de-select (got '%s')"
+        % str(state.slots[0]["character"]))
+    check(css.token_state(0) == PLACED and css.token_view(0).get_parent() == tiles[third].token_layer(),
+        "de-select (re-pick): the new chip is PLACED on the new tile (state %d)" % css.token_state(0))
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "de-select (end): nothing is left in flight after the journey")
+
+    if is_instance_valid(host):
+        host.queue_free()
+    await process_frame
