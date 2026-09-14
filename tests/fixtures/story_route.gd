@@ -1,10 +1,11 @@
 extends RefCounted
-# Shared helper for the WP-0 step-4 Story-route test migration.
+# Shared helper for the Story-route tests.
 #
-# The Story route is frontend-owned: Main Menu STORY MODE -> the MatchFlow host
-# in story mode -> the Encounter Briefing -> the encounter launch. Tests enter
-# it exactly the way the player does, and gameplay is only ever constructed by
-# the host from an immutable MatchLaunchConfig.
+# The Story route is frontend-owned and TWO-STEP (Doc 01 §9): Main Menu
+# STORY MODE -> MatchFlow host -> Story Fighter Select -> Encounter Briefing ->
+# the encounter launch. Tests enter it exactly the way the player does, and
+# gameplay is only ever constructed by the host from an immutable
+# MatchLaunchConfig.
 #
 # Usage (inside a SceneTree test):
 #     var story = load("res://tests/fixtures/story_route.gd").new()
@@ -14,13 +15,15 @@ extends RefCounted
 # Not a test runner: run_all_tests.py discovers tests/test_*.gd only.
 
 const AppStateScript = preload("res://scripts/app_state.gd")
+const Support = preload("res://tools/acceptance_support.gd")
 const FLOW_SCENE := "res://scenes/match_flow.tscn"
 
 var last_host: Node = null
 
 func enter(tree: SceneTree, fighter_id: String = "", mode: String = "story") -> Node:
     # Fresh Story entry: the host is the only scene, as after Main's STORY MODE
-    # row (mode "story"; pass "" to keep whatever entry flag is set).
+    # row (mode "story"; pass "" to keep whatever entry flag is set). The first
+    # presented step is the Story Fighter Select.
     if fighter_id != "":
         AppStateScript.story_fighter_id = fighter_id
     if mode != "":
@@ -31,15 +34,53 @@ func enter(tree: SceneTree, fighter_id: String = "", mode: String = "story") -> 
     await settle(tree, 12)
     return host
 
+func open_briefing(tree: SceneTree, host: Node) -> bool:
+    # Step 1 -> step 2 through the shipped controls: the Story Select commits a
+    # fighter and Continue PUSHes the Encounter Briefing. A host already on the
+    # Briefing (or on the Story Result) passes straight through, so callers do
+    # not care which step they hold.
+    #
+    # The step is only reached when its screen is actually PRESENTED: the PUSH
+    # records its destination immediately, but the Briefing is shown only after
+    # the Select's exit choreography completes.
+    if host == null or not is_instance_valid(host):
+        return false
+    for i in 300:
+        var surface := str(host.active_surface())
+        if surface == "story_briefing":
+            if host.story_briefing() != null and host.story_briefing().visible:
+                return true
+        elif surface == "story_result":
+            if host.story_result() != null and host.story_result().visible:
+                return true
+        elif surface == "story_select":
+            var select: Control = host.story_select()
+            if select != null and select.is_visible_in_tree() and not select.is_exiting():
+                Support.click_center(tree, select.continue_button())
+        await tree.process_frame
+    return false
+
 func start_encounter(tree: SceneTree, host: Node) -> Node:
-    # Presses the briefing's own START ENCOUNTER action and waits for the full
-    # §6 handshake: the destination is constructed hidden, the briefing plays
-    # its exit, the match starts from the config and the frontend is released.
-    # Tests wait for the release so the arena is the live frame (it is the
-    # current scene by then, which is what the post-match route replaces).
-    if host == null or not is_instance_valid(host) or host.story_briefing() == null:
+    # Route-aware START: from the Story Select the Briefing step is walked
+    # first; on the Briefing START ENCOUNTER launches; on the Story Result the
+    # Replay/Retry action relaunches. Every press is the shipped control.
+    #
+    # Waits for the full §6 handshake: the destination is constructed hidden,
+    # the frontend plays its exit, the match starts from the config and the
+    # frontend is released. Tests wait for the release so the arena is the live
+    # frame (it is the current scene by then, which is what the post-match route
+    # replaces).
+    if host == null or not is_instance_valid(host):
         return null
-    host.story_briefing().action_button().pressed.emit()
+    if not await open_briefing(tree, host):
+        return null
+    var surface := str(host.active_surface())
+    if surface == "story_briefing":
+        host.story_briefing().action_button().pressed.emit()
+    elif surface == "story_result":
+        host.story_result().replay_button().pressed.emit()
+    else:
+        return null
     # The host constructs its destination synchronously and hands it over before
     # tree entry: read the node the host itself owns (a name lookup in root is
     # ambiguous while a previous arena is still pending free).

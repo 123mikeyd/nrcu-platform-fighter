@@ -36,18 +36,25 @@ func run():
     if host == null:
         quit(1)
         return
-    check(host.entry_mode() == "story" and host.active_surface() == "story", "the host opens the story route on the briefing")
-    check(root.get_node_or_null("MainArena") == null, "no unattended fight exists while briefing")
-    check(host.gameplay_node() == null, "no arena exists while briefing")
-    # --- the briefing is hosted, safe and identified ---
+    check(host.entry_mode() == "story" and host.active_surface() == "story_select",
+        "the host opens the story route on the Story Fighter Select")
+    check(root.get_node_or_null("MainArena") == null, "no unattended fight exists while selecting")
+    check(host.gameplay_node() == null, "no arena exists while selecting")
+    # --- step 1: the Story Fighter Select is the entry surface ---
+    var select = host.story_select()
+    check(select != null and select.visible, "the host presents the Story Fighter Select")
+    check(not host.story_briefing().visible, "the Encounter Briefing is not skipped on entry")
+    if home.is_inside_tree():
+        home.queue_free()
+    await process_frame
+    # --- step 2: Continue reaches the hosted briefing ---
+    var reached: bool = await story.open_briefing(self, host)
+    check(reached and host.story_briefing().visible, "Continue reaches the Encounter Briefing")
     var briefing = host.story_briefing()
     check(briefing != null and briefing.visible, "the host presents the Encounter Briefing")
     check(briefing.selected_fighter_id() == "turbofit", "ready screen identifies the default fighter")
     check(str(briefing.objective_label().text).find("Bobo") != -1, "the briefing identifies the encounter")
     check(str(briefing.action_button().text) == "START ENCOUNTER", "the briefing offers the START ENCOUNTER action")
-    if home.is_inside_tree():
-        home.queue_free()
-    await process_frame
     # --- START: the encounter launches from the frozen config ---
     var arena = await story.start_encounter(self, host)
     check(arena != null, "the actual START ENCOUNTER action launches the encounter")
