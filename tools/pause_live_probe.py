@@ -214,15 +214,20 @@ def main() -> int:
     wait_for('b_fired', 25.0)
 
     wait_for('done', 25.0)
+    observed = bool(state['a_fired'] and state['b_fired'] and state['done'])
+    if process.poll() is None:
+        time.sleep(1.0)   # let the probe's own quit() land before any kill
     if process.poll() is None:
         process.kill()
     process.wait()
-    print('driver: exit=%s a_fired=%s b_fired=%s' % (process.returncode, state['a_fired'], state['b_fired']), flush=True)
+    print('driver: observed_all=%s probe_exit=%s a_fired=%s b_fired=%s done=%s' % (
+        observed, process.returncode, state['a_fired'], state['b_fired'], state['done']), flush=True)
     (out_dir / 'pause_live_probe.summary.json').write_text(
-        json.dumps({'exit': process.returncode, 'a_fired': state['a_fired'],
-                    'b_fired': state['b_fired'], 'lines': lines}, indent=2) + '\n',
+        json.dumps({'observed_all': observed, 'probe_exit': process.returncode,
+                    'a_fired': state['a_fired'], 'b_fired': state['b_fired'],
+                    'done': state['done'], 'lines': lines}, indent=2) + '\n',
         encoding='utf-8')
-    return 0 if (state['a_fired'] and state['b_fired'] and state['done']) else 1
+    return 0 if observed else 1
 
 
 if __name__ == '__main__':
