@@ -47,12 +47,24 @@ extends Control
 #   * the hand carries the active player's SEPARATE token while browsing a
 #     fighter (Doc 01 §5); the carry pose is the clean grab/pinch hand and no
 #     player identity is baked into hand art (ledger C-008).
-#   * the drawn POSE is one rule, single-sourced in _cursor_pose_visual(): CARRY
-#     while a chip is in the hand; HOVER (the empty pinch) only on the hold the
-#     hand ADDRESSES — the tile that holds the active player's committed chip,
-#     or any browsed hold while that player has no committed pick; the ordinary
-#     pointer everywhere else. It is read from the screen's state (focus/pointer
-#     + the committed picks), never from where the sprite happens to be flying.
+#   * ENTERING with NO committed pick for the active player means the chip RIDES
+#     THE CURSOR (owner requirement): the "no character selected" state IS the
+#     token in the hand, so the FIRST VISIBLE FRAME already draws the CARRY grip
+#     with the chip in it — on BOTH entry devices (a real mouse click on Main
+#     PLAY and a pad-A accept), never the ordinary pointer, whatever the pointer
+#     position, the focus or the modality. That chip was never LIFTED out of a
+#     hold, so the roster envelope does not end it (see _entry_carry): it leaves
+#     the hand through a place, an explicit cancel, a state change — or as soon
+#     as the player's own roster interaction takes over.
+#   * the drawn POSE is one rule, single-sourced in _cursor_pose_visual(), read
+#     in ITS REQUIRED ORDER: a chip IN THE HAND (the active player's unplaced
+#     chip — the entry seed, a browse carry, a take-back) -> CARRY, independent
+#     of pointer position, focus, modality and entry device; else HOVER (the
+#     empty pinch) only on the hold the hand ADDRESSES — the tile that holds the
+#     active player's committed chip, or any browsed hold while that player has
+#     no committed pick; else the ordinary pointer everywhere else. It is read
+#     from the screen's state (carry + focus/pointer + the committed picks),
+#     never from where the sprite happens to be flying.
 #   * Ready is decided by the ONE validation authority (MatchFlowState, reached
 #     through the screen's selection mirror) — this screen holds no rule set of
 #     its own (Doc 02 §2).
@@ -132,6 +144,16 @@ var _token_state: Array = []      # TokenView.State per player
 var _token_busy: Array = []       # players with an authored token motion in flight
 var _token_tweens: Dictionary = {}  # player -> the ONE in-flight motion tween
 var _carried_by := -1
+# THE ENTRY CHIP (owner requirement): entering the screen with NO committed pick
+# for the active player puts the token IN THE HAND — the "no character selected"
+# state IS the chip riding the cursor (the CARRY grip with the chip in it in the
+# FIRST visible frame, on both entry devices). Such a chip was never LIFTED out
+# of a hold, so the roster envelope — the rule that ends a lifted carry when the
+# pointer leaves the populated roster — does not apply to it until the player's
+# own roster interaction takes over (_end_entry_carry), which is what makes the
+# owner's mouse entry (a pointer resting OFF the roster when Play opens the
+# screen) keep the chip instead of dropping it one frame later.
+var _entry_carry := false
 var _seeding_focus := false
 var _focus_check_pending := false
 var _phase: Phase = Phase.ENTERING
@@ -372,6 +394,7 @@ func open_with(state) -> void:
 	_active = 0
 	_candidate = -1
 	_carried_by = -1
+	_end_entry_carry()
 	_token_busy.clear()
 	for i in 4:
 		_kill_token_motion(i)
@@ -385,6 +408,10 @@ func open_with(state) -> void:
 	_refresh()
 	_enter_choreography()
 	_seed_focus()
+	# ENTERING with no committed pick IS the chip riding the cursor (owner
+	# requirement): seed it BEFORE the pose is synced, so the FIRST visible frame
+	# already draws the CARRY grip with the chip in it.
+	_seed_entry_carry()
 	# The hand's POSE is part of the entry state: sync it now (never on the next
 	# input event — the owner-reported stale ordinary pose on CSS entry).
 	_sync_cursor_pose()
@@ -404,6 +431,9 @@ func reopen() -> void:
 	_sync_devices()
 	_refresh()
 	_seed_focus()
+	# The same entry contract as open_with(): a player who comes back WITHOUT a
+	# committed pick holds the chip again.
+	_seed_entry_carry()
 	_sync_cursor_pose()
 
 func reset() -> void:
@@ -465,6 +495,32 @@ func _seed_focus() -> void:
 	_seeding_focus = false
 	if cursor.mode == 1:
 		cursor.set_focus_target(_tiles[idx].anchor())
+
+# --- THE ENTRY CHIP (owner requirement) -----------------------------------
+func _seed_entry_carry() -> void:
+	# ENTERING the Character Select with the ACTIVE player having NO committed
+	# pick means the chip RIDES THE CURSOR: the "no character selected" state IS
+	# the token in the hand, on BOTH entry devices (a real mouse click on Main
+	# PLAY and a pad-A accept) and in the FIRST VISIBLE FRAME — never once the
+	# first input event arrives (the owner's finding: the ordinary pointer right
+	# after Play). It goes through the ONE carry implementation (_begin_carry),
+	# so the token FSM, the carry layer and the drawn pose can never disagree
+	# with a browse carry; the pickup announcement is suppressed (nothing was
+	# picked up — the chip started the screen in the hand).
+	if _state == null or _tiles.is_empty():
+		return
+	if _has_committed_pick(_active):
+		return          # a placed chip keeps its tile: the hand stays empty
+	_begin_carry(_active, false)
+	_entry_carry = _carried_by == _active
+
+func _end_entry_carry() -> void:
+	# The player's own roster interaction takes over from the entry chip: from
+	# here on the pre-existing envelope rules govern the carry exactly as before
+	# (a chip that came out of a hold ends when the pointer leaves the populated
+	# roster). Called by _begin_carry (a tile was entered / focused / taken back)
+	# and by the per-frame envelope the moment the hotspot reaches the roster.
+	_entry_carry = false
 
 # --- device availability (Doc 03 §10 / Doc 01 §4) ------------------------
 func set_connected_pads(pads: Array) -> void:
@@ -748,6 +804,14 @@ func _settle_focus_region() -> void:
 	var owner := FrontendInput.focus_owner()
 	if owner != null and _tiles.has(owner):
 		return          # focus moved inside the roster: the candidate follows
+	# The ENTRY chip is the same question the roster envelope answers (see
+	# _entry_carry): a focus move that has not browsed a hold yet drops only the
+	# pending candidate — the chip keeps riding the cursor until the player
+	# places it, cancels it explicitly, or browses a hold (from which point this
+	# semantic-region rule governs the carry exactly as before).
+	if _entry_carry:
+		_set_candidate(-1)
+		return
 	_cancel_roster_interaction()
 
 func _on_modality_changed(is_mouse: bool) -> void:
@@ -797,7 +861,12 @@ func _on_bay_unfocused(index: int) -> void:
 			return
 	bay.set_focus_signal(false)
 
-func _begin_carry(player: int) -> void:
+func _begin_carry(player: int, announce := true) -> void:
+	# A roster interaction is asking for the chip (a tile's mouse entry, a focus
+	# browse, a take-back) — or the ENTRY seed is seeding it: either way the
+	# entry chip's exemption is over and the normal envelope rules apply from
+	# here on (an entry seed sets it again below itself).
+	_end_entry_carry()
 	# CARRIED => carried_by == active player, always (ledger C-026).
 	if player != _active:
 		return
@@ -826,7 +895,8 @@ func _begin_carry(player: int) -> void:
 	if cursor != null:
 		cursor.set_carry(_tokens[player])
 	_sync_cursor_pose()
-	FrontendEvents.emit_token_pickup(player)
+	if announce:
+		FrontendEvents.emit_token_pickup(player)
 
 func _return_carried() -> void:
 	# Cancel/leave: the token RETURNS home through a real motion (ledger C-007):
@@ -835,6 +905,7 @@ func _return_carried() -> void:
 	# pick is lifted only by the staged take-back, which clears the commit first),
 	# so the committed-tile branch below is a defensive fallback for a state
 	# written from outside the screen — never the browsing path.
+	_end_entry_carry()
 	if _carried_by < 0:
 		return
 	var player := _carried_by
@@ -902,6 +973,7 @@ func _return_token_home(player: int) -> void:
 		_home_token(player))
 
 func _clear_carry() -> void:
+	_end_entry_carry()
 	if _carried_by >= 0:
 		var player := _carried_by
 		_carried_by = -1
@@ -935,22 +1007,31 @@ func _cursor_in_roster() -> bool:
 # first controller input, and — after a commit — the pinch followed the pointer
 # across every tile).
 #
-#   CARRY   — a chip is IN the hand (carried_by >= 0): the approved grip.
-#   HOVER   — the empty pinch: the hand addresses a hold it does not hold —
-#             the tile that HOLDS the active player's committed chip (the one
-#             tile the staged take-back returns the chip to), or any browsed
-#             hold while the active player has NO committed pick (the entry
-#             seed, focus browsing, a resting pointer).
-#   REGULAR — the ordinary pointer: everywhere else. A committed chip makes its
-#             OWN tile the only pinch target, so hovering any other fighter is
-#             plain navigation.
+# THE ORDER IS THE RULE. The three answers are read in exactly this sequence,
+# and nothing geometric may pre-empt the first one:
+#
+#   1. CARRY   — a chip is IN THE HAND: the ACTIVE player's UNPLACED chip (the
+#                entry seed, a browse carry, a take-back). Independent of
+#                pointer position, focus, modality and entry device. Asking the
+#                geometry FIRST was the hole the owner hit: opening Character
+#                Select with the chip unplaced drew the ordinary pointer
+#                whenever the entry device's pointer/focus rested off the roster
+#                (the mouse click on Main PLAY) instead of the grip that HOLDS
+#                the chip — and on the pad it drew the empty pinch instead.
+#   2. HOVER   — the empty pinch: the hand addresses a hold it does not hold —
+#                the tile that HOLDS the active player's committed chip (the one
+#                tile the staged take-back returns the chip to), or any browsed
+#                hold while the active player has NO committed pick.
+#   3. REGULAR — the ordinary pointer: everywhere else. A committed chip makes
+#                its OWN tile the only pinch target, so hovering any other
+#                fighter is plain navigation.
 func _sync_cursor_pose() -> void:
 	if cursor == null or not cursor.has_method("set_visual_mode"):
 		return
 	cursor.set_visual_mode(_cursor_pose_visual())
 
 func _cursor_pose_visual() -> int:
-	if _carried_by >= 0:
+	if _chip_in_hand():
 		return 1
 	var hold := _cursor_hold_tile()
 	if hold < 0:
@@ -958,6 +1039,17 @@ func _cursor_pose_visual() -> int:
 	if _has_committed_pick(_active) and not _tile_holds_active_pick(hold):
 		return 0
 	return 2
+
+func _chip_in_hand() -> bool:
+	# RULE 1's question, asked ALONE and FIRST: is the active player's UNPLACED
+	# chip riding the cursor? `_carried_by` names exactly that player (ledger
+	# C-026: CARRIED always equals the active player, and the ONE lift rule keeps
+	# a carried chip uncommitted), so "carried" IS "the active player has not
+	# placed a chip yet". Nothing else participates: the grip that HOLDS the chip
+	# is drawn wherever the hand is — that is the whole point of the grip.
+	if _carried_by < 0:
+		return false
+	return _carried_by == _active and not _has_committed_pick(_active)
 
 func _cursor_hold_tile() -> int:
 	# WHICH hold is the hand addressing? -1 = none (the hand is off the roster).
@@ -1014,7 +1106,13 @@ func _cancel_player_interaction(player: int) -> void:
 
 func _leave_field() -> void:
 	# The visual field's own exit is the belt-and-braces path; the roster
-	# interaction envelope (below) is the deterministic authority.
+	# interaction envelope (below) is the deterministic authority. The ENTRY chip
+	# is the same question the envelope answers (see _entry_carry): a field exit
+	# with no roster interaction to end never takes the entry chip out of the
+	# hand — only the pending candidate is dropped.
+	if _entry_carry:
+		_set_candidate(-1)
+		return
 	_cancel_roster_interaction()
 
 func roster_bounds() -> Rect2:
@@ -1035,14 +1133,22 @@ func roster_bounds() -> Rect2:
 
 func _enforce_roster_envelope() -> void:
 	# While carrying with the MOUSE, "is the pointer still in the roster?" is
-	# answered from the rendered hotspot every frame (ledger C-004/C-005): the
-	# carry can never survive leaving the actual populated roster envelope.
+	# answered from the rendered hotspot every frame (ledger C-004/C-005): a
+	# carry that came OUT OF A HOLD can never survive leaving the actual
+	# populated roster envelope. The ENTRY chip (see _entry_carry) is not such a
+	# carry — no hold was asked for it and there is nothing to take it back to —
+	# so it rides the cursor wherever the pointer rests until the player's own
+	# roster interaction takes over: the moment the hotspot reaches the roster,
+	# the ordinary envelope rules govern again.
 	if _carried_by < 0 or cursor == null or cursor.mode == 1:
 		return   # FOCUS mode: the semantic focus region owns cancellation
 	if _tiles.is_empty():
 		return
 	if roster_bounds().has_point(cursor.hotspot):
+		_end_entry_carry()   # the pointer reached the roster: the interaction governs
 		return
+	if _entry_carry:
+		return   # the entry chip has no roster interaction to end
 	_cancel_roster_interaction()
 
 func _set_candidate(index: int) -> void:
@@ -1101,6 +1207,7 @@ func _on_tile_pressed(id: String) -> void:
 	var from_carry: bool = _carried_by == player
 	if from_carry:
 		_carried_by = -1
+		_end_entry_carry()   # the chip left the hand for a tile: the entry chip is done
 		if cursor != null:
 			cursor.clear_carry()
 	FrontendEvents.emit_token_place(player)
@@ -1244,6 +1351,11 @@ func _cancel_or_back() -> void:
 	#   4. only then the BACK route (whose origin the flow owns).
 	# A screen that is still entering/exiting keeps the pre-existing FLAT
 	# behaviour: no stage is peeled while its own transition is in flight.
+	# The ENTRY chip IS a carried chip, so it peels as stage 1 like any other:
+	# the first ui_cancel at a fresh entry returns the chip home (the hand is
+	# empty afterwards and the screen STAYS — the layer the player can see is
+	# gone before the route is offered). Nothing here is flat: the route needs a
+	# press that finds no carry / commit / candidate at all.
 	if _phase == Phase.ENTERING or _phase == Phase.EXITING:
 		_flat_back()
 		return

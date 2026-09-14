@@ -13,10 +13,13 @@ extends SceneTree
 #
 # The owner-directed suites at the END of this file each drive the REAL path the
 # finding came from:
-#   * real_route_entry_suite   (1) the pose in the first visible CSS frame after
-#                              the shipped Main PLAY route — pad accept and
-#                              mouse click — asserted before any input reaches
-#                              the CSS;
+#   * real_route_entry_suite   (1) THE ENTRY CHIP in the first visible CSS frame
+#                              after the shipped Main PLAY route — a real pad
+#                              accept and a real mouse click — asserted before
+#                              any input reaches the CSS: the CARRY grip with
+#                              the chip in the hand, never the ordinary pointer.
+#                              The mouse pass also walks the owner journey
+#                              (place -> existing pose rule -> pad-B take-back);
 #   * roster_tile_anchor_suite (2) the roster tile's focus-hand anchor: the
 #                              fingertip in the tile's lower-right region and
 #                              the drawn body clear of the name's font-measured
@@ -90,11 +93,19 @@ func run():
 
     # --- tokens: one per player, screen-local FSM -------------------------
     check(css.token_view(0) != null and css.token_view(3) != null, "four token views exist")
-    check(css.token_state(0) == UNASSIGNED and css.token_state(3) == UNASSIGNED, "no token is assigned at entry")
-    check(not css.token_view(0).visible, "an unassigned token is not visible")
-    check(css.token_view(0).get_parent() == css.token_home_layer(), "an unassigned token lives in the explicit home layer")
-    check(not hand.is_carrying(), "the hand is free until the roster interaction starts")
-    check(hand.visual == 0, "carry presentation is not active on entry")
+    # ENTRY CONTRACT (owner requirement): with P1 having NO committed pick the
+    # chip RIDES THE CURSOR — the "no character selected" state IS the token in
+    # the hand (the CARRY grip with the chip in it, from the first visible
+    # frame) — while an UNASSIGNED player (P4, Empty) keeps its token at home.
+    check(css.token_state(0) == CARRIED and hand.is_carrying(),
+        "the active player's chip rides the cursor at entry (state %d, carried_by %d)"
+        % [css.token_state(0), int(css.get_carried_by())])
+    check(css.token_view(0).visible and str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "the entry chip is drawn in the cursor carry layer")
+    check(hand.visual == 1, "the CARRY grip is what the entry draws (visual %d)" % int(hand.visual))
+    check(css.token_state(3) == UNASSIGNED and not css.token_view(3).visible,
+        "an UNASSIGNED (Empty) player's token stays hidden at home")
+    check(css.token_view(3).get_parent() == css.token_home_layer(), "an unassigned token lives in the explicit home layer")
 
     # --- candidate vs committed -------------------------------------------
     var tiles: Array = css.get_tiles()
@@ -808,7 +819,9 @@ func entry_pose_suite(vs, hand) -> void:
     # (B) NO STALE HAND POSE ON CSS ENTRY: the hand's pose must follow the state
     # at the moment the screen becomes visible / its target changes — never one
     # input event later. The FOCUS path is proven with NO input event delivered
-    # to the CSS at all.
+    # to the CSS at all, and the entry state it must answer to is the OWNER's
+    # entry chip: no committed pick -> the token rides the cursor -> the CARRY
+    # grip with the chip in it (never the ordinary pointer, never the pinch).
     hand.claim_focus()
     var host = await vs.enter(self)
     var css = host.char_select()
@@ -817,41 +830,54 @@ func entry_pose_suite(vs, hand) -> void:
         return
     await create_timer(0.4).timeout
     var tiles: Array = css.get_tiles()
-    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(), "entry pose: the entry seed does not carry the chip yet")
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying(),
+        "entry pose: the entry chip rides the cursor (carried_by %d)" % int(css.get_carried_by()))
     check(hand._focus_anchor == tiles[0].anchor(), "entry pose: the hand's focus target IS the first roster tile")
     check(css._cursor_in_roster(), "entry pose: the hand's hotspot sits in the roster envelope, on the first tile")
-    check(int(hand.visual) == 2, "entry pose: the hand's pose is the empty pinch on entry (visual %d, no input event delivered)" % int(hand.visual))
-    check(texture_path_of(hand.active_texture()) == HOVER_SPRITE,
-        "entry pose: the hand draws the empty-pinch sprite (got %s)" % texture_path_of(hand.active_texture()))
-    check(hand.active_tip().is_equal_approx(hand.HOVER_TIP),
-        "entry pose: the empty pinch keeps its measured anchor %s" % str(hand.HOVER_TIP))
+    check(int(hand.visual) == 1, "entry pose: the hand's pose is the CARRY grip on entry (visual %d, no input event delivered)" % int(hand.visual))
+    check(texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "entry pose: the hand draws the carry grip sprite (got %s)" % texture_path_of(hand.active_texture()))
+    check(hand.active_tip().is_equal_approx(hand.TIP_CARRY),
+        "entry pose: the carry grip keeps its measured anchor %s" % str(hand.TIP_CARRY))
     check(texture_path_of(hand.active_texture()) != POINT_SPRITE, "entry pose: the ordinary pointer pose is NOT what the hand draws")
+    check(texture_path_of(hand.active_texture()) != HOVER_SPRITE, "entry pose: the empty pinch is NOT what the entry draws either")
 
     # The pose follows a TARGET change too: focus the Back area (off the roster),
-    # with no further input, and the ordinary pointer pose is back.
+    # with no further input — and the CARRY grip STAYS, because the chip is in
+    # the hand: the pose answers the chip's state, never the focus geometry.
     var back: Control = css.get_node("ReferenceFrame/Header/BackAction")
     back.grab_focus()
     await create_timer(0.6).timeout
-    check(int(hand.visual) == 0 and texture_path_of(hand.active_texture()) == POINT_SPRITE,
-        "entry pose: leaving the roster restores the ordinary pointer pose (visual %d)" % int(hand.visual))
+    check(int(css.get_carried_by()) == 0 and int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "entry pose: focus off the roster keeps the CARRY grip while the chip is in the hand (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
 
-    # The pointer path: a pointer coming to REST on a roster tile draws the empty
-    # pinch without any hover/enter event and without any further input.
+    # The pointer path: a pointer coming to REST on a roster tile finds the
+    # entry chip already in the hand — the CARRY grip, no hover/enter event and
+    # no further input needed.
     arm_mouse(hand, tiles[0].get_global_rect().get_center())
     await create_timer(0.25).timeout
-    check(int(css.get_carried_by()) == -1, "entry pose: a resting pointer starts no carry (Doc 03 §3 hover arming)")
-    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
-        "entry pose: a resting pointer on a roster tile draws the empty pinch, with no further input (visual %d, %s)"
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying(),
+        "entry pose: a resting pointer finds the entry chip in the hand (carried_by %d, Doc 03 §3 hover arming)"
+        % int(css.get_carried_by()))
+    check(int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "entry pose: a resting pointer on a roster tile draws the CARRY grip, with no further input (visual %d, %s)"
         % [int(hand.visual), texture_path_of(hand.active_texture())])
-    # …and the APPROVED CARRY grip still takes over the moment the carry starts.
+    # …and the APPROVED CARRY grip is the very same grip once the carry is live.
     tiles[0].mouse_entered.emit()
     await create_timer(0.1).timeout
     check(hand.is_carrying() and int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
         "entry pose: the real carry still draws the approved grip (visual %d, %s)"
         % [int(hand.visual), texture_path_of(hand.active_texture())])
     check(css.get_carried_by() == 0 and css.token_state(0) == CARRIED, "entry pose: …and the chip is in the hand")
+    # The entry chip leaves the hand through the roster envelope once the
+    # player's own roster interaction has taken over (the pre-existing rule —
+    # here the pointer really is off the populated roster).
     css._leave_field()
     await create_timer(0.4).timeout
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "entry pose: after the roster interaction the field exit frees the hand (carried_by %d)"
+        % int(css.get_carried_by()))
     check(int(hand.visual) == 2 or int(hand.visual) == 0, "entry pose: the pose settles after the leave (visual %d)" % int(hand.visual))
     if is_instance_valid(host):
         host.queue_free()
@@ -1158,7 +1184,13 @@ func roster_tile_anchor_suite(vs, hand) -> void:
         host.queue_free()
     await process_frame
 
-    # --- the DRAWN pinch at the entry anchor (nothing committed) ------------
+    # --- the DRAWN entry chip at the entry anchor (nothing committed) ------
+    # The owner's entry state IS the chip in the hand, so what the anchor draws
+    # at entry is the CARRY GRIP — not the empty pinch anymore. Its drawn body is
+    # wider than the point pose's, so the pose-dependent overlap with the first
+    # tile's name is MEASURED and recorded here (the authored point pose's own
+    # overlap stays 0.00 px^2 and is enforced by the focus manifest's own split);
+    # the by-eye verdict comes from the fixed-60 Hz entry captures.
     hand.claim_focus()
     var fresh_host = await vs.enter(self)
     var fresh = fresh_host.char_select()
@@ -1166,40 +1198,48 @@ func roster_tile_anchor_suite(vs, hand) -> void:
         check(false, "roster anchor: a fresh CSS is mounted and idle")
         return
     await create_timer(0.4).timeout
-    check(int(fresh.get_carried_by()) == -1 and not hand.is_carrying(),
-        "roster anchor: the entry seed lifts no chip")
-    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
-        "roster anchor: the entry draws the empty pinch (visual %d, %s)"
+    check(int(fresh.get_carried_by()) == 0 and hand.is_carrying(),
+        "roster anchor: the entry chip rides the cursor (carried_by %d)" % int(fresh.get_carried_by()))
+    check(int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "roster anchor: the entry draws the CARRY grip at the anchor (visual %d, %s)"
         % [int(hand.visual), texture_path_of(hand.active_texture())])
     await Support.settle_hand(self)
     var first: Control = fresh.get_tiles()[0]
     var entry_body := Support.hand_body_rect(hand, "observed")
     var entry_glyph := name_glyph_box(first)
-    check(Support.intersect_area(entry_body, entry_glyph) == 0.0,
-        "roster anchor: the PINCH drawn at the entry anchor clears the first tile's name (overlap %.2f px^2)"
-        % Support.intersect_area(entry_body, entry_glyph))
+    var entry_overlap := Support.intersect_area(entry_body, entry_glyph)
+    check(entry_overlap <= 45.0,
+        "roster anchor: the entry CARRY grip's drawn body over the first tile's name stays the recorded pose-dependent overlap (%.2f px^2, 39.50 px^2 measured — the authored point pose stays 0.00)"
+        % entry_overlap)
     if is_instance_valid(fresh_host):
         fresh_host.queue_free()
     await process_frame
 
-# --- (1) THE ENTRY POSE ON THE REAL PLAY ROUTE -------------------------------
+# --- (1) THE ENTRY CHIP ON THE REAL PLAY ROUTE --------------------------------
 #
-# OWNER REPORT (live pad + mouse, current build): right after Play, the hand sat
-# on the first roster tile but drew the WRONG pose until the first controller
-# input arrived, which then fixed it. The previous entry-pose suite missed this
-# because it never took the real route (it mounted the MatchFlow fixture
-# directly and forced FOCUS with a direct hand.claim_focus() call) and because
-# it asserted the pose only AFTER the entry guard and the hand's flight had
-# settled — by then the old geometric fallback (_cursor_in_roster(), the
-# fingertip inside the roster envelope) had become true, so the stale window was
-# invisible to it.
+# OWNER FINDING (live mouse + pad, current build): opening the Character Select
+# from Main PLAY with NO committed pick drew the ORDINARY POINTER — the owner's
+# screenshot shows the pointing hand with NO CHIP in it right after Play — and
+# on the pad it drew the empty pinch. The owner's model is the screen's own
+# state: with no character selected the chip RIDES THE CURSOR, so the CARRY grip
+# with the chip in it is what the FIRST VISIBLE FRAME must draw, on BOTH entry
+# devices.
 #
-# The pose is now read from the screen's STATE — the tile the focus owns, or the
-# tile the pointer rests on — so it is correct in the FIRST frame the screen is
-# visible. Both passes below press the shipped Main PLAY row through the real
-# route (the MatchFlow host is entered by the runtime's scene change) and assert
-# in that first visible frame, while the CSS entry guard is still running and NO
-# input event has been delivered to the Character Select.
+# The old entry-pose suite passed straight through the live bug: it asserted the
+# ENTRY CONDITION THE CODE PRODUCED (nothing carried: carried_by == -1, the pad
+# drawing the empty pinch, the mouse the ordinary pointer off the roster) rather
+# than the owner's state, so its assertions could never fail while the owner
+# looked at exactly the same wrong pose on screen.
+#
+# Both passes below press the shipped Main PLAY row through the REAL route (the
+# runtime's scene change mounts the MatchFlow host) and assert in that first
+# visible frame, while the CSS entry guard is still running and NO input event
+# has been delivered to the Character Select. The mouse pass also proves the
+# chip SURVIVES the frames that follow with the pointer resting off the roster
+# (the owner's case: the pointer stays where PLAY was clicked) and then walks
+# the whole owner journey — a real motion onto a hold, a real left click that
+# PLACES the chip (the pose then answers the existing rule), and a real pad-B
+# take-back that puts the chip back in the hand (the CARRY grip again).
 
 func mount_main() -> Control:
     # The shipped Main Menu as the current scene, exactly like the runtime: the
@@ -1264,21 +1304,34 @@ func real_route_entry_pad(vs, hand) -> void:
         "real route (pad): the pose is asserted DURING the entry choreography (phase %d, guard %.2f)"
         % [int(css.get_phase()), css.get_input_guard()])
     check(hand.mode == 1, "real route (pad): the hand is in FOCUS modality (mode %d)" % int(hand.mode))
-    check(not hand.is_carrying() and int(css.get_carried_by()) == -1,
-        "real route (pad): the entry seed lifts no chip (carried_by %d)" % int(css.get_carried_by()))
     var tiles: Array = css.get_tiles()
     check(hand._focus_anchor == tiles[0].anchor(),
         "real route (pad): the hand is authored onto the FIRST roster tile")
-    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
-        "real route (pad): the first visible frame draws the empty pinch, with no input event delivered (visual %d, %s)"
+    # THE ENTRY CHIP, pad-A: no committed pick -> the chip rides the cursor.
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying(),
+        "real route (pad): the entry chip rides the cursor in the first visible frame (carried_by %d)"
+        % int(css.get_carried_by()))
+    check(int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "real route (pad): the first visible frame draws the CARRY grip with the chip in it, no input event delivered (visual %d, %s)"
         % [int(hand.visual), texture_path_of(hand.active_texture())])
     check(texture_path_of(hand.active_texture()) != POINT_SPRITE,
         "real route (pad): the ordinary pointer pose is NOT what the entry draws")
+    check(texture_path_of(hand.active_texture()) != HOVER_SPRITE,
+        "real route (pad): the empty pinch is NOT what the entry draws either")
+    check(css.token_view(0).visible and str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "real route (pad): the carried chip is DRAWN in the cursor carry layer")
+    check(hand.carried_token() == css.token_view(0),
+        "real route (pad): the hand carries the player's SEPARATE token object")
+    var chip_centre: Vector2 = css.token_view(0).global_position + css.token_view(0).size * 0.5
+    check(chip_centre.distance_to(hand.carry_pinch_point()) <= 1.0,
+        "real route (pad): the chip's centre lands on the carry anchor (%.2f px off)"
+        % chip_centre.distance_to(hand.carry_pinch_point()))
     var tip: Vector2 = tiles[0].anchor().get_global_rect().position
     check(hand.hotspot.distance_to(tip) > 1.0,
-        "real route (pad): the pinch is already drawn while the fingertip is still %.1f px from the tile — the pose never waited for the sprite"
+        "real route (pad): the carry is already drawn while the fingertip is still %.1f px from the tile — the pose never waited for the sprite"
         % hand.hotspot.distance_to(tip))
-    # …and the first CONTROLLER input then does what it always did: browse.
+    # …and the first CONTROLLER input then does what it always did: browse. The
+    # entry chip is already in the hand, so the browse never drops it.
     var idle: bool = await vs.wait_css_ready(host, self)
     check(idle, "real route (pad): the CSS leaves its entry guard")
     await pad_nav(JOY_BUTTON_DPAD_RIGHT)
@@ -1287,14 +1340,37 @@ func real_route_entry_pad(vs, hand) -> void:
     check(moved == tiles[1],
         "real route (pad): a real D-pad press walks the roster (%s)" % str(moved.get_path() if moved != null else "-"))
     check(int(css.get_carried_by()) == 0 and hand.is_carrying() and int(hand.visual) == 1,
-        "real route (pad): the browse then lifts the chip and draws the carry grip (carried_by %d, visual %d)"
+        "real route (pad): the browse keeps the entry chip in the hand and the CARRY grip drawn (carried_by %d, visual %d)"
         % [int(css.get_carried_by()), int(hand.visual)])
+    # (c) PLACING the chip: the same real pad-A commits it and the pose answers
+    # the EXISTING rule — the empty pinch on the hold that HOLDS the committed
+    # chip (the focused tile).
+    await pad_nav(JOY_BUTTON_A)
+    await create_timer(0.5).timeout
+    check(str(host.selection_state.slots[0]["character"]) == str(tiles[1].fighter_id),
+        "real route (pad): a real pad-A places the chip on the focused tile (%s)"
+        % str(host.selection_state.slots[0]["character"]))
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "real route (pad): the placed chip left the hand (carried_by %d)" % int(css.get_carried_by()))
+    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
+        "real route (pad): on the chip's OWN tile the pose is the empty pinch (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    # (d) TAKING IT BACK: a real pad-B takes the committed chip into the hand and
+    # the CARRY grip is drawn again.
+    await press_pad_b()
+    await create_timer(0.2).timeout
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying(),
+        "real route (pad): B takes the committed chip back into the hand (carried_by %d)"
+        % int(css.get_carried_by()))
+    check(int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "real route (pad): the taken-back chip draws the CARRY grip again (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
     # The pass ends with NOTHING in flight: a chip left in the hand across a
     # screen teardown would be a cursor-owned leftover (Doc 04 §4).
     await pad_nav(JOY_BUTTON_B)
     await create_timer(0.2).timeout
     check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
-        "real route (pad): the browse carry is taken back out of the hand before the teardown")
+        "real route (pad): the take-back carry is cancelled back out of the hand before the teardown")
     await cleanup_real_route(host, home)
 
 func real_route_entry_mouse(vs, hand) -> void:
@@ -1325,12 +1401,69 @@ func real_route_entry_mouse(vs, hand) -> void:
         "real route (mouse): the pose is asserted DURING the entry choreography (phase %d, guard %.2f)"
         % [int(css.get_phase()), css.get_input_guard()])
     check(hand.mode == 0, "real route (mouse): the pointer still owns the hand (mode %d)" % int(hand.mode))
+    # THE OWNER'S CASE: the pointer stays where PLAY was clicked — OFF the
+    # populated roster — and the entry chip is in the hand all the same.
     check(not css._cursor_in_roster(), "real route (mouse): the pointer rests OFF the populated roster")
-    check(int(hand.visual) == 0 and texture_path_of(hand.active_texture()) == POINT_SPRITE,
-        "real route (mouse): off the roster the first visible frame draws the ordinary pointer (visual %d, %s)"
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying(),
+        "real route (mouse): the entry chip rides the cursor with the pointer off the roster (carried_by %d)"
+        % int(css.get_carried_by()))
+    check(int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "real route (mouse): the first visible frame draws the CARRY grip, not the ordinary pointer (visual %d, %s)"
         % [int(hand.visual), texture_path_of(hand.active_texture())])
-    check(not hand.is_carrying() and int(css.get_carried_by()) == -1,
-        "real route (mouse): nothing is carried by a pointer that never entered the roster")
+    check(texture_path_of(hand.active_texture()) != POINT_SPRITE,
+        "real route (mouse): the ordinary pointer pose is NOT what the entry draws")
+    check(css.token_view(0).visible and str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "real route (mouse): the carried chip is DRAWN in the cursor carry layer")
+    # The frames the owner actually looks at: the pointer never enters the
+    # roster, and the chip must still be in the hand (the entry chip has no
+    # roster interaction to end — the envelope exemption in char_select).
+    await frames(20)
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying(),
+        "real route (mouse): the entry chip survives the frames after the transition (carried_by %d)"
+        % int(css.get_carried_by()))
+    check(int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "real route (mouse): …and the CARRY grip is still what is drawn (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    check(bool(css._entry_carry),
+        "real route (mouse): the entry chip is still the un-interacted entry state")
+    # THE OWNER JOURNEY, on the same real route: a real pointer motion onto a
+    # hold (the hover-survival helper convention) — the chip stays in the hand
+    # and the CARRY grip stays drawn.
+    var idle: bool = await vs.wait_css_ready(host, self)
+    check(idle, "real route (mouse): the CSS leaves its entry guard")
+    var tiles: Array = css.get_tiles()
+    var target: int = 0
+    await pointer_motion(hand, tiles[target].get_global_rect().get_center())
+    tiles[target].mouse_entered.emit()
+    await create_timer(0.15).timeout
+    check(int(css.get_candidate()) == target,
+        "real route (mouse): the pointer entering a hold moves the candidate (%d)" % int(css.get_candidate()))
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying() and int(hand.visual) == 1,
+        "real route (mouse): the chip in the hand keeps drawing the CARRY grip over the hold (carried_by %d, visual %d)"
+        % [int(css.get_carried_by()), int(hand.visual)])
+    # (c) a real left click PLACES it: the pose then answers the EXISTING rule —
+    # the empty pinch on the hold that HOLDS the active player's committed chip.
+    await pointer_click(hand, tiles[target], tiles[target].get_global_rect().get_center())
+    await create_timer(0.5).timeout
+    check(str(host.selection_state.slots[0]["character"]) == str(tiles[target].fighter_id),
+        "real route (mouse): the real left click places the chip (%s)"
+        % str(host.selection_state.slots[0]["character"]))
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "real route (mouse): the placed chip left the hand (carried_by %d)" % int(css.get_carried_by()))
+    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
+        "real route (mouse): over the chip's OWN tile the pose is the empty pinch (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    # (d) a real pad-B takes the committed chip back into the hand: the CARRY
+    # grip is back in the very first frame of the taken-back state.
+    await press_pad_b()
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying(),
+        "real route (mouse): B takes the committed chip back into the hand (carried_by %d)"
+        % int(css.get_carried_by()))
+    check(int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "real route (mouse): the taken-back chip draws the CARRY grip again (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    check(str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "real route (mouse): the taken-back chip rides the cursor carry layer")
     await cleanup_real_route(host, home)
 
 # --- (4) A / LEFT-CLICK on the committed tile DE-SELECTS (owner requirement) --

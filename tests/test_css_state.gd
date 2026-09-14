@@ -273,10 +273,13 @@ func matrix(vs, device: String) -> void:
     check(int(css.get_active()) == 0, "an entry starts on P1")
     for i in 4:
         check(str(state.slots[i]["character"]) == "", "no fighter is preselected (P%d)" % (i + 1))
-    check(css.token_state(0) == UNASSIGNED, "P1's token starts UNASSIGNED")
-    check(token_parent_name(0) == "TokenHomeLayer", "the unassigned token is owned by TokenHomeLayer")
-    check(not css.token_view(0).visible, "an unassigned token is hidden")
-    check(not hand.is_carrying(), "the hand carries nothing at entry")
+    # ENTRY CONTRACT (owner requirement): P1 has no committed pick, so the chip
+    # RIDES THE CURSOR — the "no character selected" state IS the token in the
+    # hand, from the first visible frame, on every entry device.
+    check(css.token_state(0) == CARRIED, "P1's token starts CARRIED (the entry chip)")
+    check(token_parent_name(0) == "CursorCarryLayer", "the entry chip is owned by CursorCarryLayer")
+    check(css.token_view(0).visible, "the entry chip is drawn in the hand")
+    check(hand.is_carrying() and hand.visual == 1, "the CARRY grip is what the entry draws")
     check(not css.ready_allowed(), "the fresh configuration cannot ready")
     check(bays[0].presented_fighter() == "", "the active bay shows no committed fighter")
 
