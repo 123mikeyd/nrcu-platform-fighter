@@ -304,6 +304,15 @@ func run():
         # leftover handle is only freed if it survived (test hygiene).
         arena.queue_free()
     await process_frame
+
+    # --- staged cancel (Doc 04): pad-B / ui_cancel peels ONE stage per press,
+    # and the Back route follows the CSS's ENTRY ORIGIN, never a hardcoded Main.
+    await staged_cancel_suite(vs, hand)
+    # --- (A) a committed pick survives browsing the UI; (B) the hand's pose
+    # follows the CSS state on entry / target change, not the next input event.
+    await browse_survival_suite(vs, hand)
+    await entry_pose_suite(vs, hand)
+
     # --- Back cancels a carried token (fresh host: the route itself is a scene
     # change owned by the flow, so only the local contract is asserted)
     var host3 = await vs.enter(self)
@@ -323,3 +332,374 @@ func run():
     await process_frame
     if failures == 0: print("PASS: character select interaction (fresh defaults, device ownership, token FSM, ready gating, route, preservation)")
     quit(1 if failures else 0)
+
+# --- staged cancel: one press = one stage; the BACK route follows the ORIGIN --
+#
+# The staged grammar (Doc 04 Character Select): an uncommitted CARRIED chip is
+# cancelled first, then the ACTIVE player's COMMITTED pick is taken back into
+# the hand, then the pending CANDIDATE is cleared — only a press that finds
+# nothing pending follows the BACK route, and that route must resolve to the
+# screen's ENTRY ORIGIN (Main for a fresh CSS, Results when the CSS was PUSHed
+# from Results by CHANGE FIGHTERS).
+#
+# Every press below is a REAL device event delivered through the engine's own
+# input dispatch (Input.parse_input_event) — never a direct call to the screen
+# handler — and a counter proves one physical press reaches the screen exactly
+# once (no double handling through the semantic signal and the ui_cancel action).
+
+func press_pad_b() -> void:
+    var down := InputEventJoypadButton.new()
+    down.button_index = JOY_BUTTON_B
+    down.pressed = true
+    Input.parse_input_event(down)
+    await process_frame
+    await process_frame
+    var up := InputEventJoypadButton.new()
+    up.button_index = JOY_BUTTON_B
+    up.pressed = false
+    Input.parse_input_event(up)
+    await process_frame
+    await process_frame
+
+func press_escape() -> void:
+    var down := InputEventKey.new()
+    down.keycode = KEY_ESCAPE
+    down.pressed = true
+    Input.parse_input_event(down)
+    await process_frame
+    await process_frame
+    var up := InputEventKey.new()
+    up.keycode = KEY_ESCAPE
+    up.pressed = false
+    Input.parse_input_event(up)
+    await process_frame
+    await process_frame
+
+func connect_cancel_counter(sink: Array) -> void:
+    # The semantic cancel signal, resolved through the autoload NODE (the global
+    # identifier is not available inside a --script SceneTree run).
+    var service = root.get_node_or_null("FrontendInput")
+    if service != null:
+        service.cancel_pressed.connect(func() -> void: sink[0] += 1)
+
+func staged_cancel_suite(vs, hand) -> void:
+    await staged_cancel_fresh(vs, hand)
+    await staged_cancel_from_results(vs, hand)
+
+func pad_nav(button: JoyButton) -> void:
+    var down := InputEventJoypadButton.new()
+    down.button_index = button
+    down.pressed = true
+    Input.parse_input_event(down)
+    await process_frame
+    await process_frame
+    var up := InputEventJoypadButton.new()
+    up.button_index = button
+    up.pressed = false
+    Input.parse_input_event(up)
+    await process_frame
+    await process_frame
+
+func texture_path_of(tex: Texture2D) -> String:
+    return "" if tex == null else str(tex.resource_path)
+
+# --- (A) a COMMITTED pick survives browsing ---------------------------------
+#
+# The CSS destinations a player moves through: other roster tiles, the stations,
+# the Ready band, the mode control (FFA / Teams) and the Back area. `browses`
+# marks the roster tiles, where the bay is SUPPOSED to large-preview the
+# candidate (Doc 04 §12) while the commit itself stays untouched.
+
+func browse_destinations(css) -> Array:
+    var out: Array = []
+    var tiles: Array = css.get_tiles()
+    for i in tiles.size():
+        if i == 0:
+            continue
+        out.append({"name": "roster tile %d" % i, "control": tiles[i], "browses": true})
+    var bays: Array = css.get_bays()
+    for i in bays.size():
+        if i == 0:
+            continue
+        out.append({"name": "station %d" % (i + 1), "control": bays[i], "browses": false})
+    out.append({"name": "ready band", "control": css.get_ready_band(), "browses": false})
+    var mode = css.get_mode_control()
+    if mode != null and mode.segment_count() > 1:
+        out.append({"name": "mode (teams)", "control": mode.segment(1), "browses": false})
+    out.append({"name": "header Back", "control": css.get_node("ReferenceFrame/Header/BackAction"), "browses": false})
+    return out
+
+func browse_survival_suite(vs, hand) -> void:
+    # (A) SELECTION MUST SURVIVE BROWSING. Moving the focus/pointer across the CSS
+    # UI may only cancel an IN-FLIGHT carry: it must never take a committed chip
+    # back (that is the exclusive job of an explicit ui_cancel, proven above).
+    var host = await vs.enter(self)
+    var css = host.char_select()
+    if css == null or not await vs.wait_css_ready(host, self):
+        check(false, "browse survival: a CSS is mounted and idle")
+        return
+    var state = host.selection_state
+    var bays: Array = css.get_bays()
+    var tiles: Array = css.get_tiles()
+    css._on_bay_activated(0)
+    css._on_tile_pressed("ggb")
+    css._on_bay_activated(1)
+    css._on_tile_pressed("ggb")
+    # Back to P1: the browsing journey below is the ACTIVE player's.
+    css._on_bay_activated(0)
+    await create_timer(0.4).timeout
+    check(int(css.get_active()) == 0, "browse survival: P1 is the active player for the journey")
+    check(str(state.slots[0]["character"]) == "ggb" and str(state.slots[1]["character"]) == "ggb",
+        "browse survival: both stations committed a fighter")
+    check(bays[0].presented_fighter() == "ggb", "browse survival: the active bay presents the committed fighter")
+    check(css.ready_allowed() and css.get_ready_band().is_shown(), "browse survival: the configuration is valid (Ready band up)")
+    check(css.token_state(0) == PLACED, "browse survival: the committed chip rests PLACED on its tile")
+
+    # POINTER: browse another tile (the chip lifts into the hand), then move across
+    # every other destination.
+    var other: int = css._tile_index_of("mephisto")
+    arm_mouse(hand, tiles[other].get_global_rect().get_center())
+    tiles[other].mouse_entered.emit()
+    check(css.get_carried_by() == 0, "browse survival: hovering another tile lifts the committed chip into the hand")
+    check(str(state.slots[0]["character"]) == "ggb", "browse survival: …without touching the commit")
+    for spot in browse_destinations(css):
+        arm_mouse(hand, (spot["control"] as Control).get_global_rect().get_center())
+        await create_timer(0.08).timeout
+        check(str(state.slots[0]["character"]) == "ggb",
+            "browse survival (pointer over the %s): the active player's commit survives" % str(spot["name"]))
+        check(str(state.slots[1]["character"]) == "ggb",
+            "browse survival (pointer over the %s): the other commit survives" % str(spot["name"]))
+        if not bool(spot["browses"]):
+            check(bays[0].presented_fighter() == "ggb",
+                "browse survival (pointer over the %s): the active bay presents the COMMITTED fighter" % str(spot["name"]))
+    await create_timer(0.4).timeout
+    check(css.get_carried_by() == -1, "browse survival: no carry is left in flight when the pointer leaves the roster")
+    check(css.token_state(0) == PLACED, "browse survival: the chip returned to its committed tile (state %d)" % css.token_state(0))
+    check(bays[0].presented_fighter() == "ggb", "browse survival: the active bay is back on the committed fighter")
+
+    # PAD/FOCUS: the same journey through the engine's own focus navigation.
+    await pad_nav(JOY_BUTTON_DPAD_DOWN)
+    for pass_index in 2:
+        for spot in browse_destinations(css):
+            (spot["control"] as Control).grab_focus()
+            await create_timer(0.12).timeout
+            check(str(state.slots[0]["character"]) == "ggb",
+                "browse survival (focus on the %s, pass %d): the active player's commit survives" % [str(spot["name"]), pass_index + 1])
+            check(str(state.slots[1]["character"]) == "ggb",
+                "browse survival (focus on the %s, pass %d): the other commit survives" % [str(spot["name"]), pass_index + 1])
+            if not bool(spot["browses"]):
+                check(bays[0].presented_fighter() == "ggb",
+                    "browse survival (focus on the %s, pass %d): the active bay presents the COMMITTED fighter" % [str(spot["name"]), pass_index + 1])
+    check(css.ready_allowed(), "browse survival: the configuration is still valid after the focus journey")
+    check(css.token_state(0) == PLACED, "browse survival: the committed chip is still placed (state %d)" % css.token_state(0))
+    # …and the station is still usable: it can pick a DIFFERENT fighter afterwards.
+    css._on_bay_activated(0)
+    css._on_tile_pressed("mephisto")
+    await create_timer(0.4).timeout
+    check(str(state.slots[0]["character"]) == "mephisto", "browse survival: the station can still re-pick a different fighter afterwards")
+    if is_instance_valid(host):
+        host.queue_free()
+    await process_frame
+
+# --- (B) no stale hand pose on CSS entry ------------------------------------
+
+const HOVER_SPRITE := "res://assets/ui/hand_hover.png"
+const POINT_SPRITE := "res://assets/ui/hand_point.png"
+const CARRY_SPRITE := "res://assets/ui/hand_hold.png"
+
+func entry_pose_suite(vs, hand) -> void:
+    # (B) NO STALE HAND POSE ON CSS ENTRY: the hand's pose must follow the state
+    # at the moment the screen becomes visible / its target changes — never one
+    # input event later. The FOCUS path is proven with NO input event delivered
+    # to the CSS at all.
+    hand.claim_focus()
+    var host = await vs.enter(self)
+    var css = host.char_select()
+    if css == null or not await vs.wait_css_ready(host, self):
+        check(false, "entry pose: a CSS is mounted and idle")
+        return
+    await create_timer(0.4).timeout
+    var tiles: Array = css.get_tiles()
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(), "entry pose: the entry seed does not carry the chip yet")
+    check(hand._focus_anchor == tiles[0].anchor(), "entry pose: the hand's focus target IS the first roster tile")
+    check(css._cursor_in_roster(), "entry pose: the hand's hotspot sits in the roster envelope, on the first tile")
+    check(int(hand.visual) == 2, "entry pose: the hand's pose is the empty pinch on entry (visual %d, no input event delivered)" % int(hand.visual))
+    check(texture_path_of(hand.active_texture()) == HOVER_SPRITE,
+        "entry pose: the hand draws the empty-pinch sprite (got %s)" % texture_path_of(hand.active_texture()))
+    check(hand.active_tip().is_equal_approx(hand.HOVER_TIP),
+        "entry pose: the empty pinch keeps its measured anchor %s" % str(hand.HOVER_TIP))
+    check(texture_path_of(hand.active_texture()) != POINT_SPRITE, "entry pose: the ordinary pointer pose is NOT what the hand draws")
+
+    # The pose follows a TARGET change too: focus the Back area (off the roster),
+    # with no further input, and the ordinary pointer pose is back.
+    var back: Control = css.get_node("ReferenceFrame/Header/BackAction")
+    back.grab_focus()
+    await create_timer(0.6).timeout
+    check(int(hand.visual) == 0 and texture_path_of(hand.active_texture()) == POINT_SPRITE,
+        "entry pose: leaving the roster restores the ordinary pointer pose (visual %d)" % int(hand.visual))
+
+    # The pointer path: a pointer coming to REST on a roster tile draws the empty
+    # pinch without any hover/enter event and without any further input.
+    arm_mouse(hand, tiles[0].get_global_rect().get_center())
+    await create_timer(0.25).timeout
+    check(int(css.get_carried_by()) == -1, "entry pose: a resting pointer starts no carry (Doc 03 §3 hover arming)")
+    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
+        "entry pose: a resting pointer on a roster tile draws the empty pinch, with no further input (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    # …and the APPROVED CARRY grip still takes over the moment the carry starts.
+    tiles[0].mouse_entered.emit()
+    await create_timer(0.1).timeout
+    check(hand.is_carrying() and int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "entry pose: the real carry still draws the approved grip (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    check(css.get_carried_by() == 0 and css.token_state(0) == CARRIED, "entry pose: …and the chip is in the hand")
+    css._leave_field()
+    await create_timer(0.4).timeout
+    check(int(hand.visual) == 2 or int(hand.visual) == 0, "entry pose: the pose settles after the leave (visual %d)" % int(hand.visual))
+    if is_instance_valid(host):
+        host.queue_free()
+    await process_frame
+
+func staged_cancel_fresh(vs, hand) -> void:
+    # Stages 1/3/4 on a FRESH CSS (origin MAIN, nothing committed anywhere).
+    var host = await vs.enter(self)
+    var css = host.char_select()
+    if css == null or not await vs.wait_css_ready(host, self):
+        check(false, "staged cancel: a fresh CSS is mounted and idle")
+        return
+    var cancels := [0]
+    var backs := [0]
+    connect_cancel_counter(cancels)
+    css.back_requested.connect(func() -> void: backs[0] += 1)
+    var origin: String = host.route_origin()
+    check(origin == "main", "staged cancel: a fresh CSS reports the MAIN entry origin (got '%s')" % origin)
+    check(str(host.selection_state.slots[0]["character"]) == "", "staged cancel: the fresh CSS has no committed pick")
+
+    # STAGE 1 — a carried (uncommitted) chip returns home; the screen stays.
+    var idx: int = css._tile_index_of("mephisto")
+    check(idx >= 0, "stage 1: precondition — mephisto is in the roster")
+    arm_mouse(hand, css.get_tiles()[idx].get_global_rect().get_center())
+    css._on_tile_entered(idx)
+    check(css.get_carried_by() == 0 and hand.is_carrying(), "stage 1: precondition — P1's chip is carried")
+    var before: int = cancels[0]
+    await press_escape()
+    check(cancels[0] == before + 1, "stage 1: ONE ui_cancel press reaches the screen exactly once (no double handling)")
+    check(backs[0] == 0, "stage 1: a consumed stage never requests the BACK route")
+    check(css.get_carried_by() == -1 and not hand.is_carrying(), "stage 1: the carried chip leaves the hand")
+    await create_timer(0.3).timeout
+    check(css.token_state(0) == UNASSIGNED, "stage 1: the uncommitted chip returns home (state %d)" % css.token_state(0))
+    check(css.token_view(0).get_parent() == css.token_home_layer(), "stage 1: …and is owned by the home layer")
+    check(host.is_surface_presented("css") and css.is_visible_in_tree(), "stage 1: the screen is STILL the Character Select")
+    check(str(host.selection_state.slots[0]["character"]) == "", "stage 1: cancelling a carry never commits a fighter")
+
+    # STAGE 3 — the pending candidate clears; the screen still stays.
+    check(css.get_candidate() >= 0, "stage 3: precondition — a candidate is still pending (%d)" % css.get_candidate())
+    await press_escape()
+    check(css.get_candidate() == -1, "stage 3: the pending candidate/preview is cleared")
+    check(backs[0] == 0, "stage 3: clearing the candidate never requests the BACK route")
+    check(host.is_surface_presented("css") and css.is_visible_in_tree(), "stage 3: the screen is STILL the Character Select")
+
+    # STAGE 4 — nothing carried/committed/pending -> the BACK route, to ORIGIN.
+    await press_escape()
+    check(backs[0] == 1, "stage 4: the BACK route is requested exactly once")
+    var home = await vs.wait_for_scene(self, "home.tscn")
+    check(home != null, "stage 4: a fresh CSS (origin MAIN) back route leaves to Main")
+    if css != null and is_instance_valid(css):
+        check(str(host.selection_state.slots[0]["character"]) == "", "stage 4: the route never invented a commit")
+    if is_instance_valid(host):
+        host.queue_free()
+    if home != null:
+        home.queue_free()
+    await process_frame
+
+func staged_cancel_from_results(vs, hand) -> void:
+    # Stage 2 + the origin-correct BACK route: a CSS PUSHed from Results
+    # (CHANGE FIGHTERS) records the RESULTS origin, so its back route must
+    # restore the Results host mounted beneath it — never Main.
+    var host = await vs.enter(self)
+    var host_id: int = host.get_instance_id()
+    var arena = await vs.launch(self, host, ["ggb", "ggb", "", ""], "sky")
+    check(arena != null, "staged cancel/results: a match launches on the production route")
+    if arena == null:
+        return
+    await vs.resolve(self, arena, [1])
+    var post = await vs.wait_for_flow(self, host_id)
+    check(post != null, "staged cancel/results: the completed match RETURNs to the frontend")
+    if post == null:
+        return
+    var change = post.post_match().result_screen.find_child("ChangeFighters", true, false)
+    check(change != null, "staged cancel/results: Results offers CHANGE FIGHTERS")
+    if change == null:
+        return
+    change.pressed.emit()
+    var pushed: bool = await vs.wait_for(self, func() -> bool: return post.is_surface_presented("css"), 240)
+    check(pushed, "staged cancel/results: CHANGE FIGHTERS PUSHes the Character Select")
+    if not pushed:
+        return
+    var css = post.char_select()
+    var idle: bool = await vs.wait_for(self, func() -> bool: return css.get_phase() == 1 and css._guard <= 0.0, 240)
+    check(idle, "staged cancel/results: the pushed CSS leaves its entry guard")
+    var origin: String = post.route_origin()
+    check(origin == "results", "the CSS entered from Results records the RESULTS origin (got '%s')" % origin)
+    check(str(post.selection_state.slots[0]["character"]) == "ggb", "the pushed CSS keeps the committed fighter")
+    # Normalise the transient roster interaction through the screen's own
+    # cancellation transition so the staged sequence starts from a known state.
+    css._leave_field()
+    await create_timer(0.1).timeout
+    check(css.get_carried_by() == -1 and css.get_candidate() == -1,
+        "the staged sequence starts with nothing carried or pending (carry %d, candidate %d)" % [css.get_carried_by(), css.get_candidate()])
+    # The pointer stays inside the populated roster envelope for the whole
+    # sequence: a carried chip must survive the mouse envelope rule.
+    var ggb_index: int = css._tile_index_of("ggb")
+    check(ggb_index >= 0, "the committed fighter owns a roster tile (idx %d)" % ggb_index)
+    arm_mouse(hand, css.get_tiles()[ggb_index].get_global_rect().get_center())
+    check(hand.mode == 0, "the pointer modality owns the hand for the staged sequence")
+
+    var cancels := [0]
+    var backs := [0]
+    connect_cancel_counter(cancels)
+    css.back_requested.connect(func() -> void: backs[0] += 1)
+
+    # STAGE 2 — a real pad B takes the committed chip back into the hand.
+    var before: int = cancels[0]
+    await press_pad_b()
+    check(cancels[0] == before + 1, "stage 2: ONE pad-B press reaches the screen exactly once (no double handling)")
+    check(backs[0] == 0, "stage 2: a consumed stage never requests the BACK route")
+    check(str(post.selection_state.slots[0]["character"]) == "", "stage 2: the commit is UNDONE (chip taken back)")
+    check(css.get_carried_by() == 0, "stage 2: the chip is back in the hand (carried_by %d)" % css.get_carried_by())
+    check(css.token_state(0) == CARRIED, "stage 2: the token FSM reads CARRIED (state %d)" % css.token_state(0))
+    check(hand.is_carrying() and hand.visual == 1, "stage 2: the carry presentation is active")
+    check(str(css.token_view(0).get_parent().name) == "CursorCarryLayer", "stage 2: the taken-back chip is owned by the carry layer")
+    check(post.is_surface_presented("css") and post.active_surface() == "css", "stage 2: the screen NEVER left the Character Select")
+    check(css.get_candidate() >= 0, "stage 2: the taken-back fighter stays the candidate (%d)" % css.get_candidate())
+    # The commit is gone for the ACTIVE player only: the other station keeps its
+    # pick (only the active player's staged cancel is peeled).
+    check(str(post.selection_state.slots[1]["character"]) == "ggb", "stage 2: the other station keeps its committed pick")
+
+    # STAGE 1 — the taken-back chip is cancelled back home.
+    await press_pad_b()
+    check(backs[0] == 0, "stage 1 (results origin): the carry cancel never requests the BACK route")
+    check(css.get_carried_by() == -1 and not hand.is_carrying(), "stage 1 (results origin): the carried chip is cancelled")
+    check(post.is_surface_presented("css"), "stage 1 (results origin): the screen is STILL the Character Select")
+
+    # STAGE 3 — the pending candidate clears (asserted immediately: the deferred
+    # semantic-focus settle may clear a candidate on its own later).
+    check(css.get_candidate() >= 0, "stage 3 (results origin): precondition — the taken-back fighter is the candidate (%d)" % css.get_candidate())
+    await press_pad_b()
+    check(css.get_candidate() == -1, "stage 3 (results origin): the pending candidate is cleared")
+    check(post.is_surface_presented("css") and post.active_surface() == "css", "stage 3 (results origin): still the Character Select")
+    await create_timer(0.3).timeout
+    check(css.token_state(0) == UNASSIGNED, "stage 1 settle (results origin): the uncommitted chip went home (state %d)" % css.token_state(0))
+    check(str(post.selection_state.slots[0]["character"]) == "", "the active player's pick stays taken back (nothing re-commits on its own)")
+
+    # STAGE 4 — nothing pending: the BACK route resolves the RECORDED origin.
+    check(backs[0] == 0, "no earlier stage requested the route (backs %d)" % backs[0])
+    var scene_before = self.current_scene
+    await press_pad_b()
+    check(backs[0] == 1, "stage 4: the BACK route is requested exactly once")
+    var back_to_results: bool = await vs.wait_for(self, func() -> bool: return post.is_surface_presented("postmatch"), 240)
+    check(back_to_results, "stage 4: the CSS Back route from the RESULTS origin RESTORES Results")
+    check(post.active_surface() == "postmatch", "stage 4: Results is the active surface again (not Main)")
+    check(self.current_scene == scene_before, "stage 4: the route did NOT switch scene to Main")
+    post.queue_free()
+    await process_frame

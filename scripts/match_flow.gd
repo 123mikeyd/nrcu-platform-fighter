@@ -766,8 +766,22 @@ func _on_css_ready() -> void:
     push_surface(SURFACE_SSS)
 
 func _on_css_back() -> void:
+    # The CSS BACK route goes to the screen's ENTRY ORIGIN, never a hardcoded
+    # Main (Doc 02 §5): a CSS PUSHed from Results (CHANGE FIGHTERS) has the
+    # Results host still mounted beneath it, so Back restores THAT surface. A
+    # fresh CSS (origin Main) has nothing beneath and leaves to Main.
     _last_route_error = ""
+    if _css_entry_origin() == ORIGIN_RESULTS and _route_stack.size() > 1:
+        pop_surface()
+        return
     _leave_to_home()
+
+func _css_entry_origin() -> String:
+    # The origin the flow recorded for the ACTIVE CSS: the router's own typed
+    # return stack (what route_origin() reports to the acceptance harnesses).
+    if flow == null or _active_surface != SURFACE_CSS:
+        return ""
+    return route_origin()
 
 func _on_sss_confirmed(id: String) -> void:
     _begin_launch(str(id))

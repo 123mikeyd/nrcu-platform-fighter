@@ -17,6 +17,13 @@ extends Control
 #     the state instead of re-applying defaults.
 #   * candidate fighter != committed fighter. Hover/focus only changes the
 #     candidate; only a confirm (click / semantic accept) edits the state.
+#   * ui_cancel (Esc / pad B / the Back control) is STAGED: it cancels a carried
+#     chip, then takes the ACTIVE player's committed chip back into the hand
+#     (the screen stays — the player can re-place or re-browse), then clears a
+#     pending candidate, and only then follows the BACK route. Focus/pointer
+#     movement may only cancel an IN-FLIGHT carry: it never takes a committed
+#     chip back. The BACK route itself belongs to the flow, which resolves the
+#     screen's ENTRY ORIGIN (Main, or Results when the CSS was PUSHed from it).
 #   * fighter selection NEVER silently turns an EMPTY slot into a Human one
 #     (Doc 04 §6): kind is changed in the PlayerBay.
 #   * token state is screen-local and complete
@@ -357,6 +364,9 @@ func open_with(state) -> void:
 	_refresh()
 	_enter_choreography()
 	_seed_focus()
+	# The hand's POSE is part of the entry state: sync it now (never on the next
+	# input event — the owner-reported stale ordinary pose on CSS entry).
+	_sync_cursor_pose()
 
 func reopen() -> void:
 	# Back from the stage page: every commit survives; transient carry does not.
@@ -373,6 +383,7 @@ func reopen() -> void:
 	_sync_devices()
 	_refresh()
 	_seed_focus()
+	_sync_cursor_pose()
 
 func reset() -> void:
 	_phase = Phase.IDLE
@@ -381,6 +392,7 @@ func reset() -> void:
 	_clear_carry()
 	_sync_devices()
 	_refresh()
+	_sync_cursor_pose()
 
 func play_exit() -> void:
 	if _phase == Phase.EXITING:
@@ -776,6 +788,7 @@ func _begin_carry(player: int) -> void:
 	_tokens[player].set_state(TokenView.State.CARRIED)
 	if cursor != null:
 		cursor.set_carry(_tokens[player])
+	_sync_cursor_pose()
 	FrontendEvents.emit_token_pickup(player)
 
 func _return_carried() -> void:
@@ -860,6 +873,33 @@ func _clear_carry() -> void:
 			token.visible = false
 	if cursor != null:
 		cursor.clear_carry()
+	_sync_cursor_pose()
+
+func _cursor_in_roster() -> bool:
+	# The hand's authoritative hotspot sits inside the populated roster envelope
+	# (the same boundary the carry uses): "the hand is on a chip it does not hold
+	# yet" — true whether the hand is anchored on a tile (FOCUS entry seed) or
+	# resting on one (MOUSE).
+	if cursor == null or _tiles.is_empty():
+		return false
+	return roster_bounds().has_point(cursor.hotspot)
+
+func _sync_cursor_pose() -> void:
+	# Doc 03 §5/§6 + the carry-art contract: the hand's POSE follows THIS screen's
+	# state immediately — on entry, on every candidate/focus/target change and
+	# after every state transition — never on the next input event (owner report:
+	# the hand sat on the first roster tile still drawing the ordinary pose).
+	#   carrying            -> CARRY  (the approved grip that holds the chip)
+	#   over a browsed hold -> HOVER  (the empty pinch: over a chip not yet held)
+	#   nothing             -> REGULAR (the ordinary pointer)
+	if cursor == null or not cursor.has_method("set_visual_mode"):
+		return
+	if _carried_by >= 0:
+		cursor.set_visual_mode(1)
+	elif _candidate >= 0 or _cursor_in_roster():
+		cursor.set_visual_mode(2)
+	else:
+		cursor.set_visual_mode(0)
 
 func _cancel_roster_interaction() -> void:
 	# THE one shared cancellation transition (ledger C-005/C-006): candidate
@@ -920,6 +960,9 @@ func _update_candidate_visuals() -> void:
 	for i in _tiles.size():
 		_tiles[i].set_candidate(i == _candidate)
 	_update_active_preview()
+	# The hand's pose follows the candidate/token state at the moment it changes
+	# (never at the next input event).
+	_sync_cursor_pose()
 
 func _update_active_preview() -> void:
 	# Doc 04 §12 / ledger C-047: the active bay large-previews the candidate
@@ -1081,8 +1124,62 @@ func _on_start_shortcut() -> void:
 	_on_ready_pressed()
 
 func _on_back_pressed() -> void:
+	# The visible Back control and the semantic ui_cancel are the SAME staged
+	# cancellation (Doc 04 staged cancel): the control must not bypass stages
+	# 1-3 and jump straight to the route.
+	_cancel_or_back()
+
+func _cancel_or_back() -> void:
+	# ONE press peels exactly ONE layer (Doc 04 Character Select grammar):
+	#   1. a CARRIED (uncommitted) chip -> the token FSM's return path;
+	#   2. else the ACTIVE player's COMMITTED pick -> back into the hand;
+	#   3. else the pending candidate/preview -> cleared (back to the roster);
+	#   4. only then the BACK route (whose origin the flow owns).
+	# A screen that is still entering/exiting keeps the pre-existing FLAT
+	# behaviour: no stage is peeled while its own transition is in flight.
+	if _phase == Phase.ENTERING or _phase == Phase.EXITING:
+		_flat_back()
+		return
+	if _carried_by >= 0:
+		_return_carried()
+		return
+	if _has_committed_pick(_active):
+		_take_back_committed(_active)
+		return
+	if _candidate >= 0:
+		_set_candidate(-1)
+		return
+	_flat_back()
+
+func _flat_back() -> void:
+	# The pre-existing flat behaviour: drop the transient carry and request the
+	# BACK route. The FLOW resolves the screen's entry origin, never this screen.
 	_clear_carry()
 	back_requested.emit()
+
+func _has_committed_pick(player: int) -> bool:
+	# A COMMITTED pick is a non-EMPTY player with a fighter in the persistent
+	# state; a candidate is only a preview and never counts (Doc 04 §12).
+	if _state == null or player < 0 or player >= _state.slots.size():
+		return false
+	var slot: Dictionary = _state.slots[player]
+	if str(slot.get("kind", "empty")) == "empty":
+		return false
+	return str(slot.get("character", "")) != ""
+
+func _take_back_committed(player: int) -> void:
+	# Stage 2: UNDO the commit and put the chip back in the hand — the token
+	# FSM's carry presentation over the taken-back fighter, with that tile left
+	# as the candidate so the player can re-place it or keep browsing. The
+	# screen NEVER leaves on this stage (the stage-4 route owns that).
+	if _state == null or player < 0 or player != _active:
+		return
+	var slot: Dictionary = _state.slots[player]
+	var tile_index := _tile_index_of(str(slot.get("character", "")))
+	slot["character"] = ""
+	_begin_carry(player)          # lifts the token out of its placed slot
+	_set_candidate(tile_index)    # the taken-back fighter stays the candidate
+	_refresh()
 
 func _process(delta: float) -> void:
 	if _guard > 0.0:
@@ -1090,6 +1187,12 @@ func _process(delta: float) -> void:
 	if _phase == Phase.ENTERING and _guard <= 0.0:
 		_phase = Phase.IDLE
 	_enforce_roster_envelope()
+	if is_visible_in_tree():
+		# The hand's pose tracks THIS screen's state every frame while the screen
+		# owns the cursor: a pointer coming to rest on a roster tile or a focus
+		# target change is reflected immediately, never at the next input event.
+		# A hidden screen never writes to the shared cursor.
+		_sync_cursor_pose()
 
 # --- keyboard / controller: the semantic path (Doc 03 §7/§11/§13) ---------
 # C-050/C-051: the directional topology is RE-DERIVED from the resolved
@@ -1379,10 +1482,12 @@ func _on_semantic_accept() -> void:
 		return
 
 func _on_semantic_cancel() -> void:
-	# §11 Back matrix: CSS ui_cancel -> Main.
+	# §11 Back matrix + Doc 04 staged cancel: keyboard Esc and pad B reach this
+	# through FrontendInput.cancel_pressed (one signal per physical press), and
+	# it runs the SAME staged handler as the visible Back control.
 	if not is_visible_in_tree() or _phase == Phase.EXITING:
 		return
-	_on_back_pressed()
+	_cancel_or_back()
 
 # --- test surface --------------------------------------------------------
 func get_tiles() -> Array:

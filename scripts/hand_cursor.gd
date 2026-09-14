@@ -33,8 +33,9 @@ extends Control
 #
 # hover = the artist's EMPTY PINCH (sheet cell 2 of hand_sheet_v3.png,
 # hand_hover.png, HOVER_TIP) — a hand hovering over a token it does not yet
-# hold. It is kept loaded and anchored for that future use and is NOT drawn by
-# the carry path any more.
+# hold. It is the Visual.HOVER pose (the carry-art contract keeps it out of the
+# carry path itself); a screen syncs the pose to its own state on entry and on
+# every target/focus change.
 #
 # hand_grab.png stays available but is unused by the carry path.
 #
@@ -51,7 +52,7 @@ signal hover_changed(target: Control)
 signal modality_changed(mouse_mode: bool)
 
 enum Mode { MOUSE, FOCUS }
-enum Visual { REGULAR, CARRY }
+enum Visual { REGULAR, CARRY, HOVER }
 
 # §5: frame-rate-invariant critically damped response, closed form.
 # omega = 31.5 rad/s puts the acceptance windows at ~124–126 ms for 90%
@@ -181,6 +182,10 @@ func begin_screen(_screen_id: String) -> void:
     # there are no hidden cursor-owned tokens.
     if _carrying_token != null and not is_instance_valid(_carrying_token):
         clear_carry()
+    # The pose belongs to the screen that owns the cursor: a new screen starts
+    # from the ordinary pose and syncs it to its own state on entry (never the
+    # previous screen's carry/hover pinch left behind).
+    set_visual_mode(Visual.REGULAR)
     if mode == Mode.FOCUS and _focus_anchor == null:
         # Focus continues across the transition only if the new screen sets a
         # focus target (authored default selection).
@@ -436,11 +441,16 @@ func active_texture() -> Texture2D:
         # separate object in the CursorCarryLayer. The empty-pinch sprite is
         # the HOVER pose (hover_texture()) and no carry path draws it.
         return _tex_hold
+    if visual == Visual.HOVER and _tex_hover != null:
+        # The EMPTY PINCH: the hand over a roster chip it does not hold yet
+        # (entry-focus seed / a pointer resting on a tile before the carry
+        # starts). The carry path never draws it.
+        return _tex_hover
     return _tex_point
 
 func hover_texture() -> Texture2D:
-    # The HOVER pose: the artist's empty pinch (hand_hover.png). Kept reachable
-    # for the "hand over a token it does not yet hold" state; not the carry.
+    # The HOVER pose: the artist's empty pinch (hand_hover.png) — what the hand
+    # draws while it is over a token it does not yet hold.
     return _tex_hover
 
 func active_tip() -> Vector2:
@@ -448,6 +458,8 @@ func active_tip() -> Vector2:
         return TIP_PRESS
     if visual == Visual.CARRY:
         return TIP_CARRY
+    if visual == Visual.HOVER:
+        return HOVER_TIP
     return TIP_POINT
 
 func carry_pinch_point() -> Vector2:
