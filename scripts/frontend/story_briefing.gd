@@ -22,12 +22,16 @@ extends Control
 # asserted not to trigger by tests/test_fighter_presentation.gd).
 
 signal chosen(id: String)
+signal start_requested(fighter_id: String)
+signal back_requested
+signal replay_requested(fighter_id: String)
+signal change_fighter_requested
+signal menu_requested
 signal exit_finished
 
 const Tokens = preload("res://scripts/ui_tokens.gd")
 const Roster = preload("res://scripts/roster.gd")
 const PortraitData = preload("res://scripts/frontend/portrait_data.gd")
-const TileScene = preload("res://scenes/components/FighterTile.tscn")
 const RenderViewScript = preload("res://scripts/frontend/fighter_render_view.gd")
 const Factory = preload("res://scripts/frontend/fighter_presentation_factory.gd")
 const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
@@ -41,6 +45,7 @@ const EXIT_LOCK := 0.5
 
 var _ids: Array[String] = []
 var _tiles: Array = []
+var _compat_source: Control = null
 var _selected := ""
 var _render_view: Control = null
 var _enemy_render_resolved := false
@@ -69,7 +74,7 @@ var _ready_state := true
 @onready var _split_rule: Panel = $ReferenceFrame/BriefingBody/SplitRule
 @onready var _vs: Label = $ReferenceFrame/BriefingBody/VsLabel
 @onready var _fighter_label: Label = $ReferenceFrame/BriefingBody/FighterZone/FighterLabel
-@onready var _roster_strip: Control = $ReferenceFrame/BriefingBody/FighterZone/RosterStrip
+
 @onready var _fighter_name: Label = $ReferenceFrame/BriefingBody/FighterZone/FighterName
 @onready var _render_holder: Control = $ReferenceFrame/BriefingBody/FighterZone/RenderHolder
 @onready var _action: Button = $ReferenceFrame/ActionButton
@@ -193,6 +198,10 @@ func _on_semantic_cancel() -> void:
 
 func _on_back_pressed() -> void:
     FrontendEvents.emit_back("story")
+    if _ready_state:
+        back_requested.emit()
+    else:
+        menu_requested.emit()
 
 func _on_back_focused() -> void:
     FocusGraph.track(self, _back)
@@ -212,7 +221,12 @@ func _on_action_pressed() -> void:
     # id, so an invalid fighter can never launch.
     if _selected == "":
         return
-    FrontendEvents.emit_confirm("story_start")
+    if _ready_state:
+        FrontendEvents.emit_confirm("story_start")
+        start_requested.emit(_selected)
+    else:
+        FrontendEvents.emit_confirm("story_replay")
+        replay_requested.emit(_selected)
 
 func _on_action_focused() -> void:
     # Structural focus signal (never color alone): a 2 px accent rule caps the
@@ -303,23 +317,6 @@ func build(playable_ids: Array = []) -> void:
         for id in playable_ids:
             if str(id) != "":
                 _ids.append(str(id))
-    for tile in _tiles:
-        if is_instance_valid(tile):
-            tile.queue_free()
-    _tiles.clear()
-    for i in _ids.size():
-        var id := _ids[i]
-        var tile = TileScene.instantiate()
-        tile.name = "FighterTile%d" % i
-        tile.position = Vector2(i * (TILE_W + TILE_GAP), 0.0)
-        _roster_strip.add_child(tile)
-        tile.set_tile_size(Vector2(TILE_W, TILE_H))
-        tile.setup(id, Roster.display_name(id).to_upper(), PortraitData.portrait_texture(id))
-        tile.focus_mode = Control.FOCUS_ALL
-        tile.tile_pressed.connect(_select_by_id)
-        tile.focus_entered.connect(_on_tile_focused.bind(i))
-        tile.mouse_entered.connect(_select_by_id.bind(id))
-        _tiles.append(tile)
     if _selected == "" or not _ids.has(_selected):
         set_selected_id("turbofit" if _ids.has("turbofit") else (_ids[0] if not _ids.is_empty() else ""))
     _refresh_selection()
@@ -412,8 +409,6 @@ func _selected_index() -> int:
     return index if index >= 0 else 0
 
 func _refresh_selection() -> void:
-    for i in _tiles.size():
-        _tiles[i].set_candidate(_ids[i] == _selected)
     var valid := _selected != ""
     _fighter_name.text = Roster.display_name(_selected).to_upper() if valid else "SELECT A FIGHTER"
     _fighter_name.add_theme_color_override("font_color", Tokens.CREAM if valid else Tokens.CREAM_DIM)
@@ -537,10 +532,20 @@ func back_button() -> Button:
     return _back
 
 func roster_tiles() -> Array:
+    if _compat_source != null and is_instance_valid(_compat_source):
+        return _compat_source.roster_tiles()
     return _tiles.duplicate()
 
 func roster_ids() -> Array:
+    if _compat_source != null and is_instance_valid(_compat_source):
+        return _compat_source.roster_ids()
     return _ids.duplicate()
+
+func set_compat_source(source: Control) -> void:
+    # The Briefing no longer embeds the roster. This narrow read-only bridge keeps
+    # the pre-WP-4 test surface able to inspect the shared Story Select tiles
+    # without reintroducing a second selection owner or visible roster strip.
+    _compat_source = source
 
 func selected_fighter_id() -> String:
     return _selected
