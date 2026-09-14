@@ -47,6 +47,9 @@ func run():
     # --- the result / retry / replay / back contract on one encounter ---
     var chosen: String = playable[0]
     var host = await story.enter(self, chosen)
+    # Capture the host identity while it lives: the launch handshake frees it
+    # (Doc 02 §5/§6) and the result wait must not touch the freed node.
+    var host_id: int = host.get_instance_id()
     var arena = await story.start_encounter(self, host)
     check(arena != null, "the encounter launches for the result contract")
     if arena != null:
@@ -55,7 +58,7 @@ func run():
         for i in 3:
             arena.player_one._handle_blast_zone()
         check(arena.story_state == "lost", "human stock exhaustion shows the loss state")
-        var loss_host = await story.wait_for_flow(self, host.get_instance_id())
+        var loss_host = await story.wait_for_flow(self, host_id)
         check(loss_host != null, "the loss returns to the Story Result host")
         if loss_host != null:
             var loss_briefing = loss_host.story_briefing()
@@ -65,6 +68,7 @@ func run():
             check(body != null and not body.is_visible_in_tree(), "the loss result locks the briefing selection away")
             check(loss_host.story_selection_id() == chosen, "the loss keeps the played fighter")
             # Retry preserves the selection
+            var loss_host_id: int = loss_host.get_instance_id()
             var retry = await story.start_encounter(self, loss_host)
             check(retry != null and retry.player_one.character_id == chosen, "Retry preserves selection")
             if retry != null:
@@ -73,7 +77,7 @@ func run():
                     fighter.set_physics_process(false)
                 retry.player_two.receive_hit(1000, Vector3.RIGHT, 100)
                 check(retry.story_state == "complete", "lethal damage completes the retried encounter")
-                var win_host = await story.wait_for_flow(self, loss_host.get_instance_id())
+                var win_host = await story.wait_for_flow(self, loss_host_id)
                 check(win_host != null, "the win returns to the Story Result host")
                 if win_host != null:
                     var win_briefing = win_host.story_briefing()

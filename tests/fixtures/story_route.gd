@@ -64,11 +64,22 @@ func wait_for_post_match(tree: SceneTree, previous_id: int = 0) -> Node:
                 return child
     return null
 
-func wait_for_flow(tree: SceneTree, previous_id: int = 0) -> Node:
+func wait_for_flow(tree: SceneTree, previous: Variant = 0) -> Node:
     # Waits for a MatchFlow host — optionally a NEW one (post-match re-entry).
     # Iterates the tree: duplicate sibling names get auto-suffixed, and a test
     # that mounted a host manually outlives the route (the engine only frees the
     # CURRENT scene on a scene change).
+    #
+    # `previous` is the host being left behind: its instance id (captured while
+    # it was alive) or the node itself. A node the route ALREADY FREED is
+    # resolved safely here — calling a method on a freed instance is a dangling
+    # access that faults the engine intermittently (the REPLAY/RETRY handoff in
+    # test_story_results), so callers must never do it.
+    var previous_id := 0
+    if typeof(previous) == TYPE_INT:
+        previous_id = int(previous)
+    elif is_instance_valid(previous):
+        previous_id = (previous as Node).get_instance_id()
     for i in 300:
         await tree.process_frame
         var newest: Node = null

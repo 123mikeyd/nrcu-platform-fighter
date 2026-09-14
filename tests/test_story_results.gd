@@ -64,6 +64,11 @@ func run():
     if result_host == null:
         quit(1)
         return
+    # The launch handshake frees this host (Doc 02 §5/§6): capture its identity
+    # while it is alive and pass THAT to the next wait. Reading an instance id
+    # off the node after the route freed it is a dangling-instance access (the
+    # engine faults on it intermittently) and never a route requirement.
+    var result_host_id: int = result_host.get_instance_id()
     var cursor_layer = root.get_node_or_null("Cursor")
     check(cursor_layer != null and cursor_layer.hand != null and not cursor_layer.hand.is_carrying(),
         "results cursor does not carry a token")
@@ -94,7 +99,7 @@ func run():
         story.run_ready(replay)
         for i in 3: replay.player_one._handle_blast_zone()
         check(replay.story_state == "lost" and replay.match_over, "human stock exhaustion shows loss")
-        var loss_host = await story.wait_for_flow(self, result_host.get_instance_id())
+        var loss_host = await story.wait_for_flow(self, result_host_id)
         check(loss_host != null, "the loss returns to the Story Result host")
         if loss_host != null:
             check(str(loss_host.story_briefing().title_label().text) != "your pretty cool"
