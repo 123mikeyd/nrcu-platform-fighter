@@ -17,7 +17,8 @@ extends SceneTree
 #   * PLAY (home.gd's own handler) reaches MatchFlow;
 #   * CSS READY -> SSS -> confirm freezes a MatchLaunchConfig whose fields match
 #     the selected state, gameplay accepts it and the match starts;
-#   * gameplay end re-enters the MatchFlow host with the RESULTS origin, and the
+#   * gameplay end RETURNs the typed end-state payload to the MatchFlow host,
+#     whose PostMatch surface presents the immutable MatchResult, and the
 #     completed arena is torn down before post-match configuration.
 
 const StateScript = preload("res://scripts/match_flow_state.gd")
@@ -249,18 +250,14 @@ func part_b_production_route() -> void:
         check(arena.active_level == "sky", "the confirmed stage reaches the match")
         check(bool(arena._launched_from_flow), "gameplay knows it was launched from the flow")
 
-    # --- gameplay end -> post-match configuration back in the flow ---------
+    # --- gameplay end -> PostMatch in the flow (WP-0 step 5) ---------------
     if arena != null and is_instance_valid(arena):
         for fighter in arena.fighters:
             fighter.set_physics_process(false)
         for index in [1, 2, 3]:
             arena.fighters[index].stocks = 0
             arena._on_fighter_eliminated(arena.fighters[index])
-        check(arena.match_over and arena.result_panel.visible, "the match resolves into the shipped Results screen")
-        var change = arena.find_child("ChangeFighters", true, false)
-        check(change != null and change.visible, "Results offers Change Fighters")
-        if change != null:
-            change.pressed.emit()
+        check(arena.match_over, "the match resolves")
 
     var reentry = null
     for i in 300:
@@ -269,13 +266,27 @@ func part_b_production_route() -> void:
         if node != null and node.get_instance_id() != prior_id:
             reentry = node
             break
-    check(reentry != null, "Change Fighters re-enters the MatchFlow host for post-match configuration")
-    check(not is_instance_valid(arena), "the completed gameplay is torn down before post-match configuration")
+    check(reentry != null, "the completed match RETURNs to the MatchFlow host")
+    check(not is_instance_valid(arena), "the completed gameplay is torn down before the PostMatch surface is up")
     if reentry != null:
+        check(reentry.active_surface() == "postmatch", "the RETURN presents the PostMatch surface")
+        check(reentry.post_match() != null and reentry.post_match_result() != null,
+            "the host presents the immutable MatchResult gameplay handed over")
         check(reentry.route_origin() == "results", "the re-entry records the RESULTS origin")
-        check(reentry.active_surface() == "css", "post-match configuration resumes on Character Select")
+        var winner = reentry.post_match_result().winner_entry()
+        # The survivor is P1 (the committed ggb fighter): fighters[1..3] were
+        # eliminated above, and player_index is slot index + 1.
+        check(int(winner.get("player_index", 0)) == 1, "the payload declares the last survivor (P1) the winner")
+        check(str(winner.get("fighter_id", "")) == "ggb", "the winning entry is the committed fighter")
+        var change = reentry.post_match().result_screen.find_child("ChangeFighters", true, false)
+        check(change != null and change.visible, "Results offers Change Fighters")
+        if change != null:
+            change.pressed.emit()
+        var pushed_css: bool = await wait_for(func() -> bool: return reentry.active_surface() == "css", 180)
+        check(pushed_css, "Change Fighters PUSHes the CSS with origin RESULTS")
+        check(reentry.route_origin() == "results", "the CSS route records the RESULTS origin")
         check(reentry.surface_root_alpha("css") > 0.0, "the re-entered CSS is presented visibly")
-        check(reentry.presented_surfaces() == ["css"], "exactly one surface is presented after the re-entry")
+        check(reentry.presented_surfaces() == ["css"], "exactly one surface is presented after the push")
         check(root.get_node_or_null("MainArena") == null, "no arena exists during post-match configuration")
         reentry.queue_free()
         await frames(3)

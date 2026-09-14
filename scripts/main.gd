@@ -3,7 +3,7 @@ extends Node3D
 # becomes gameplay"). The player-facing routes no longer load this scene
 # directly — scenes/match_flow.tscn hosts Character Select / Stage Select / the
 # Story Encounter Briefing and constructs the arena with an immutable
-# MatchLaunchConfig (WP-0 steps 3-4).
+# MatchLaunchConfig (WP-0 steps 3-5).
 #
 # Two ways in:
 #   * the MatchFlow router sets `launch_config` BEFORE tree entry; _ready then
@@ -14,9 +14,16 @@ extends Node3D
 #   * a direct load (tests, F10 debug launcher) keeps the shipped behaviour:
 #     AppState.enter_mode picks the entry route.
 #
-# The legacy Char/Stage/Result panels below are still constructed here so the
-# debug launcher and the existing tests keep working, but they are NOT part of
-# the production routes any more (removing them outright is WP-0 steps 6-7).
+# WP-0 step 5: gameplay OWNS NO RESULTS SCREEN. At match resolution it produces
+# the immutable end-state data (MatchResult / StoryOutcome, Doc 02 §4) and hands
+# it to the router through the typed post-match payload (AppState
+# .return_to_post_match) — the RETURN verb of Doc 02 §5 — which tears this arena
+# down and lets the frontend present PostMatch. No frame of this scene survives
+# behind Results, and no Results surface ever reads a live fighter.
+#
+# The legacy Char/Stage panels below are still constructed here so the debug
+# launcher and the existing tests keep working, but they are NOT part of the
+# production routes any more (removing them outright is WP-0 steps 7).
 # The Story panel is already gone: the Story route is frontend-owned and what
 # remains here is the Story state machine over the launch config's payload.
 
@@ -28,7 +35,6 @@ const SetupScript = preload("res://scripts/match_setup.gd")
 const DemoStyle = preload("res://scripts/demo_style.gd")
 const StageSelectScript = preload("res://scripts/stage_select.gd")
 const CharSelectScript = preload("res://scripts/char_select.gd")
-const ResultScreenScript = preload("res://scripts/result_screen.gd")
 const MatchResultScript = preload("res://scripts/match_result.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
 const SelectionStateScript = preload("res://scripts/match_selection_state.gd")
@@ -49,8 +55,6 @@ var _launched_from_flow := false
 var ready_remaining := 0.0
 var go_remaining := 0.0
 var ready_label: Label
-var result_panel: Control
-var result_screen: Control
 
 var fighters: Array = []
 var active_level := "debug"
@@ -84,7 +88,6 @@ var player_one: CharacterBody3D
 var player_two: CharacterBody3D
 var p1_label: Label
 var p2_label: Label
-var winner_label: Label
 var match_over := false
 # Elimination order observed during the match (player_index sequence). The
 # result snapshot is built from it at resolution, before any reset mutates
@@ -160,9 +163,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
             stage_select.request_back()
         elif setup.visible: back_to_menu()
         else: _leave_story()
-    elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R and match_over:
-        _reset_match()
-    # Results owns its own reveal/accelerate input (see result_screen.gd).
+    # WP-0 step 5: the raw R rematch bypass is REMOVED. A resolved match hands
+    # its end-state payload to the frontend, which owns the visible Results
+    # actions (Doc 06 §9: no hidden raw rematch; Doc 09 WP-5 "remove host raw R
+    # bypass"). Results input is owned by the PostMatch surface.
 
 func back_to_menu() -> void:
     show_setup()
@@ -170,7 +174,6 @@ func back_to_menu() -> void:
 
 func show_setup() -> void:
     _cancel_ready()
-    result_panel.hide()
     story_state = ""
     _story_encounter = false
     if stage_panel != null:
@@ -188,7 +191,6 @@ func show_setup() -> void:
     for projectile in get_tree().get_nodes_in_group("projectiles") + get_tree().get_nodes_in_group("goo_puddles"):
         projectile.queue_free()
     match_over = false
-    winner_label.visible = false
     setup.show()
     setup.find_child("StartMatchButton",true,false).grab_focus()
 
@@ -222,7 +224,6 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
     teams_enabled = teams
     _elimination_order.clear()
     match_over = false
-    winner_label.visible = false
     var roster = load("res://scripts/roster.gd")
     var palette_counts: Dictionary = {}
     for i in range(slots.size()):
@@ -248,7 +249,6 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
     player_one = fighters[0]
     player_two = fighters[1]
     setup.hide()
-    result_panel.hide()
     bobo_health_bar.visible = bobo_encounter
     _begin_ready()
     return true
@@ -305,21 +305,18 @@ func _begin_story_encounter(payload: Dictionary) -> void:
     player_two.facing = float(payload.get("enemy_facing", -1.0))
     _begin_ready()
 
-func _reenter_match_flow(entry: String) -> void:
-    # Gameplay end -> the frontend owns post-match (Doc 02 §1/§5): the flow is
-    # re-entered for post-match VS configuration ("vs:results" / "vs:stage") or
-    # for the Story Result ("story:result:won" / ":lost"). The route entry rides
-    # the existing mode string until WP-0 step 6 introduces the MatchResult /
-    # StoryOutcome payload; this scene change tears the completed arena down
-    # before the flow returns.
-    result_panel.hide()
-    AppStateScript.enter_mode = str(entry)
+func _return_to_post_match(payload: Dictionary) -> void:
+    # Gameplay end -> the frontend owns post-match (Doc 02 §1, §5 RETURN): the
+    # typed end-state payload (MatchResult / StoryOutcome) is handed to the
+    # MatchFlow router, and this scene change tears the completed arena down
+    # before the PostMatch surface becomes interactive. Gameplay never shows a
+    # Results screen and never reads a live fighter for one.
+    AppStateScript.return_to_post_match(payload)
     get_tree().change_scene_to_file(MATCH_FLOW_SCENE)
 
 func _build_stage_panel(layer: CanvasLayer) -> void:
-    # Stage page (SSS grammar), used by the debug launcher and the legacy
-    # Results -> Change Stage path; the production route hosts its own SSS
-    # inside MatchFlow.
+    # Stage page (SSS grammar), used by the debug launcher; the production route
+    # hosts its own SSS inside MatchFlow.
     stage_panel = Control.new()
     stage_panel.name = "StagePanel"
     stage_panel.theme = DemoStyle.make()
@@ -376,31 +373,6 @@ func _launch_match() -> void:
     # Validation failed: back to the character page so the player can fix it.
     char_panel.show()
     char_select.reopen()
-
-func _on_result_change_fighters() -> void:
-    if _launched_from_flow:
-        _reenter_match_flow("vs:results")
-        return
-    result_panel.hide()
-    if selection_state != null:
-        # VS flow: back to the character select with everything preserved.
-        char_panel.show()
-        char_select.reopen()
-    else:
-        show_setup()
-
-func _on_result_change_stage() -> void:
-    if _launched_from_flow:
-        # Doc 02 §5: Results -> Change Stage PUSHes the SSS with origin RESULTS.
-        _reenter_match_flow("vs:stage")
-        return
-    if selection_state == null:
-        return
-    result_panel.hide()
-    _sss_from = "css"
-    _pending_match = false
-    stage_panel.show()
-    stage_select.open_with(selection_state.stage, selection_state.stage)
 
 func open_stage_select(focus_id: String) -> void:
     var current: String = setup.selected_level()
@@ -652,27 +624,9 @@ func _build_hud() -> void:
     controls.modulate = Color(0.7, 0.78, 0.9)
     layer.add_child(controls)
 
-    # Result screen (Melee result grammar, Doc 03 5): full layer; the winner
-    # banner is up immediately, the stat pages + actions phase in after the
-    # 160-tick wait or the first input (see result_screen.gd).
-    result_panel = Control.new()
-    result_panel.name = "ResultPanel"
-    result_panel.theme = DemoStyle.make()
-    result_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    layer.add_child(result_panel)
-    var result_shade := ColorRect.new()
-    result_shade.color = Color("273a37")
-    result_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    result_panel.add_child(result_shade)
-    result_screen = ResultScreenScript.new()
-    result_screen.name = "ResultScreen"
-    result_panel.add_child(result_screen)
-    winner_label = result_screen.outcome_label
-    result_screen.rematch_requested.connect(_reset_match)
-    result_screen.setup_requested.connect(_on_result_change_fighters)
-    result_screen.menu_requested.connect(back_to_menu)
-    result_screen.stage_requested.connect(_on_result_change_stage)
-    result_panel.hide()
+    # WP-0 step 5: gameplay builds no Results screen. The result layer moved to
+    # the MatchFlow host's PostMatch surface (scripts/frontend/post_match.gd);
+    # at resolution this arena hands the immutable payload over and RETURNs.
     ready_label = Label.new()
     ready_label.name = "ReadyGo"
     ready_label.position = Vector2(340,270)
@@ -712,36 +666,36 @@ func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
         Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
         _story_won = player_one.stocks > 0 and player_two.stocks <= 0
         story_state = "complete" if _story_won else "lost"
-        winner_label.visible = false
-        # Doc 02 §1: the Story Result is a frontend surface, not a panel inside
-        # gameplay. The arena RETURNs to the MatchFlow host with the outcome;
-        # the host presents the shipped Story result state (Doc 07 §16: the
-        # story wording with replay/retry + MAIN MENU, never the multiplayer
-        # Results screen). Deferred so this frame's resolution stays intact.
-        call_deferred("_reenter_match_flow", "story:result:" + ("won" if _story_won else "lost"))
+        # Doc 02 §1/§4: the arena produces the typed StoryOutcome and RETURNs to
+        # the MatchFlow router, which owns the post-match presentation (the
+        # shipped Story result state today — Doc 07 §16: the story wording with
+        # replay/retry + MAIN MENU, never the multiplayer Results screen).
+        # Deferred so this frame's resolution stays intact.
+        var encounter_id: String = launch_config.story_encounter_id() if launch_config != null and launch_config.has_story() else ""
+        call_deferred("_return_to_post_match", AppStateScript.story_return_payload(
+            _story_won, str(encounter_id), str(player_one.character_id), str(active_level), launch_config))
         return
-    # Explicit result snapshot at match resolution, before any reset mutates
-    # the fighter state (Doc 06 §23, Doc 09 §11): stable fighter ids, explicit
-    # placement, teams and winner flags. Results is pure presentation over it.
+    # Explicit result snapshot at match resolution, before any reset mutates the
+    # fighter state (Doc 06 §4): stable fighter ids, explicit placement, teams
+    # and winner flags. PostMatch is pure presentation over this payload — no
+    # live-fighter node is ever consulted for a result again.
     var result = MatchResultScript.resolve(fighters, teams_enabled, _elimination_order)
-    result_panel.show()
-    winner_label.visible = true
-    # Change Stage stays offered when the configuration lives in the MatchFlow
-    # host (the shipped Results grammar keeps all four actions).
-    result_screen.show_result(result, selection_state != null or _launched_from_flow)
+    call_deferred("_return_to_post_match", AppStateScript.vs_return_payload(
+        result, launch_config, teams_enabled, str(active_level), active_slots))
 
 func _reset_match() -> void:
+    # Local match restart (debug launcher / test lifecycle). Player-facing
+    # REMATCH is the PostMatch route action: it LAUNCHes a fresh arena from the
+    # preserved MatchLaunchConfig instead of restarting this one in place.
     if _story_encounter and match_over:
         # A finished Story encounter is replayed through the Story Result's
-        # REPLAY/RETRY (the arena is a fresh launch by then), so R never
-        # restarts a resolved encounter in place.
+        # REPLAY/RETRY (the arena is a fresh launch by then), so a local reset
+        # never restarts a resolved encounter in place.
         return
     _elimination_order.clear()
     match_over = false
-    winner_label.visible = false
     for fighter in fighters:
         fighter.reset_fighter(fighter.spawn_position, true)
-    result_panel.hide()
     _begin_ready()
 
 func _cancel_ready() -> void:

@@ -242,7 +242,7 @@ func part_e_story_result_and_replay() -> void:
         fighter.set_physics_process(false)
     arena.player_two.receive_hit(1000, Vector3.RIGHT, 100)
     check(arena.story_state == "complete" and arena.match_over, "lethal damage completes the encounter")
-    check(not arena.winner_label.visible, "the generic freeplay winner text never appears in Story")
+    check(not arena.get("winner_label"), "the arena carries no generic freeplay winner text any more")
     var result_host = await story.wait_for_flow(self, launch_host_id)
     check(result_host != null, "the completed arena returns to the MatchFlow host")
     check(not is_instance_valid(arena), "the completed gameplay is torn down before the Story Result")

@@ -67,10 +67,14 @@ func run():
     check(not arena.match_over and bobo.health == hp-5, "knockoff never bypasses HP")
     bobo.receive_hit(1000,Vector3.RIGHT,100)
     check(arena.story_state == "complete", "real lethal damage completes Story")
-    check(not arena.winner_label.visible, "the generic freeplay winner text never appears in Story")
     # --- the Story Result is the host's surface (REPLAY / RETRY) ---
     var result_host = await story.wait_for_flow(self, launch_host_id)
     check(result_host != null, "the completed encounter returns to the MatchFlow host")
+    if result_host != null:
+        check(result_host.entry_mode() == "story" and result_host.active_surface() == "story",
+            "the Story outcome opens the Story surface — never the multiplayer Results (PostMatch)")
+        check(not result_host.is_surface_presented("postmatch"),
+            "no multiplayer Results surface is presented for a Story outcome")
     if result_host == null:
         print("BOBO_INPUT failures=", failures)
         quit(1)

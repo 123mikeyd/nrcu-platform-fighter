@@ -47,7 +47,7 @@ func run():
     check(arena.match_over and arena.story_state == "complete", "final elimination completes the one-stage story")
     # Same-frame resolution: cleanup, freeze release and control lock (the arena
     # is replaced by the frontend Story Result at the end of this frame).
-    check(not arena.winner_label.visible, "generic freeplay winner text does not leak")
+    check(not arena.get("winner_label"), "generic freeplay winner text does not leak (the frontend owns the result)")
     check(hero.freeze_remaining == 0 and not hero.get_node("FrozenShell").visible,
         "completion clears freeze even with physics disabled")
     check(bolt.is_queued_for_deletion(), "completion immediately queues every projectile for cleanup")
@@ -135,8 +135,14 @@ func run():
     for f in direct.fighters: f.set_physics_process(false)
     for i in [0, 2]:
         for stock in 3: direct.fighters[i]._handle_blast_zone()
-    check(direct.winner_label.visible and "TEAM B WINS!" in direct.winner_label.text
-        and direct.find_child("StoryBriefing", true, false) == null, "freeplay uses the original winner flow")
+    check(direct.match_over and direct.find_child("StoryBriefing", true, false) == null,
+        "freeplay keeps the original match flow (winner resolved by the payload)")
+    # WP-0 step 5: the freeplay teams result is presented by the frontend.
+    var direct_post = await story.wait_for_post_match(self)
+    check(direct_post != null, "the freeplay teams result reaches the PostMatch surface")
+    if direct_post != null:
+        check(int(direct_post.post_match_result().winning_team) == 1, "the payload declares TEAM B the winner")
+        check("TEAM B WINS!" in str(direct_post.post_match().outcome_label.text), "freeplay teams vocabulary survives")
     direct.queue_free()
     await story.free_hosts(self)
     await process_frame

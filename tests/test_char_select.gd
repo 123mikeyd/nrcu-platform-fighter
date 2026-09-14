@@ -145,18 +145,28 @@ func run():
     check(not arena.stage_panel.visible and not arena.char_panel.visible, "VS screens closed after the stage confirm")
     check(arena.fighters.size() == 2, "the match starts with the selected fighters")
     check(str(arena.fighters[0].character_id) == "ggb" and str(arena.fighters[1].character_id) == "ggb", "committed fighters reach the match")
-    # --- state preservation: Results -> Change Fighters -> CSS ------------
+    # --- state preservation: Results -> Change Fighters -> CSS (WP-0 step 5:
+    # the frontend owns Results; this direct arena start hands the immutable
+    # payload to the MatchFlow host) --------------------------------------
     for f in arena.fighters:
         f.set_physics_process(false)
     arena.fighters[1].stocks = 0
     arena._on_fighter_eliminated(arena.fighters[1])
-    check(arena.result_panel.visible, "result screen after the match")
-    arena.find_child("ChangeFighters", true, false).pressed.emit()
-    for i in 3: await process_frame
-    check(arena.char_panel.visible, "Change Fighters returns to the CSS")
-    var css2 = arena.char_panel.find_child("CharSelect", true, false)
-    check(str(arena.selection_state.slots[0].character) == "ggb", "fighters preserved through the results round trip")
-    check(not hand.is_carrying(), "no token state survives the results round trip (carried_by %d, token %s)" % [css.get_carried_by(), str(hand.carried_token())])
+    var vs = load("res://tests/fixtures/vs_route.gd").new()
+    var post = await vs.wait_for_post_match(self)
+    check(post != null and post.post_match_result() != null,
+        "the resolved match hands its payload to the MatchFlow PostMatch surface")
+    if post != null:
+        var change = post.post_match().result_screen.find_child("ChangeFighters", true, false)
+        check(change != null and change.visible, "Results offers Change Fighters")
+        if change != null:
+            change.pressed.emit()
+        var restored: bool = await vs.wait_for(self, func() -> bool: return post.active_surface() == "css", 180)
+        check(restored, "Change Fighters returns to the CSS")
+        check(str(post.selection_state.slots[0]["character"]) == "ggb", "fighters preserved through the results round trip")
+        check(not hand.is_carrying(), "no token state survives the results round trip (carried_by %d, token %s)" % [css.get_carried_by(), str(hand.carried_token())])
+        post.queue_free()
+        await process_frame
     arena.queue_free()
     await process_frame
     # --- Back cancels a carried token (fresh arena: the route itself is a

@@ -50,6 +50,20 @@ func start_encounter(tree: SceneTree, host: Node) -> Node:
             return arena
     return arena
 
+func wait_for_post_match(tree: SceneTree, previous_id: int = 0) -> Node:
+    # Waits for a MatchFlow host presenting the PostMatch surface (the RETURN
+    # destination of a completed match).
+    for i in 300:
+        await tree.process_frame
+        for child in tree.root.get_children():
+            if not child.has_method("active_surface"):
+                continue
+            if previous_id != 0 and child.get_instance_id() == previous_id:
+                continue
+            if child.active_surface() == "postmatch":
+                return child
+    return null
+
 func wait_for_flow(tree: SceneTree, previous_id: int = 0) -> Node:
     # Waits for a MatchFlow host — optionally a NEW one (post-match re-entry).
     # Iterates the tree: duplicate sibling names get auto-suffixed, and a test

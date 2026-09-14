@@ -698,6 +698,12 @@ func is_outcome_revealed() -> bool:
 func is_row_revealed(index: int) -> bool:
     return index >= 0 and index < _rows_shown
 
+func reveal_tick() -> int:
+    # WP-0 step 5: the PostMatch surface applies the Doc 01 §14 cancel rule
+    # (ui_cancel leaves only after the reveal safety) against exactly the guard
+    # window this screen already uses to ignore carry-over input.
+    return _reveal_tick
+
 func get_hero_ids() -> Array:
     return _hero_ids.duplicate()
 

@@ -230,8 +230,10 @@ func _encounter_catalog() -> void:
 	check(main_source.contains('payload.get("hud_title_template"'), "the HUD title template is consumed from the story payload")
 	check(main_source.contains("cfg.has_story()"), "gameplay's story branch keys off the immutable config")
 	var flow_source := _source("res://scripts/match_flow.gd")
-	check(main_source.contains('"story:result:"'), "gameplay RETURNs to the flow with the Story outcome token")
-	check(flow_source.contains("ORIGIN_RESULT"), "the host owns the Story Result origin token")
+	check(main_source.contains("AppStateScript.story_return_payload"), "gameplay RETURNs the typed StoryOutcome payload to the flow")
+	check(_source("res://scripts/app_state.gd").contains("POST_MATCH_STORY"), "the cross-scene channel owns the Story outcome payload kind")
+	check(flow_source.contains("POST_MATCH_STORY") and flow_source.contains("SURFACE_POSTMATCH"),
+		"the host owns the PostMatch surface and the Story outcome kind")
 	check(flow_source.contains("LaunchConfigScript.build"), "the Story launch freezes through the same builder as the VS path")
 	check(_source("res://scripts/match_flow_state.gd").contains('encounter.get("enemy_id"'),
 		"the state factory takes the enemy slot from the encounter catalog")

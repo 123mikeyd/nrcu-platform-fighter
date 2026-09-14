@@ -40,14 +40,20 @@ extends Control
 #   play_entry / play_exit     the screen's own entry/exit choreography
 #
 # STEP SCOPE (what is deliberately left for later, per Doc 02 §10):
-#   * Story Fighter Select (the two-step split of Doc 01 §9) and the standalone
-#     Story Result redesign are WP-4/WP-5: today the host presents the shipped
-#     Encounter Briefing (roster strip included) and its Back follows the player
-#     route Story -> Main with the selection preserved.
-#   * Multiplayer Results / Story Result become a PostMatch surface here in
-#     step 6; today gameplay RETURNs to this host with the route entry
-#     (main.gd _reenter_match_flow) both for post-match VS configuration and for
-#     the Story Result state the briefing already owns.
+#   * WP-0 step 5 moved the multiplayer Results into the PostMatch surface this
+#     host owns: gameplay produces the immutable MatchResult at match
+#     resolution and RETURNs here with the typed payload (AppState.post_match);
+#     the host presents the PostMatch surface over it and implements the route
+#     actions (REMATCH -> LAUNCH from the preserved MatchLaunchConfig, CHANGE
+#     FIGHTERS / CHANGE STAGE -> PUSH with origin RESULTS, MAIN MENU -> clear
+#     the stack to Main). The Story outcome rides the same typed channel; its
+#     presentation stays the shipped Story surface state (the standalone Story
+#     Result redesign is WP-5).
+#   * Story Fighter Select (the two-step split of Doc 01 §9) is WP-4: today the
+#     host presents the shipped Encounter Briefing (roster strip included).
+#   * Multiplayer Results VISUALS / resolution semantics (elimination batches,
+#     ties, team ranking, hero framing) are WP-5; this host presents the shipped
+#     result_screen unchanged.
 #   * Debug Match Setup stays gameplay-side (Doc 02 §9) and is not reachable
 #     from this host yet.
 
@@ -65,6 +71,7 @@ const StageCatalog = preload("res://scripts/catalogs/stage_catalog.gd")
 const FighterCatalog = preload("res://scripts/catalogs/fighter_catalog.gd")
 const EncounterCatalog = preload("res://scripts/catalogs/story_encounter_catalog.gd")
 const StoryBriefingScene = preload("res://scenes/story_briefing.tscn")
+const PostMatchScript = preload("res://scripts/frontend/post_match.gd")
 const Tokens = preload("res://scripts/ui_tokens.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
 
@@ -75,19 +82,20 @@ const SELF_SCENE := "res://scenes/match_flow.tscn"
 const SURFACE_CSS := "css"
 const SURFACE_SSS := "sss"
 const SURFACE_STORY := "story"
+const SURFACE_POSTMATCH := "postmatch"
 
-# Entry modes (AppState.enter_mode, the pre-PostMatch route channel).
+# Entry modes (AppState.enter_mode, the pre-PostMatch route channel). PLAIN
+# modes only: the post-match route rides the typed payload below, never an
+# origin suffix like "vs:results" (retired in WP-0 step 5).
 const MODE_VS := "vs"
 const MODE_STORY := "story"
 const MODE_DEBUG := "debug"
 
-# Route origins (Doc 02 §5): the surface a route was entered from.
+# Route origins (Doc 02 §5): the surface a route was entered from. "results" is
+# PostMatch's own origin label — CHANGE FIGHTERS / CHANGE STAGE PUSH with it and
+# an SSS opened from Results POPs back to Results.
 const ORIGIN_MAIN := "main"
 const ORIGIN_RESULTS := "results"
-const ORIGIN_STAGE := "stage"
-# Gameplay -> Story Result (Doc 02 §1: the post-match Story Result is a
-# frontend surface; the flow is re-entered with the outcome token).
-const ORIGIN_RESULT := "result"
 
 const STORY_RESULT_WON := "won"
 const STORY_RESULT_LOST := "lost"
@@ -123,6 +131,7 @@ var _scope := INPUT_SCOPE_FRONTEND
 var _css: Control = null
 var _sss: Control = null
 var _briefing: Control = null         # Story Encounter Briefing (the Story surface)
+var _post_match: Control = null       # PostMatch: the multiplayer Results surface
 var _surfaces: Dictionary = {}
 var _presented: Dictionary = {}
 var _entered: Dictionary = {}
@@ -144,15 +153,28 @@ var _frontend_exited := false
 var _launch_confirmed := false
 var _match_started := false
 
+# PostMatch state (WP-0 step 5): the typed payload gameplay handed over, the
+# immutable result it carries and the preserved launch snapshot REMATCH works
+# from. Never a live fighter read (Doc 02 §4).
+var _post_match_payload: Dictionary = {}
+var _post_match_result = null
+var _post_match_config = null
+var _post_match_presented := false
+
 func _ready() -> void:
     _style_backdrop()
     _build_surfaces()
-    var entry := _consume_entry()
-    _mode = str(entry["mode"])
-    if _mode == MODE_STORY:
-        _open_story(str(entry["result"]))
+    var payload: Dictionary = AppStateScript.take_post_match()
+    if not payload.is_empty():
+        # RETURN from gameplay (Doc 02 §5): the completed match handed over its
+        # typed end-state payload; the frontend owns PostMatch.
+        _open_post_match(payload)
     else:
-        _open_vs(str(entry["origin"]))
+        var mode := _consume_entry()
+        if mode == MODE_STORY:
+            _open_story("")
+        else:
+            _open_vs("")
     # The previous screen may be holding its frame (Main PLAY): reveal this host
     # underneath it — one continuous surface, never a cut to black.
     Frontend.release(0.28)
@@ -213,8 +235,21 @@ func _build_surfaces() -> void:
     _briefing.exit_finished.connect(_on_story_exit_finished)
     _briefing.hide()
 
-    _surfaces = {SURFACE_CSS: _css, SURFACE_SSS: _sss, SURFACE_STORY: _briefing}
-    _presented = {SURFACE_CSS: false, SURFACE_SSS: false, SURFACE_STORY: false}
+    # PostMatch (Doc 02 §1 POST-MATCH, §10.6): the multiplayer Results surface.
+    # It presents the SHIPPED result_screen over the immutable MatchResult
+    # payload gameplay hands over; the router owns the four route actions.
+    _post_match = PostMatchScript.new()
+    _post_match.name = "PostMatch"
+    layer.add_child(_post_match)
+    _post_match.rematch_requested.connect(_on_post_match_rematch)
+    _post_match.change_fighters_requested.connect(_on_post_match_change_fighters)
+    _post_match.change_stage_requested.connect(_on_post_match_change_stage)
+    _post_match.menu_requested.connect(_on_post_match_menu)
+    _post_match.exit_finished.connect(_on_surface_exit_finished.bind(SURFACE_POSTMATCH))
+    _post_match.hide()
+
+    _surfaces = {SURFACE_CSS: _css, SURFACE_SSS: _sss, SURFACE_STORY: _briefing, SURFACE_POSTMATCH: _post_match}
+    _presented = {SURFACE_CSS: false, SURFACE_SSS: false, SURFACE_STORY: false, SURFACE_POSTMATCH: false}
 
 func _roster_cards() -> Array:
     # Roster data comes from the catalog (Doc 02 §8), never from a screen or a
@@ -301,22 +336,19 @@ func _apply_encounter_slots() -> void:
 # ---------------------------------------------------------------------------
 # Entry
 # ---------------------------------------------------------------------------
-func _consume_entry() -> Dictionary:
-    # The entry flag is consumed here (like main.gd did). Until the PostMatch
-    # payload exists (step 6) the route rides the existing colon string:
-    #   "vs"                   fresh VS entry (Main -> PLAY)
-    #   "vs:results"           Results -> Change Fighters
-    #   "vs:stage"             Results -> Change Stage (PUSH the SSS with origin RESULTS)
-    #   "story"                fresh Story entry (Main -> STORY MODE)
-    #   "story:result:won"     gameplay -> Story Result (briefing result state)
-    #   "story:result:lost"
+func _consume_entry() -> String:
+    # The entry flag is consumed here (like main.gd did) and resolved to a PLAIN
+    # entry mode. Origin/result suffixes ("vs:results", "vs:stage",
+    # "story:result:won") are RETIRED (WP-0 step 5): the post-match route is the
+    # typed payload consumed in _ready(), and route origins are the router's own
+    # typed stack (Doc 02 §5).
     var raw := str(AppStateScript.enter_mode)
     AppStateScript.enter_mode = "debug"
-    var parts := raw.split(":", false)
-    var mode := str(parts[0]) if parts.size() > 0 else MODE_DEBUG
-    var origin := str(parts[1]) if parts.size() > 1 else ""
-    var result := str(parts[2]) if parts.size() > 2 else ""
-    return {"mode": mode, "origin": origin, "result": result}
+    if raw == MODE_STORY:
+        return MODE_STORY
+    if raw == MODE_VS:
+        return MODE_VS
+    return MODE_DEBUG
 
 func open_vs(origin: String = "") -> void:
     _open_vs(origin)
@@ -338,9 +370,6 @@ func _open_vs(origin: String) -> void:
     set_input_scope(INPUT_SCOPE_FRONTEND)
     prepare_fresh_entry(SURFACE_CSS)
     play_entry(SURFACE_CSS)
-    if origin == ORIGIN_STAGE:
-        # Results -> Change Stage (Doc 02 §5): PUSH with origin RESULTS.
-        call_deferred("_push_stage_from_results")
 
 func open_story(result: String = "") -> void:
     _open_story(result)
@@ -349,14 +378,21 @@ func _open_story(result: String = "") -> void:
     # Story route (Doc 01 §9): Main -> Story Fighter Select/Briefing ->
     # gameplay. The host owns the surface; the encounter metadata and the
     # playable roster come from StoryEncounterCatalog (Doc 02 §8) and the
-    # selected fighter survives the route through AppState (the pre-PostMatch
-    # cross-scene channel) — that is what keeps the choice when Back returns to
-    # Main and when gameplay returns for the Story Result.
+    # selected fighter survives the route through AppState (the cross-scene
+    # channel) — that is what keeps the choice when Back returns to Main and
+    # when gameplay returns for the Story Result.
+    _enter_story_surface(str(AppStateScript.story_fighter_id), _current_encounter_id())
+    if result == STORY_RESULT_WON or result == STORY_RESULT_LOST:
+        _show_story_result(result == STORY_RESULT_WON)
+
+func _enter_story_surface(fighter_id: String, encounter_id: String) -> void:
+    # Shared by the fresh Story entry and by the post-match Story outcome, so
+    # the Story surface is mounted exactly one way.
     _mode = MODE_STORY
-    var fighter := _allowed_story_fighter(str(AppStateScript.story_fighter_id))
+    var fighter := _allowed_story_fighter(str(fighter_id))
     if fighter == "":
         fighter = STORY_DEFAULT_FIGHTER
-    flow = StateScript.fresh_story(_current_encounter_id(), fighter)
+    flow = StateScript.fresh_story(str(encounter_id) if encounter_id != "" else _current_encounter_id(), fighter)
     AppStateScript.story_fighter_id = str(flow.slots[0].fighter_id)
     _apply_encounter_slots()
     flow.origin = ORIGIN_MAIN
@@ -370,11 +406,101 @@ func _open_story(result: String = "") -> void:
     set_input_scope(INPUT_SCOPE_FRONTEND)
     prepare_fresh_entry(SURFACE_STORY)
     play_entry(SURFACE_STORY)
-    if result == STORY_RESULT_WON or result == STORY_RESULT_LOST:
-        _show_story_result(result == STORY_RESULT_WON)
 
-func _push_stage_from_results() -> void:
-    push_surface(SURFACE_SSS, ORIGIN_RESULTS)
+# ---------------------------------------------------------------------------
+# RETURN -> PostMatch (Doc 02 §5, §10.6). Gameplay hands the typed end-state
+# payload over (AppState.post_match) and changes scene; the frontend owns the
+# presentation and the route actions. No live fighter is ever read here: the
+# payload is the authority (Doc 02 §4, Doc 06 §4).
+# ---------------------------------------------------------------------------
+func _open_post_match(payload: Dictionary) -> void:
+    if str(payload.get("kind", "")) == AppStateScript.POST_MATCH_STORY:
+        _open_story_outcome(payload)
+        return
+    _open_vs_outcome(payload)
+
+func _open_vs_outcome(payload: Dictionary) -> void:
+    # Multiplayer Results: PostMatch presents the shipped result_screen over the
+    # immutable MatchResult snapshot.
+    _mode = MODE_VS
+    _post_match_payload = payload
+    _post_match_result = payload.get("result", null)
+    _post_match_config = payload.get("config", null)
+    flow = _flow_from_post_match(payload)
+    # The route was entered from post-match, so PostMatch is the origin the
+    # next PUSH (CHANGE FIGHTERS / CHANGE STAGE) records (Doc 02 §5).
+    flow.origin = ORIGIN_RESULTS
+    flow.push_return(ORIGIN_RESULTS)
+    selection_state = flow.to_selection_state()
+    _route_stack = [SURFACE_POSTMATCH]
+    _active_surface = SURFACE_POSTMATCH
+    _entered = {}
+    _entered[SURFACE_POSTMATCH] = true
+    set_input_scope(INPUT_SCOPE_FRONTEND)
+    prepare_fresh_entry(SURFACE_POSTMATCH)
+    play_entry(SURFACE_POSTMATCH)
+
+func _open_story_outcome(payload: Dictionary) -> void:
+    # Story Result ownership move (Doc 02 §1): the typed StoryOutcome decides the
+    # state; the SHIPPED Story result presentation stays on the Story surface
+    # (the standalone Story Result redesign is WP-5).
+    var config = payload.get("config", null)
+    var encounter_id := str(payload.get("encounter_id", ""))
+    var fighter := str(payload.get("fighter_id", ""))
+    if config != null and config.is_valid():
+        if encounter_id == "":
+            encounter_id = str(config.story_encounter_id())
+        if fighter == "" and config.slot_count() > 0:
+            fighter = str(config.slot(0).get("fighter_id", ""))
+        _post_match_config = config
+    _post_match_payload = payload
+    if fighter == "":
+        fighter = str(AppStateScript.story_fighter_id)
+    _enter_story_surface(fighter, encounter_id)
+    _show_story_result(bool(payload.get("won", false)))
+
+func _flow_from_post_match(payload: Dictionary):
+    # Restore the setup state behind PostMatch (Doc 01 §2: returning from
+    # Results restores MatchFlowState instead of reapplying defaults): the
+    # preserved launch snapshot when the match came from this router, else the
+    # resolution context the arena handed over (direct/debug arena start).
+    var config = payload.get("config", null)
+    if config != null and config.is_valid():
+        return _flow_from_config(config)
+    var state = SelectionStateScript.new()
+    state.mode = int(payload.get("mode", 0))
+    var stage := str(payload.get("stage", ""))
+    if stage != "":
+        state.stage = stage
+    var slots = payload.get("slots", [])
+    if slots is Array and not (slots as Array).is_empty():
+        state.slots = (slots as Array).duplicate(true)
+    return StateScript.from_selection_state(state)
+
+func _flow_from_config(config):
+    # The immutable launch snapshot holds everything the setup state needs; the
+    # legacy vocabulary is produced through the SAME adapter statics the state
+    # exposes, so no rule is duplicated here.
+    var state = SelectionStateScript.new()
+    state.mode = int(config.mode())
+    state.stage = str(config.stage_id())
+    var slots: Array = []
+    for i in config.slot_count():
+        var entry: Dictionary = config.slot(i)
+        slots.append({
+            "kind": StateScript.kind_to_legacy(int(entry.get("kind", StateScript.Kind.EMPTY))),
+            "character": str(entry.get("fighter_id", "")),
+            "team": int(entry.get("team_id", StateScript.NO_TEAM)),
+            "difficulty": str(entry.get("difficulty", StateScript.DEFAULT_DIFFICULTY)),
+            "device": StateScript.input_source_to_legacy_device(entry.get("input_source", {})),
+        })
+    state.slots = slots
+    var restored = StateScript.from_selection_state(state)
+    for i in mini(config.slot_count(), restored.slots.size()):
+        # The resolved presentation variant is part of the snapshot (Doc 02 §4);
+        # the legacy adapter cannot carry it, so it is re-applied here.
+        restored.slots[i].palette_index = int(config.slot(i).get("palette_index", i))
+    return restored
 
 # ---------------------------------------------------------------------------
 # Router verbs (Doc 02 §5). Route state is updated by the verb; the screens'
@@ -427,18 +553,39 @@ func launch_match() -> bool:
         return false
     return _begin_launch(str(flow.stage_id))
 
-func return_to_flow(origin: String = ORIGIN_RESULTS) -> void:
-    # RETURN (gameplay end -> post-match configuration). Gameplay calls this
-    # path; the completed arena is gone before the flow is re-entered.
-    AppStateScript.enter_mode = "vs:" + str(origin)
-    get_tree().change_scene_to_file(SELF_SCENE)
+func rematch() -> bool:
+    # LAUNCH from PostMatch (Doc 02 §5 REMATCH / Doc 06 §8): relaunch with the
+    # PRESERVED MatchLaunchConfig — same fighters, palettes, teams, devices and
+    # stage — never re-seeded defaults.
+    if _launch_state != LAUNCH_IDLE or _active_surface != SURFACE_POSTMATCH:
+        return false
+    var config = rematch_config()
+    if config == null:
+        return false
+    if not _begin_launch_with_config(config):
+        return false
+    if _post_match != null:
+        # The shipped Results leaves immediately; its exit completes the launch
+        # handshake (§6 hold).
+        _post_match.play_exit()
+    return true
 
-func return_to_story_result(won: bool) -> void:
-    # RETURN (gameplay end -> Story Result, Doc 02 §1). The mirrored entry
-    # channel gameplay uses is main.gd _reenter_match_flow(); this verb exists
-    # for the host's own tests and for the step-6 PostMatch hand-off.
-    AppStateScript.enter_mode = "story:" + ORIGIN_RESULT + ":" + (STORY_RESULT_WON if won else STORY_RESULT_LOST)
-    get_tree().change_scene_to_file(SELF_SCENE)
+func rematch_config():
+    # The preserved launch snapshot when the match came from this router; a
+    # direct/debug arena start has none, so the router REBUILDS one from the
+    # handed-over resolution snapshot (mode/slots/stage) through the same
+    # validation authority instead of falling back to fresh VS defaults.
+    if _post_match_config != null and _post_match_config.is_valid():
+        return _post_match_config
+    if flow == null or _post_match_payload.is_empty() or str(_post_match_payload.get("kind", "")) != AppStateScript.POST_MATCH_VS:
+        return null
+    var rebuilt = LaunchConfigScript.build(flow, str(flow.stage_id))
+    if not rebuilt.is_valid():
+        _last_route_error = str(rebuilt.validation_error())
+        return null
+    _last_route_error = ""
+    _post_match_config = rebuilt
+    return rebuilt
 
 # --- internal transition completion ----------------------------------------
 func _enter_surface(surface_name: String) -> void:
@@ -455,9 +602,10 @@ func _enter_surface(surface_name: String) -> void:
 
 func _on_surface_exit_finished(surface_name: String) -> void:
     _hide_surface(surface_name)
-    if surface_name == SURFACE_SSS and _launch_confirmed:
-        # The confirm exit belongs to the launch, not to a POP: hold here and
-        # let the readiness handshake release the flow (§6).
+    if _launch_confirmed:
+        # The exit belongs to a LAUNCH, not to a POP: SSS confirm, Story START
+        # and Results REMATCH all hold here and let the readiness handshake
+        # release the flow (§6).
         _frontend_exited = true
         _maybe_launch()
         return
@@ -466,7 +614,8 @@ func _on_surface_exit_finished(surface_name: String) -> void:
         return
     if surface_name == SURFACE_SSS:
         # SSS Back with no router transition in flight: the screen played its
-        # own exit, so finish the POP (Doc 02 §5: SSS Back -> CSS POP).
+        # own exit, so finish the POP (Doc 02 §5: SSS Back -> CSS POP, or back
+        # to Results when the SSS was PUSHed from PostMatch).
         pop_surface()
 
 func _pop_origin() -> String:
@@ -485,6 +634,8 @@ func prepare_fresh_entry(surface_name: String, _context: Dictionary = {}) -> voi
         _sss.reset()
     elif surface_name == SURFACE_STORY and _briefing != null:
         _briefing.reset()
+    elif surface_name == SURFACE_POSTMATCH and _post_match != null:
+        _post_match.prepare_fresh()
 
 func prepare_return_entry(surface_name: String, _context: Dictionary = {}) -> void:
     _restore_presentation(surface_name)
@@ -496,6 +647,10 @@ func prepare_return_entry(surface_name: String, _context: Dictionary = {}) -> vo
         _sss.reset()
     elif surface_name == SURFACE_STORY and _briefing != null:
         _briefing.reset()
+    elif surface_name == SURFACE_POSTMATCH and _post_match != null:
+        # POP back from the SSS opened from Results: the revealed Results screen
+        # is restored as it was (never re-revealed).
+        _post_match.prepare_return()
 
 func play_entry(surface_name: String, _context: Dictionary = {}) -> void:
     match surface_name:
@@ -520,6 +675,16 @@ func play_entry(surface_name: String, _context: Dictionary = {}) -> void:
             # The briefing opens against the stored Story selection (the
             # encounter's player-facing copy comes from its own scene).
             _briefing.open(story_selection_id())
+        SURFACE_POSTMATCH:
+            if _post_match == null:
+                return
+            _show_surface(SURFACE_POSTMATCH)
+            # Fresh entry: present the SHIPPED result_screen over the immutable
+            # payload gameplay handed over. A return entry (POP back from SSS)
+            # only restores the surface — the reveal is never replayed.
+            if not _post_match_presented:
+                _post_match_presented = true
+                _post_match.present(_post_match_result, _post_match_result != null)
         _:
             return
     set_input_scope(INPUT_SCOPE_FRONTEND)
@@ -536,6 +701,9 @@ func play_exit(surface_name: String, _destination: String = "") -> void:
         SURFACE_STORY:
             if _briefing != null:
                 _briefing.play_exit()
+        SURFACE_POSTMATCH:
+            if _post_match != null:
+                _post_match.play_exit()
 
 func _restore_presentation(surface_name: String) -> void:
     # Doc 02 §7: root alpha = authored baseline. This is the CSS return fix.
@@ -579,6 +747,39 @@ func _on_css_back() -> void:
 
 func _on_sss_confirmed(id: String) -> void:
     _begin_launch(str(id))
+
+# --- PostMatch route actions (Doc 02 §5, Doc 06 §8) --------------------------
+func _on_post_match_rematch() -> void:
+    _last_route_error = ""
+    rematch()
+
+func _on_post_match_change_fighters() -> void:
+    # CHANGE FIGHTERS -> PUSH the CSS with origin RESULTS. The PUSH keeps
+    # PostMatch mounted beneath, so a CSS Back / ui_cancel route can restore it.
+    _last_route_error = ""
+    push_surface(SURFACE_CSS, ORIGIN_RESULTS)
+
+func _on_post_match_change_stage() -> void:
+    # CHANGE STAGE -> PUSH the SSS with origin RESULTS; its Back POPs back to
+    # Results and a confirm LAUNCHes the new stage with the same roster.
+    _last_route_error = ""
+    push_surface(SURFACE_SSS, ORIGIN_RESULTS)
+
+func _on_post_match_menu() -> void:
+    # MAIN MENU (and the Results ui_cancel route, Doc 01 §14): clear the stack
+    # to Main.
+    clear_to_main()
+
+func clear_to_main() -> void:
+    _last_route_error = ""
+    _route_stack.clear()
+    _active_surface = ""
+    for name in _presented:
+        _presented[name] = false
+    if flow != null:
+        flow.return_stack.clear()
+        flow.origin = ORIGIN_MAIN
+    _leave_to_home()
 
 # --- Story surface callbacks -------------------------------------------------
 func _on_story_chosen(id: String) -> void:
@@ -664,12 +865,16 @@ func _begin_launch(stage_id: String) -> bool:
     if not config.is_valid():
         _last_route_error = str(config.validation_error())
         return false
+    return _begin_launch_with_config(config)
+
+func _begin_launch_with_config(config) -> bool:
+    # The frozen snapshot starts the §6 handshake: construct the destination NOW,
+    # while the outgoing surface still owns the frame (SSS confirm pose + exit
+    # choreography, the Story START exit, or the Results REMATCH release).
     _last_route_error = ""
     pending_launch = config
     _launch_confirmed = true
     _frontend_exited = false
-    # §6: construct the destination NOW, while the SSS still owns the frame
-    # (its confirm pose + exit choreography cover the construction window).
     _construct_gameplay(config)
     return true
 
@@ -804,6 +1009,18 @@ func story_playable_ids() -> Array:
 
 func story_stage() -> String:
     return story_stage_id()
+
+func post_match() -> Control:
+    return _post_match
+
+func post_match_payload() -> Dictionary:
+    return _post_match_payload
+
+func post_match_result():
+    return _post_match_result
+
+func post_match_config():
+    return _post_match_config
 
 func route_stack_names() -> Array:
     return _route_stack.duplicate()
