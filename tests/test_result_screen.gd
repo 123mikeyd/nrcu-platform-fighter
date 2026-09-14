@@ -171,7 +171,10 @@ func run():
     # Standings: placement order, one row per player, OUT without damage.
     var list = rs.find_child("StandingsList", true, false)
     check(list != null, "standings list exists")
-    check(list.get_child_count() == 4, "four standings rows")
+    # The row pool carries the team layout's worst case (2 headers + 4 members);
+    # an FFA result plans exactly its four player rows.
+    check(rs.row_count() == 4 and list.get_child_count() == 6, "four standings rows in a six-slot pool")
+    check(not list.get_child(4).visible and not list.get_child(5).visible, "unused rows stay hidden")
     var row0 = list.get_child(0)
     var row1 = list.get_child(1)
     var row2 = list.get_child(2)
@@ -288,25 +291,27 @@ func run():
             check(bool(team_result.team_mode), "team payload is marked team mode")
             check(int(team_result.winning_team) == 1, "winning team comes from match logic")
             check(str(team_result.entry_for_player(2)["team_id"]) == "1", "entries supply team ids in team mode")
-            check(post.outcome_label.text == "TEAM B WINS!", "team heading names the winning team")
+            check(post.outcome_label.text == "TEAM B", "team heading names the winning team (WINNER eyebrow carries the outcome, no redundant WINS!)")
             check(rs.get_accent_color() == Tokens.TEAM_B, "team result uses the team color, not a player color")
             check(rs.get_hero_ids() == ["doge_man", "turbofit"], "winner group contains the winning team players")
             var team_list = rs.find_child("StandingsList", true, false)
-            # WP-5 LANE B (Doc 06 §3, Doc 01 §12): team members SHARE their team
-            # rank — the winning teammates are never ranked against each other,
-            # and the losing members share theirs.
-            check(team_list.get_child(0).find_child("Name", true, false).text == "DOGE MAN"
-                and team_list.get_child(1).find_child("Name", true, false).text == "TURBOFIT",
-                "the winning team's members lead the standings")
-            check(team_list.get_child(0).find_child("Rank", true, false).text == "1ST"
-                and team_list.get_child(1).find_child("Rank", true, false).text == "1ST",
-                "winning teammates share 1ST instead of being ranked against each other")
-            check(team_list.get_child(2).find_child("Name", true, false).text == "TEKNIUM"
-                and team_list.get_child(3).find_child("Name", true, false).text == "GGB",
+            # WP-5 (Doc 06 §3, Doc 01 §12): the standings GROUP by team — one
+            # shared-rank group header ("1ST · TEAM A") followed by that team's
+            # member rows. Teammates are never ranked against each other: the
+            # rank lives on the group, and member rows carry none of their own.
+            check(rs.row_count() == 6, "two team groups are two headers + four member rows")
+            check(rs.row_kind(0) == "team_header" and rs.row_kind(1) == "team_member" and rs.row_kind(2) == "team_member"
+                and rs.row_kind(3) == "team_header" and rs.row_kind(4) == "team_member" and rs.row_kind(5) == "team_member",
+                "each team is one shared-rank header followed by its members")
+            check(rs.row_text(0) == "1ST · TEAM B", "the winning team's group header carries the SHARED rank and the team")
+            check(rs.row_text(1) == "P2  DOGE MAN" and rs.row_text(2) == "P4  TURBOFIT",
+                "the winning team's members lead the standings under their header")
+            check(rs.row_text(3) == "2ND · TEAM A", "the losing team shares its rank on its own group header")
+            check(rs.row_text(4) == "P1  TEKNIUM" and rs.row_text(5) == "P3  GGB",
                 "eliminated team players remain in the standings")
-            check(team_list.get_child(2).find_child("Rank", true, false).text == "2ND"
-                and team_list.get_child(3).find_child("Rank", true, false).text == "2ND",
-                "the losing team shares its rank across its members")
+            check(not team_list.get_child(1).find_child("Rank", true, false).visible
+                and not team_list.get_child(2).find_child("Rank", true, false).visible,
+                "member rows carry no rank of their own (never ranked against a teammate)")
 
     # ---------------------------------------------------------------------
     # Draw (Doc 06 §4): heading DRAW, placements as supplied, no winner hero.

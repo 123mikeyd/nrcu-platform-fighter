@@ -1,14 +1,30 @@
 extends Control
-# NRCU Results — winner-first payoff screen (Doc 06, WP-E).
+# NRCU Results — winner-first payoff screen (Doc 06, WP-E; corrective WP-5).
 #
 # Pure presentation/navigation over an explicit MatchResult snapshot: the
 # screen sorts by `placement`, resolves the winner model from `fighter_id`,
-# and never infers rank from stats (Doc 06 §3/§21).
+# and never infers rank from stats (Doc 06 §3/§21). Every decision the screen
+# makes is bound to the lane/wp5-resolution data contract and NOT re-derived
+# here (Doc 06 §4 "Results does not derive match truth"):
+#   * FFA standings order = `placement`, ties broken by station order only —
+#     the shared ranks the resolver produced are displayed as-is;
+#   * team standings = `team_standings()` groups: a shared-rank group header
+#     ("1ST · TEAM A", Doc 01 §12) followed by its member rows; teammates are
+#     never ranked against each other;
+#   * `eliminated` is read from the snapshot (never inferred from stocks) and
+#     an OUT entry shows OUT with no damage field (Doc 06 §4);
+#   * the hero group is `winning_entries()` — TEAM mode renders EVERY member of
+#     the winning team, including one eliminated before match end;
+#   * DRAW: no winner hero at all, entries exactly as supplied.
 #
 # Composition at 1280x720 inside a centered ReferenceFrame (Doc 06 §6):
-#   Top outcome header  y ~26-112   WINNER / P2 DOGE MAN / rule
+#   Top outcome header  y ~26-112   WINNER / P2 DOGE MAN or TEAM A / rule
 #   Main payoff         y ~110-510  winner hero | final standings
 #   Action bar          y ~585-670  Rematch / Change Fighters / [Stage] / Main Menu
+# Team mode: the hero field is a WIDE group field whose aspect IS the winning
+# group's measured field (Doc 06 §7 — never composed 2:1 and cropped into
+# 1.1:1), and each winning fighter keeps its own resolved palette variant
+# (Doc 06 §10 — independently paletted subjects).
 # No StatPanel, no page navigation, no duplicate player inspector.
 #
 # Reveal (Doc 06 §16, tick-driven on FrontendClock):
@@ -25,6 +41,7 @@ signal stage_requested
 
 const Tokens = preload("res://scripts/ui_tokens.gd")
 const MatchResultScript = preload("res://scripts/match_result.gd")
+const Factory = preload("res://scripts/frontend/fighter_presentation_factory.gd")
 const FighterRenderViewScript = preload("res://scripts/frontend/fighter_render_view.gd")
 const Roster = preload("res://scripts/roster.gd")
 const ResultRowScene = preload("res://scenes/components/ResultRow.tscn")
@@ -51,7 +68,18 @@ const STAND_HEAD_Y := 130.0
 const STAND_RULE_Y := 152.0
 const ROW_Y0 := 170.0
 const ROW_STRIDE := 86.0
-const MAX_ROWS := 4
+const ROW_H := 78.0
+# Team standings (Doc 01 §12): a shared-rank group header, then its members.
+# Two team groups of two are 6 rows: 2 headers + 4 member rows.
+const FFA_ROWS := 4
+const MAX_ROWS := 6
+const TEAM_HEADER_H := 30.0
+const TEAM_MEMBER_H := 60.0
+const TEAM_GROUP_GAP := 10.0
+# The team hero field (Doc 06 §7): wide enough for the measured group field,
+# bounded by the standings column and the authored main-payoff band.
+const TEAM_HERO_W := 456.0
+const TEAM_HERO_MIN_H := 190.0
 const ACTION_Y := 585.0
 const MENU_X := 680.0
 const MENU_X_TIGHT := 456.0   # Main Menu slides up when Change Stage is absent
@@ -96,6 +124,7 @@ var _hero_group: Control
 var _hero_text: Label
 var _hero_views: Array = []
 var _hero_ids: Array = []
+var _hero_rect := Rect2(HERO_X, HERO_Y, HERO_W, HERO_H)
 var _standings_label: Label
 var _standings_rule: Panel
 var _standings_list: Control
@@ -103,6 +132,8 @@ var _rows: Array = []
 var _action_bar: Control
 var _actions: Dictionary = {}
 var _row_entries: Array = []
+var _row_kinds: Array = []
+var _row_y: Array = []
 var _row_count := 0
 
 var _reveal_active := false
@@ -207,7 +238,7 @@ func _build_standings(frame: Control) -> void:
     _standings_list.name = "StandingsList"
     _standings_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _standings_list.position = Vector2(STAND_X, ROW_Y0)
-    _standings_list.size = Vector2(STAND_W, ROW_STRIDE * MAX_ROWS)
+    _standings_list.size = Vector2(STAND_W, ROW_STRIDE * FFA_ROWS)
     standings.add_child(_standings_list)
     for i in MAX_ROWS:
         # Rows are Controls, not Buttons: nothing here performs an action
@@ -274,8 +305,11 @@ func _apply_outcome() -> void:
         eyebrow = "WINNER"
         if bool(_result.team_mode) and int(_result.winning_team) >= 0:
             var team := int(_result.winning_team)
-            heading = "TEAM %s WINS!" % ("A" if team == 0 else "B")
-            _accent = Tokens.TEAM_A if team == 0 else Tokens.TEAM_B
+            # Doc 01 §12 / the WP-5 schematic: "WINNER" above "TEAM A" — the
+            # eyebrow already states the outcome, so a second WINS! is
+            # redundant (Doc 06 §6 "no tiny redundant information").
+            heading = _team_name(team)
+            _accent = _team_color(team)
         else:
             var winner: Dictionary = _result.winner_entry()
             if not winner.is_empty():
@@ -298,31 +332,173 @@ func _apply_outcome() -> void:
     _outcome_rule.size = Vector2(_rule_w, 3.0)
 
 func _apply_rows() -> void:
-    var ordered: Array = []
+    # The standings are PLANNED first (kind + data per row), then shaped and
+    # filled. FFA: `placement` order over the snapshot entries — a shared rank
+    # orders by station only and is never re-ranked. Team: `team_standings()`
+    # groups — one shared-rank group header per team, then its member rows
+    # (Doc 01 §12, Doc 06 §3).
+    _row_entries = []
+    _row_kinds = []
+    _row_y = []
     if _result != null:
-        ordered = _result.entries.duplicate()
-        ordered.sort_custom(func(a, b): return int(a["placement"]) < int(b["placement"]))
-    _row_entries = ordered
+        if bool(_result.team_mode):
+            _plan_team_rows()
+        else:
+            _plan_ffa_rows()
     _row_count = mini(_row_entries.size(), MAX_ROWS)
+    _plan_row_geometry()
     for i in _rows.size():
         var row: Control = _rows[i]
         if i >= _row_count:
             row.visible = false
             continue
-        _fill_row(row, _row_entries[i])
+        _fill_row(row, i)
 
-func _fill_row(row: Control, entry: Dictionary) -> void:
-    var place := int(entry.get("placement", 0))
-    var stocks := int(entry.get("stocks_remaining", 0))
-    var eliminated: bool = stocks <= 0
-    var player_index := int(entry.get("player_index", 0))
-    var color := _player_color(player_index)
+func _plan_ffa_rows() -> void:
+    var ordered: Array = _result.entries.duplicate()
+    ordered.sort_custom(_placement_order)
+    for entry in ordered:
+        _row_entries.append(entry)
+        _row_kinds.append("player")
+
+func _plan_team_rows() -> void:
+    for group in _result.team_standings():
+        _row_entries.append(group)
+        _row_kinds.append("team_header")
+        for entry in group["entries"]:
+            _row_entries.append(entry)
+            _row_kinds.append("team_member")
+
+func _placement_order(a: Dictionary, b: Dictionary) -> bool:
+    # Explicit placement first (owned by match resolution); inside a shared
+    # rank the station order only ORDERS the display — it never re-ranks
+    # anybody (Doc 06 §2 "do not invent unique placement").
+    if int(a["placement"]) != int(b["placement"]):
+        return int(a["placement"]) < int(b["placement"])
+    return int(a["player_index"]) < int(b["player_index"])
+
+func _plan_row_geometry() -> void:
+    # Row offsets are measured in the same units for both compositions, so the
+    # reveal stagger and every read surface stay index-based.
+    var y := 0.0
+    for i in _row_count:
+        var kind := str(_row_kinds[i])
+        if kind == "team_header":
+            if i > 0:
+                y += TEAM_GROUP_GAP
+            _row_y.append(y)
+            y += TEAM_HEADER_H
+        elif kind == "team_member":
+            _row_y.append(y)
+            y += TEAM_MEMBER_H
+        else:
+            _row_y.append(y)
+            y += ROW_STRIDE
+
+func _fill_row(row: Control, index: int) -> void:
+    _shape_row(row, str(_row_kinds[index]))
+    row.position.y = float(_row_y[index])
+    if str(_row_kinds[index]) == "team_header":
+        _fill_team_header(row, _row_entries[index])
+    else:
+        _fill_player_row(row, _row_entries[index], str(_row_kinds[index]) == "team_member")
+
+func _row_offset(index: int) -> float:
+    if index >= 0 and index < _row_y.size():
+        return float(_row_y[index])
+    return 0.0
+
+func _shape_row(row: Control, kind: String) -> void:
+    # One component, three authored shapes: the FFA player row (78px), the team
+    # group header band (30px) and the compact team member row (60px).
     var plate: Panel = row.get_node("Plate")
-    plate.add_theme_stylebox_override("panel", Tokens.flat(Tokens.SURFACE_1 if eliminated else Tokens.SURFACE_HI, Tokens.RULE, Tokens.STROKE))
+    var side: Panel = row.get_node("Side")
+    var rank: Label = row.get_node("Rank")
+    var port: Label = row.get_node("Port")
+    var name_label: Label = row.get_node("Name")
+    var stocks: Label = row.get_node("Stocks")
+    var damage: Label = row.get_node("Damage")
+    rank.visible = true
+    port.visible = true
+    name_label.visible = true
+    stocks.visible = true
+    damage.visible = true
+    if kind == "team_header":
+        row.size = Vector2(STAND_W, TEAM_HEADER_H)
+        plate.size = Vector2(STAND_W, TEAM_HEADER_H)
+        side.position = Vector2.ZERO
+        side.size = Vector2(4.0, TEAM_HEADER_H)
+        rank.position = Vector2(24.0, 0.0)
+        rank.size = Vector2(STAND_W - 48.0, TEAM_HEADER_H)
+        port.visible = false
+        name_label.visible = false
+        stocks.visible = false
+        damage.visible = false
+        return
+    if kind == "team_member":
+        row.size = Vector2(STAND_W, TEAM_MEMBER_H)
+        plate.size = Vector2(STAND_W, TEAM_MEMBER_H)
+        side.position = Vector2(0.0, 8.0)
+        side.size = Vector2(4.0, TEAM_MEMBER_H - 16.0)
+        rank.visible = false            # the rank lives on the group header
+        port.position = Vector2(24.0, 8.0)
+        port.size = Vector2(84.0, 28.0)
+        name_label.position = Vector2(120.0, 8.0)
+        name_label.size = Vector2(310.0, TEAM_MEMBER_H - 16.0)
+        stocks.position = Vector2(434.0, 6.0)
+        stocks.size = Vector2(222.0, 24.0)
+        damage.position = Vector2(434.0, 32.0)
+        damage.size = Vector2(222.0, 24.0)
+        return
+    row.size = Vector2(STAND_W, ROW_H)
+    plate.size = Vector2(STAND_W, ROW_H)
+    side.position = Vector2(0.0, 10.0)
+    side.size = Vector2(4.0, ROW_H - 20.0)
+    rank.position = Vector2(24.0, 12.0)
+    rank.size = Vector2(84.0, 30.0)
+    port.position = Vector2(24.0, 44.0)
+    port.size = Vector2(84.0, 20.0)
+    name_label.position = Vector2(120.0, 12.0)
+    name_label.size = Vector2(310.0, 54.0)
+    stocks.position = Vector2(434.0, 10.0)
+    stocks.size = Vector2(222.0, 24.0)
+    damage.position = Vector2(434.0, 44.0)
+    damage.size = Vector2(222.0, 24.0)
+
+func _fill_team_header(row: Control, group: Dictionary) -> void:
+    # The shared team rank (Doc 01 §12 "1ST · TEAM A"): ONE line carrying the
+    # rank the whole group shares and the team it belongs to. Members below
+    # deliberately carry no rank of their own — teammates are never ranked
+    # against each other (Doc 06 §3).
+    var place := int(group.get("placement", MatchResultScript.NO_PLACEMENT))
+    var team_id := int(group.get("team_id", MatchResultScript.NO_TEAM))
+    var color := _team_color(team_id)
+    var plate: Panel = row.get_node("Plate")
+    plate.add_theme_stylebox_override("panel", Tokens.flat(Color(0, 0, 0, 0), Tokens.RULE, Tokens.STROKE))
     var side: Panel = row.get_node("Side")
     side.add_theme_stylebox_override("panel", Tokens.flat(color))
     var rank: Label = row.get_node("Rank")
-    rank.text = _placement_text(place)
+    rank.text = "%s · %s" % [_placement_text(place), _team_name(team_id)]
+    rank.add_theme_color_override("font_color", color)
+    rank.add_theme_font_size_override("font_size", Tokens.T_META)
+
+func _fill_player_row(row: Control, entry: Dictionary, is_member: bool) -> void:
+    # Every value displayed here is snapshot data. `eliminated` is the explicit
+    # field (Doc 06 §4) — it is never re-derived from stocks, and an eliminated
+    # entry shows OUT with NO damage field, because lose_stock() resets the
+    # damage the match is over (Doc 06 §4).
+    var stocks_remaining := int(entry.get("stocks_remaining", 0))
+    var eliminated: bool = bool(entry.get("eliminated", stocks_remaining <= 0))
+    var is_winner: bool = bool(entry.get("is_winner", false))
+    var player_index := int(entry.get("player_index", 0))
+    var color := _player_color(player_index)
+    var plate: Panel = row.get_node("Plate")
+    plate.add_theme_stylebox_override("panel", Tokens.flat(
+        Tokens.SURFACE_HI if is_winner else Tokens.SURFACE_1, Tokens.RULE, Tokens.STROKE))
+    var side: Panel = row.get_node("Side")
+    side.add_theme_stylebox_override("panel", Tokens.flat(color))
+    var rank: Label = row.get_node("Rank")
+    rank.text = _placement_text(int(entry.get("placement", 0)))
     rank.add_theme_color_override("font_color", Tokens.CREAM_DIM if eliminated else Tokens.CREAM)
     rank.add_theme_font_size_override("font_size", Tokens.T_NAV)
     var port: Label = row.get_node("Port")
@@ -334,13 +510,12 @@ func _fill_row(row: Control, entry: Dictionary) -> void:
     name_label.add_theme_color_override("font_color", Tokens.CREAM)
     name_label.add_theme_font_size_override("font_size", Tokens.T_NAV)
     var stocks_label: Label = row.get_node("Stocks")
-    stocks_label.text = "OUT" if eliminated else "STOCKS %d" % stocks
+    stocks_label.text = "OUT" if eliminated else "STOCKS %d" % stocks_remaining
     stocks_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
     stocks_label.add_theme_font_size_override("font_size", Tokens.T_META)
-    stocks_label.position.y = 28.0 if eliminated else 10.0
+    # An OUT row centres its single state line in the row band.
+    stocks_label.position.y = (row.size.y - 24.0) * 0.5 if eliminated else stocks_label.position.y
     var damage_label: Label = row.get_node("Damage")
-    # Eliminated players show OUT and NO damage: lose_stock() resets
-    # damage_percent to 0, so the value is not match information (Doc 06 §19).
     damage_label.visible = not eliminated
     damage_label.text = "" if eliminated else "%d%%" % int(entry.get("damage_percent", 0))
     damage_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
@@ -425,16 +600,23 @@ func _apply_hero() -> void:
     _hero_views.clear()
     _hero_ids = []
     _hero_text.hide()
+    _hero_rect = Rect2(HERO_X, HERO_Y, HERO_W, HERO_H)
+    _set_hero_frame(_hero_rect)
     if _hero_group == null or _result == null:
         return
     if str(_result.outcome) != MatchResultScript.OUTCOME_WIN:
         return
+    # The hero GROUP is the snapshot's winning entries (Doc 06 §3): in team mode
+    # EVERY member of the winning team, including one eliminated before match
+    # end; in FFA the declared winner.
     var ids: Array = []
+    var palettes: Array = []
     if bool(_result.team_mode):
         for entry in _result.winning_entries():
-            var id := str(entry.get("fighter_id", ""))
-            if Roster.ids().has(id):
-                ids.append(id)
+            var member_id := str(entry.get("fighter_id", ""))
+            if Roster.ids().has(member_id):
+                ids.append(member_id)
+                palettes.append(int(entry.get("palette_index", 0)))
     else:
         var winner: Dictionary = _result.winner_entry()
         if winner.is_empty():
@@ -442,6 +624,7 @@ func _apply_hero() -> void:
         var id := str(winner.get("fighter_id", ""))
         if Roster.ids().has(id):
             ids.append(id)
+            palettes.append(int(winner.get("palette_index", 0)))
         else:
             # Unknown id: keep a text hero, never a blank frame and never a
             # display-name reverse lookup (Doc 06 §3).
@@ -450,15 +633,54 @@ func _apply_hero() -> void:
     if ids.is_empty():
         return
     _hero_ids = ids
-    # One FighterRenderView per result: RESULTS_HERO for the FFA winner,
-    # RESULTS_TEAM for the coordinated winning-team group (Doc 06 §9).
+    # One FighterRenderView per result, through the WP-3 presentation factory:
+    # RESULTS_HERO for the FFA winner, RESULTS_TEAM for the coordinated winning
+    # group (Doc 06 §7/§10). The team field is the ACTUAL wide group field (its
+    # aspect IS the measured group box), so the render is never composed wide
+    # and cropped into the FFA frame.
+    var team_view := bool(_result.team_mode) and ids.size() > 1
+    var profile: String = Factory.PROFILE_RESULTS_TEAM if team_view else Factory.PROFILE_RESULTS_HERO
+    _hero_rect = _hero_rect_for(ids, profile)
+    _set_hero_frame(_hero_rect)
     var view = FighterRenderViewScript.new()
-    view.set_profile("RESULTS_TEAM" if bool(_result.team_mode) else "RESULTS_HERO")
+    view.name = "WinnerRenderView"
     view.position = Vector2.ZERO
-    view.size = Vector2(HERO_W, HERO_H)
+    view.size = _hero_rect.size
     _hero_group.add_child(view)
+    view.set_profile(profile)
     view.set_subjects(ids)
+    # Per-subject palette identity (Doc 06 §10): every winner keeps the variant
+    # the match resolved for that station, so a duplicate fighter can never
+    # collapse to one colour in the group.
+    view.set_subject_palettes(palettes)
+    # LIVE_IDLE while the surface is visible (Doc 06 §10), inside the ONE
+    # viewport the live-view budget allocates to Results.
+    view.set_presentation_mode(Factory.MODE_LIVE_IDLE)
+    view.request_render()
     _hero_views.append(view)
+
+func _hero_rect_for(ids: Array, profile: String) -> Rect2:
+    # FFA and single-subject groups use the authored hero frame. A multi-subject
+    # team group gets the wide group field: width fills the hero column and the
+    # height follows the group's own measured aspect.
+    if ids.size() <= 1 or profile != Factory.PROFILE_RESULTS_TEAM:
+        return Rect2(HERO_X, HERO_Y, HERO_W, HERO_H)
+    var box: AABB = Factory.box_for(ids, profile)
+    var aspect := clampf(box.size.x / maxf(box.size.y, 0.01), 1.0, 2.4)
+    var height := clampf(TEAM_HERO_W / aspect, TEAM_HERO_MIN_H, HERO_H)
+    return Rect2(HERO_X, HERO_Y, TEAM_HERO_W, height)
+
+func _set_hero_frame(rect: Rect2) -> void:
+    var field := Rect2(rect.position.x - FIELD_PAD_X, rect.position.y - FIELD_PAD_Y,
+        rect.size.x + FIELD_PAD_X * 2.0, rect.size.y + FIELD_PAD_Y * 2.0)
+    _hero_field.position = field.position
+    _hero_field.size = field.size
+    _hero_tint.position = field.position
+    _hero_tint.size = field.size
+    _hero_accent.position = Vector2(rect.position.x + 8.0, field.position.y + field.size.y - 26.0)
+    _hero_group.position = rect.position
+    _hero_group.size = rect.size
+    _hero_group.pivot_offset = Vector2(rect.size.x * 0.5, rect.size.y)
 
 func _cursor_entry() -> void:
     # Always the regular NRCU cursor: pointer position untouched, stale hover
@@ -511,10 +733,10 @@ func _start_outcome() -> void:
     _start(_outcome_rule, "modulate:a", 1.0, OUTCOME_POP)
     _start(_outcome_rule, "size:x", _rule_w, OUTCOME_POP)
     _start(_hero_accent, "modulate:a", 1.0, OUTCOME_POP)
-    _hero_group.position.y = HERO_Y + 10.0
+    _hero_group.position.y = _hero_rect.position.y + 10.0
     _hero_group.scale = Vector2(0.97, 0.97)
     _start(_hero_group, "modulate:a", 1.0, HERO_SETTLE)
-    _start(_hero_group, "position:y", HERO_Y, HERO_SETTLE)
+    _start(_hero_group, "position:y", _hero_rect.position.y, HERO_SETTLE)
     _start(_hero_group, "scale", Vector2.ONE, HERO_SETTLE)
 
 func _start_row(index: int) -> void:
@@ -569,11 +791,11 @@ func _reset_for_show() -> void:
     _hero_accent.modulate.a = 0.0
     _hero_group.modulate.a = 0.0
     _hero_group.scale = Vector2(0.97, 0.97)
-    _hero_group.position = Vector2(HERO_X, HERO_Y + 10.0)
+    _hero_group.position = Vector2(_hero_rect.position.x, _hero_rect.position.y + 10.0)
     for i in _rows.size():
         var row: Control = _rows[i]
         row.modulate.a = 0.0
-        row.position = Vector2(-14.0, i * ROW_STRIDE)
+        row.position = Vector2(-14.0, _row_offset(i))
         if i >= _row_count:
             row.visible = false
     _action_bar.modulate.a = 0.0
@@ -600,10 +822,10 @@ func _apply_final_states() -> void:
     _hero_accent.modulate.a = 1.0
     _hero_group.modulate.a = 1.0
     _hero_group.scale = Vector2.ONE
-    _hero_group.position = Vector2(HERO_X, HERO_Y)
+    _hero_group.position = _hero_rect.position
     for i in _rows.size():
         var row: Control = _rows[i]
-        row.position = Vector2(0.0, i * ROW_STRIDE)
+        row.position = Vector2(0.0, _row_offset(i))
         if i < _row_count:
             row.visible = true
             row.modulate.a = 1.0
@@ -738,6 +960,15 @@ func _player_color(player_index: int) -> Color:
     var colors: Array = Tokens.PLAYER_COLORS
     return colors[posmod(player_index - 1, colors.size())]
 
+func _team_name(team_id: int) -> String:
+    # Team identity is a letter, never a player identity (Doc 06 §5).
+    return "TEAM %s" % String.chr(65 + posmod(maxi(team_id, 0), 26))
+
+func _team_color(team_id: int) -> Color:
+    # Team color is deliberately separate from the P1..P4 player colors
+    # (Doc 06 §5 / canonical 06 §8).
+    return Tokens.TEAM_A if posmod(maxi(team_id, 0), 2) == 0 else Tokens.TEAM_B
+
 func _placement_text(place: int) -> String:
     var suffix := "TH"
     if place % 100 < 11 or place % 100 > 13:
@@ -778,3 +1009,55 @@ func get_hero_ids() -> Array:
 
 func get_accent_color() -> Color:
     return _accent
+
+func row_count() -> int:
+    # Planned standings rows for the current result (FFA: one per player;
+    # team: one group header per team plus its members).
+    return _row_count
+
+func row_kind(index: int) -> String:
+    # "player" | "team_header" | "team_member" | "" (read surface for tests and
+    # the evidence tool).
+    if index >= 0 and index < _row_kinds.size():
+        return str(_row_kinds[index])
+    return ""
+
+func row_entry(index: int) -> Dictionary:
+    # The snapshot entry (or team group, for a header row) behind a row.
+    if index >= 0 and index < _row_entries.size():
+        return _row_entries[index]
+    return {}
+
+func row_text(index: int) -> String:
+    # The row's one-line reading, exactly as composed on screen: a player row is
+    # "RANK  P#  NAME" (rank omitted on team member rows), a team header row is
+    # its shared-rank line ("1ST · TEAM A").
+    if index < 0 or index >= _row_count:
+        return ""
+    var row: Control = _rows[index]
+    if row == null:
+        return ""
+    if str(_row_kinds[index]) == "team_header":
+        return (row.get_node("Rank") as Label).text
+    var rank_label: Label = row.get_node("Rank")
+    var port_label: Label = row.get_node("Port")
+    var name_label: Label = row.get_node("Name")
+    var parts: Array = []
+    if rank_label.visible and rank_label.text != "":
+        parts.append(rank_label.text)
+    parts.append(port_label.text)
+    parts.append(name_label.text)
+    return "  ".join(parts)
+
+func hero_view():
+    # The ONE winner render view this screen owns (WP-3 FighterRenderView), or
+    # null when the result has no hero (draw / unresolvable id).
+    for view in _hero_views:
+        if is_instance_valid(view):
+            return view
+    return null
+
+func hero_rect() -> Rect2:
+    # The authored hero group field actually used for this result: the FFA hero
+    # frame, or the wide measured group field in team mode.
+    return _hero_rect

@@ -184,6 +184,25 @@ func set_palette(index: int) -> void:
 			Factory.apply_palette(_subjects[i], _ids[i], _palette)
 	_refresh()
 
+func set_subject_palettes(indices: Array) -> void:
+	# Per-subject palette identity for multi-subject presentations (Doc 06 §10:
+	# "team view supports multiple independently paletted subjects"). Each
+	# entry is the resolved presentation variant of that subject's station, so
+	# two duplicates of one fighter cannot collapse to one colour. A single
+	# value list shorter than the subject list leaves the remaining subjects on
+	# the view palette; set_palette() stays the one-palette-for-all entry point.
+	var applied := false
+	for i in _subjects.size():
+		if not is_instance_valid(_subjects[i]):
+			continue
+		var index := int(indices[i]) if i < indices.size() else _palette
+		Factory.apply_palette(_subjects[i], _ids[i], index)
+		applied = true
+	if not indices.is_empty():
+		_palette = int(indices[0])
+	if applied:
+		_refresh()
+
 func palette_index() -> int:
 	return _palette
 
