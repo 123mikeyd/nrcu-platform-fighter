@@ -96,10 +96,19 @@ var player_two: CharacterBody3D
 var p1_label: Label
 var p2_label: Label
 var match_over := false
-# Elimination order observed during the match (player_index sequence). The
-# result snapshot is built from it at resolution, before any reset mutates
-# the fighters (Doc 06 §4/§19).
-var _elimination_order: Array = []
+# Elimination batches observed during the match (Doc 06 §1/§2). One logical
+# frame/tick collects ALL of its pending eliminations into ONE batch, and the
+# snapshot is built only after that batch is complete — the transient-survivor
+# winner bug (declaring a winner off the first individual elimination signal
+# while a second fighter is still falling out in the same tick) cannot happen.
+# `_elimination_batches` holds closed batches (arrays of player_index, in
+# observation order); `_elimination_pending` is the batch currently being
+# observed, closed at the end of the tick; `_result_finalized` seals the
+# immutable snapshot so no later signal can mutate it.
+var _elimination_batches: Array = []
+var _elimination_pending: Array = []
+var _elimination_flush_queued := false
+var _result_finalized := false
 var p1_spawn := Vector3(-4.0, 1.0, 0.0)
 var p2_spawn := Vector3(4.0, 1.0, 0.0)
 
@@ -288,6 +297,10 @@ func _stand_down_match() -> void:
         fighter._clear_move_state()
     for projectile in get_tree().get_nodes_in_group("projectiles") + get_tree().get_nodes_in_group("goo_puddles"):
         projectile.queue_free()
+    # The match is abandoned, not resolved: batch identity and the snapshot seal
+    # are cleared with it, so a later elimination in this arena is observed again
+    # exactly as it was before the stand-down.
+    _reset_elimination_state()
     match_over = false
 
 func start_match(slots: Array, teams: bool, bobo_encounter := false, level := "") -> bool:
@@ -323,7 +336,7 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
     hud_controls.text = freeplay_controls
     active_slots = slots.duplicate(true)
     teams_enabled = teams
-    _elimination_order.clear()
+    _reset_elimination_state()
     match_over = false
     var roster = load("res://scripts/roster.gd")
     var palette_counts: Dictionary = {}
@@ -635,18 +648,30 @@ func _build_hud() -> void:
     layer.add_child(ready_label)
 
 func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
-    if match_over:
+    if _result_finalized:
         return
-    # Elimination order is match-layer state: recorded here, before the
-    # survivor check can end the match (Doc 06 §4).
-    if int(loser.stocks) <= 0 and loser.player_index not in _elimination_order:
-        _elimination_order.append(loser.player_index)
+    # Batch identity is match-layer state: recorded here, before the survivor
+    # check can end the match (Doc 06 §2). Everything observed in this
+    # frame/tick lands in the SAME pending batch.
+    if int(loser.stocks) <= 0:
+        _record_elimination(int(loser.player_index))
+    if match_over:
+        # The deciding elimination of this tick already resolved the match, but
+        # the immutable snapshot is not built yet: a further elimination from the
+        # SAME tick still belongs to the deciding batch, so it was recorded above
+        # and is folded in by the deferred finalize. This is Doc 06 §1's
+        # transient-survivor winner bug: the winner is never declared off the
+        # first individual signal while a second fighter is still being removed
+        # in the same tick.
+        _schedule_elimination_flush()
+        return
     var survivors: Array = fighters.filter(func(f): return f.stocks > 0)
     var sides: Array = []
     for fighter in survivors:
         if fighter.team_id not in sides:
             sides.append(fighter.team_id)
     if (teams_enabled and sides.size() > 1) or (not teams_enabled and survivors.size() > 1):
+        _schedule_elimination_flush()
         return
     match_over = true
     _cancel_ready()
@@ -667,12 +692,80 @@ func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
         var encounter_id: String = launch_config.story_encounter_id() if launch_config != null and launch_config.has_story() else ""
         call_deferred("_return_to_post_match", AppStateScript.story_return_payload(
             _story_won, str(encounter_id), str(player_one.character_id), str(active_level), launch_config))
+        # A Story encounter has no multiplayer MatchResult: sealing the state
+        # stops the deferred finalize from ever building one for it.
+        _result_finalized = true
         return
-    # Explicit result snapshot at match resolution, before any reset mutates the
-    # fighter state (Doc 06 §4): stable fighter ids, explicit placement, teams
-    # and winner flags. PostMatch is pure presentation over this payload — no
-    # live-fighter node is ever consulted for a result again.
-    var result = MatchResultScript.resolve(fighters, teams_enabled, _elimination_order)
+    # The snapshot is NOT built here (Doc 06 §1): the deciding tick's batch is
+    # closed at the end of the tick, so every elimination the same tick still
+    # produces is part of it — and only then is the immutable MatchResult
+    # constructed and handed over (Doc 06 §4).
+    _schedule_elimination_flush()
+
+func _reset_elimination_state() -> void:
+    # Match-layer state for one match: cleared at match start and at a local
+    # reset, never by the snapshot (which is immutable).
+    _elimination_batches.clear()
+    _elimination_pending.clear()
+    _elimination_flush_queued = false
+    _result_finalized = false
+
+func _record_elimination(player_index: int) -> bool:
+    # One elimination belongs to exactly one batch: the first observation wins,
+    # and a repeat signal for the same player is ignored.
+    if player_index in _elimination_pending:
+        return false
+    for batch in _elimination_batches:
+        if player_index in batch:
+            return false
+    _elimination_pending.append(player_index)
+    return true
+
+func _schedule_elimination_flush() -> void:
+    # The batch boundary is the end of the logical frame/tick: the deferred call
+    # runs after every fighter's physics step of this tick (and after any
+    # same-tick elimination signal), so a batch is always complete before it is
+    # closed.
+    if _elimination_flush_queued or _result_finalized:
+        return
+    _elimination_flush_queued = true
+    call_deferred("_flush_eliminations")
+
+func _flush_eliminations() -> void:
+    _elimination_flush_queued = false
+    if _result_finalized:
+        return
+    if not match_over:
+        _close_elimination_batch(false)
+        return
+    _finalize_match_result()
+
+func _close_elimination_batch(final: bool) -> void:
+    if final:
+        # Every elimination the match observed is in the deciding batch already;
+        # a fighter that is demonstrably out of stocks but was never signalled
+        # (fixture / defensive path) is still eliminated at resolution time, so
+        # it joins the FINAL batch instead of getting an invented order. Doc 06
+        # §2's tie rule then gives it the same rank as the tick that decided the
+        # match, and when that batch removed every survivor the outcome is DRAW.
+        for fighter in fighters:
+            if int(fighter.stocks) <= 0:
+                _record_elimination(int(fighter.player_index))
+    if _elimination_pending.is_empty():
+        return
+    _elimination_batches.append(_elimination_pending.duplicate())
+    _elimination_pending.clear()
+
+func _finalize_match_result() -> void:
+    # The one place the immutable MatchResult is produced, at the batch boundary
+    # (Doc 06 §1/§5). Sealed first so no later signal can mutate it.
+    if _result_finalized:
+        return
+    _result_finalized = true
+    _close_elimination_batch(true)
+    if story_state != "":
+        return
+    var result = MatchResultScript.resolve(fighters, teams_enabled, _elimination_batches)
     call_deferred("_return_to_post_match", AppStateScript.vs_return_payload(
         result, launch_config, teams_enabled, str(active_level), active_slots))
 
@@ -685,7 +778,7 @@ func _reset_match() -> void:
         # REPLAY/RETRY (the arena is a fresh launch by then), so a local reset
         # never restarts a resolved encounter in place.
         return
-    _elimination_order.clear()
+    _reset_elimination_state()
     match_over = false
     for fighter in fighters:
         fighter.reset_fighter(fighter.spawn_position, true)

@@ -45,13 +45,25 @@ func act(node_name: String) -> Button:
     return rs.find_child(node_name, true, false)
 
 func resolve_ffa_match(arena: Node, survivors: Array) -> void:
+    # WP-5 LANE B: eliminations that happen at DIFFERENT times are different
+    # batches (Doc 06 §2), so a tick boundary is awaited BETWEEN them; the batch
+    # boundary — not the signal stack — is what match resolution ranks by. No
+    # frame is awaited after the deciding elimination (that one frees the arena).
     for fighter in arena.fighters:
         fighter.set_physics_process(false)
+    var order: Array = []
     for fighter in arena.fighters:
-        if int(fighter.player_index) in survivors:
-            continue
+        if not (int(fighter.player_index) in survivors):
+            order.append(fighter)
+    for i in order.size():
+        var fighter = order[i]
         fighter.stocks = 0
         arena._on_fighter_eliminated(fighter)
+        if i + 1 >= order.size():
+            return
+        await process_frame
+        if not is_instance_valid(arena):
+            return
 
 func run():
     var Tokens = load("res://scripts/ui_tokens.gd")
@@ -89,7 +101,7 @@ func run():
         quit(1)
         return
     # P1 out first, P2 next, P3 last — P4 survives.
-    resolve_ffa_match(arena, [4])
+    await resolve_ffa_match(arena, [4])
     check(arena.match_over, "the match resolves at the last elimination")
     host = await vs.wait_for_flow(self, host_id)
     check(host != null, "the completed match RETURNs to the MatchFlow host")
@@ -114,8 +126,12 @@ func run():
     check(not bool(result.team_mode), "FFA payload is not team mode")
     check(int(result.winning_team) == -1, "no winning team in FFA")
     check(result.entries.size() == 4, "one entry per active player")
-    var required := ["player_index", "fighter_id", "fighter_name", "team_id", "placement",
-        "stocks_remaining", "damage_percent", "eliminated", "elimination_order", "is_winner"]
+    # WP-5 LANE B: the complete documented snapshot field set (Doc 02 §4/§06 §4),
+    # including the resolved palette variant, the elimination BATCH and the team
+    # placement.
+    var required := ["player_index", "fighter_id", "fighter_name", "palette_index", "team_id",
+        "stocks_remaining", "damage_percent", "eliminated", "elimination_batch", "placement",
+        "team_placement", "is_winner"]
     var complete := true
     var ids: Array = []
     var places: Array = []
@@ -136,9 +152,12 @@ func run():
     var ffa_winner: Dictionary = result.winner_entry()
     check(not ffa_winner.is_empty() and int(ffa_winner["player_index"]) == 4 and bool(ffa_winner["is_winner"]), "declared winner is P4")
     check(str(result.entry_for_player(4)["fighter_id"]) == "turbofit", "winner fighter_id is stable")
-    check(int(result.entry_for_player(1)["elimination_order"]) == 0, "first elimination is order 0")
-    check(int(result.entry_for_player(2)["elimination_order"]) == 1, "elimination order tracks the match sequence")
-    check(int(result.entry_for_player(3)["elimination_order"]) == 2, "last eliminated carries the final order")
+    check(int(result.entry_for_player(4)["elimination_batch"]) == -1, "the survivor carries no elimination batch")
+    check(int(result.entry_for_player(1)["elimination_batch"]) == 0, "first elimination is batch 0")
+    check(int(result.entry_for_player(2)["elimination_batch"]) == 1, "the next elimination is batch 1")
+    check(int(result.entry_for_player(3)["elimination_batch"]) == 2, "the last eliminated carries the final batch")
+    check(int(result.entry_for_player(4)["team_placement"]) == 1, "FFA team placement mirrors the individual rank")
+    check(int(result.entry_for_player(1)["palette_index"]) == 0, "entries carry the resolved presentation variant")
 
     # Top outcome header: winner identity is the primary title, no second line.
     check(post.outcome_label.visible, "outcome header is up with the result")
@@ -257,6 +276,7 @@ func run():
         arena.fighters[0].stocks = 0
         arena._on_fighter_eliminated(arena.fighters[0])
         check(not arena.match_over, "team match continues after one elimination")
+        await frames(1)
         arena.fighters[2].stocks = 0
         arena._on_fighter_eliminated(arena.fighters[2])
         check(arena.match_over, "team result resolves")
@@ -272,8 +292,21 @@ func run():
             check(rs.get_accent_color() == Tokens.TEAM_B, "team result uses the team color, not a player color")
             check(rs.get_hero_ids() == ["doge_man", "turbofit"], "winner group contains the winning team players")
             var team_list = rs.find_child("StandingsList", true, false)
-            check(team_list.get_child(0).find_child("Name", true, false).text == "DOGE MAN", "team standings stay individual and placed")
-            check(team_list.get_child(3).find_child("Name", true, false).text == "TEKNIUM", "eliminated team players remain in the standings")
+            # WP-5 LANE B (Doc 06 §3, Doc 01 §12): team members SHARE their team
+            # rank — the winning teammates are never ranked against each other,
+            # and the losing members share theirs.
+            check(team_list.get_child(0).find_child("Name", true, false).text == "DOGE MAN"
+                and team_list.get_child(1).find_child("Name", true, false).text == "TURBOFIT",
+                "the winning team's members lead the standings")
+            check(team_list.get_child(0).find_child("Rank", true, false).text == "1ST"
+                and team_list.get_child(1).find_child("Rank", true, false).text == "1ST",
+                "winning teammates share 1ST instead of being ranked against each other")
+            check(team_list.get_child(2).find_child("Name", true, false).text == "TEKNIUM"
+                and team_list.get_child(3).find_child("Name", true, false).text == "GGB",
+                "eliminated team players remain in the standings")
+            check(team_list.get_child(2).find_child("Rank", true, false).text == "2ND"
+                and team_list.get_child(3).find_child("Rank", true, false).text == "2ND",
+                "the losing team shares its rank across its members")
 
     # ---------------------------------------------------------------------
     # Draw (Doc 06 §4): heading DRAW, placements as supplied, no winner hero.
@@ -311,10 +344,10 @@ func run():
     # never stats (Doc 06 §2).
     # ---------------------------------------------------------------------
     var placed = Payload.from_entries("WIN", false, -1, [
-        {"player_index": 4, "fighter_id": "turbofit", "fighter_name": "TURBOFIT", "team_id": -1, "placement": 2, "stocks_remaining": 3, "damage_percent": 12, "eliminated": false, "elimination_order": -1, "is_winner": false},
-        {"player_index": 3, "fighter_id": "ggb", "fighter_name": "GGB", "team_id": -1, "placement": 3, "stocks_remaining": 0, "damage_percent": 0, "eliminated": true, "elimination_order": 1, "is_winner": false},
-        {"player_index": 1, "fighter_id": "teknium", "fighter_name": "TEKNIUM", "team_id": -1, "placement": 4, "stocks_remaining": 0, "damage_percent": 0, "eliminated": true, "elimination_order": 0, "is_winner": false},
-        {"player_index": 2, "fighter_id": "doge_man", "fighter_name": "DOGE MAN", "team_id": -1, "placement": 1, "stocks_remaining": 1, "damage_percent": 137, "eliminated": false, "elimination_order": -1, "is_winner": true},
+        {"player_index": 4, "fighter_id": "turbofit", "fighter_name": "TURBOFIT", "team_id": -1, "placement": 2, "stocks_remaining": 3, "damage_percent": 12, "eliminated": false, "elimination_batch": -1, "is_winner": false},
+        {"player_index": 3, "fighter_id": "ggb", "fighter_name": "GGB", "team_id": -1, "placement": 3, "stocks_remaining": 0, "damage_percent": 0, "eliminated": true, "elimination_batch": 1, "is_winner": false},
+        {"player_index": 1, "fighter_id": "teknium", "fighter_name": "TEKNIUM", "team_id": -1, "placement": 4, "stocks_remaining": 0, "damage_percent": 0, "eliminated": true, "elimination_batch": 0, "is_winner": false},
+        {"player_index": 2, "fighter_id": "doge_man", "fighter_name": "DOGE MAN", "team_id": -1, "placement": 1, "stocks_remaining": 1, "damage_percent": 137, "eliminated": false, "elimination_batch": -1, "is_winner": true},
     ])
     rs.show_result(placed, false)
     rs.finish_reveal()
@@ -335,8 +368,8 @@ func run():
 
     # Unknown fighter_id: text hero only, NEVER a display-name reverse lookup.
     var bad = Payload.from_entries("WIN", false, -1, [
-        {"player_index": 1, "fighter_id": "not_a_fighter", "fighter_name": "TEKNIUM", "team_id": -1, "placement": 1, "stocks_remaining": 2, "damage_percent": 10, "eliminated": false, "elimination_order": -1, "is_winner": true},
-        {"player_index": 2, "fighter_id": "doge_man", "fighter_name": "DOGE MAN", "team_id": -1, "placement": 2, "stocks_remaining": 0, "damage_percent": 0, "eliminated": true, "elimination_order": 0, "is_winner": false},
+        {"player_index": 1, "fighter_id": "not_a_fighter", "fighter_name": "TEKNIUM", "team_id": -1, "placement": 1, "stocks_remaining": 2, "damage_percent": 10, "eliminated": false, "elimination_batch": -1, "is_winner": true},
+        {"player_index": 2, "fighter_id": "doge_man", "fighter_name": "DOGE MAN", "team_id": -1, "placement": 2, "stocks_remaining": 0, "damage_percent": 0, "eliminated": true, "elimination_batch": 0, "is_winner": false},
     ])
     rs.show_result(bad, false)
     rs.finish_reveal()
