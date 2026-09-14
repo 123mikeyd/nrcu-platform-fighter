@@ -25,6 +25,10 @@ const Tokens = preload("res://scripts/ui_tokens.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
 
 const MATCH_SCENE := "res://scenes/main.tscn"
+# WP-0 step 3 route switch (Doc 02 §1/§10.3): the player-facing VS route enters
+# the MatchFlow host — CSS/SSS live outside gameplay now, and the arena is only
+# constructed by the router's LAUNCH handshake.
+const MATCH_FLOW_SCENE := "res://scenes/match_flow.tscn"
 
 # Destination data (Doc 03 §2) in authored visual order.
 const DESTINATIONS: Array = [
@@ -469,18 +473,28 @@ func _leave_to_match(mode: String) -> void:
         rail.show()
         var lead := create_tween()
         lead.tween_property(rail, "size:x", minf(_rows[_selected]["rail_w"] + RAIL_LEAD, 1016.0), _sec(EXIT_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-        lead.tween_callback(_fade_out_then_go)
+        lead.tween_callback(_fade_out_then_go.bind(mode))
     else:
-        _fade_out_then_go()
+        _fade_out_then_go(mode)
 
-func _fade_out_then_go() -> void:
+func _fade_out_then_go(mode: String) -> void:
     var fade := create_tween()
     fade.tween_property(self, "modulate:a", 0.0, _sec(FADE_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-    fade.tween_callback(_go_to_match)
+    fade.tween_callback(_go_to_match.bind(mode))
 
-func _go_to_match() -> void:
+func _go_to_match(mode: String) -> void:
     await Frontend.hold_frame()
-    get_tree().change_scene_to_file(MATCH_SCENE)
+    get_tree().change_scene_to_file(_destination_scene(mode))
+
+func _destination_scene(mode: String) -> String:
+    # PLAY / STORY route decision (Doc 02 §10). VS configuration is not gameplay
+    # and no longer loads the arena: it enters MatchFlow, which constructs the
+    # arena only after a validated MatchLaunchConfig exists. Story Select /
+    # Briefing move into MatchFlow in WP-0 step 4 and the F10 debug launcher
+    # stays arena-side (Doc 02 §9), so those two still load main.tscn.
+    if mode == "story" or mode == "debug":
+        return MATCH_SCENE
+    return MATCH_FLOW_SCENE
 
 # --- input -----------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:

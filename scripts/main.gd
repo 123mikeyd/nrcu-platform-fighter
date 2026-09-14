@@ -1,4 +1,22 @@
 extends Node3D
+# Gameplay arena (Doc 02 §1: "main.tscn may keep its name; its responsibility
+# becomes gameplay"). The player-facing VS route no longer loads this scene
+# directly — scenes/match_flow.tscn hosts CSS/SSS and constructs the arena with
+# an immutable MatchLaunchConfig (WP-0 steps 3 and 5).
+#
+# Two ways in:
+#   * the MatchFlow router sets `launch_config` BEFORE tree entry; _ready then
+#     skips the legacy screen entry routes, prewarms gameplay and reports
+#     `presentation_ready` (Doc 02 §6). The match starts through
+#     start_match_from_config(), which consumes only the frozen snapshot.
+#   * a direct load (tests, F10 debug launcher, the Story route until step 4)
+#     keeps the shipped behaviour: AppState.enter_mode picks the entry route.
+#
+# The legacy Char/Stage/Story/Result panels below are still constructed here so
+# the debug launcher and the existing tests keep working, but they are NOT part
+# of the production VS path any more (removing them outright is WP-0 steps 6-7).
+
+signal presentation_ready
 
 const FighterScript = preload("res://scripts/fighter.gd")
 const Config = preload("res://scripts/match_config.gd")
@@ -10,6 +28,16 @@ const ResultScreenScript = preload("res://scripts/result_screen.gd")
 const MatchResultScript = preload("res://scripts/match_result.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
 const SelectionStateScript = preload("res://scripts/match_selection_state.gd")
+# Adapters only: the launch snapshot's typed kinds/input sources are mapped back
+# to the legacy slot vocabulary start_match() already speaks.
+const StateScript = preload("res://scripts/match_flow_state.gd")
+
+const MATCH_FLOW_SCENE := "res://scenes/match_flow.tscn"
+
+# The immutable launch snapshot handed over by the MatchFlow router (Doc 02 §3).
+# Set before tree entry; null for every direct load.
+var launch_config = null
+var _launched_from_flow := false
 var ready_remaining := 0.0
 var go_remaining := 0.0
 var ready_label: Label
@@ -90,7 +118,15 @@ func _ready() -> void:
     var entry: String = AppStateScript.enter_mode
     AppStateScript.enter_mode = "debug"
     _entry_mode = entry
-    if entry == "vs":
+    if launch_config != null:
+        # MatchFlow destination (Doc 02 §1/§6): the router already validated the
+        # setup and constructed this arena, so the legacy screen entry routes do
+        # not run. Gameplay is prewarmed and reports readiness; the match starts
+        # when the router releases the frontend.
+        _launched_from_flow = true
+        setup.hide()
+        call_deferred("_announce_presentation_ready")
+    elif entry == "vs":
         open_vs()
     elif entry == "story":
         open_story()
@@ -213,6 +249,45 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
     _begin_ready()
     return true
 
+# --- MatchFlow launch contract (Doc 02 §3, §6, §10.5) -----------------------
+
+func _announce_presentation_ready() -> void:
+    # Doc 02 §6: the destination reports it is visually ready BEFORE the router
+    # releases the frontend, so the LAUNCH transition never happens over a
+    # black/cursor-only construction frame. The world, HUD and result layer are
+    # already built at this point; what is still constructed synchronously after
+    # the reveal is the match itself (start_match_from_config spawns fighters).
+    presentation_ready.emit()
+
+func start_match_from_config(cfg) -> bool:
+    # Gameplay consumes the immutable snapshot only (Doc 02 §3): the config
+    # carries the mode, the resolved slots, the launch stage and the Story
+    # payload, so nothing here reaches into Character Select, Stage Select, the
+    # Debug Setup model or any screen node.
+    if cfg == null or not cfg.is_valid():
+        return false
+    var slots: Array = []
+    for entry in cfg.slots():
+        var slot: Dictionary = entry
+        slots.append({
+            "kind": StateScript.kind_to_legacy(int(slot.get("kind", 0))),
+            "character": str(slot.get("fighter_id", "")),
+            "team": int(slot.get("team_id", 0)),
+            "difficulty": str(slot.get("difficulty", "normal")),
+            "device": StateScript.input_source_to_legacy_device(slot.get("input_source", {})),
+        })
+    return start_match(slots, int(cfg.mode()) == 1, cfg.has_story(), str(cfg.stage_id()))
+
+func _reenter_match_flow(origin: String) -> void:
+    # Gameplay end -> post-match configuration (Doc 02 §1/§5: the flow is
+    # re-entered for CSS/SSS). The route origin rides the existing entry-mode
+    # string until WP-0 step 6 introduces the PostMatch payload (MatchResult +
+    # preserved configuration); this scene change tears the completed arena down
+    # before the flow returns.
+    result_panel.hide()
+    AppStateScript.enter_mode = "vs:" + str(origin)
+    get_tree().change_scene_to_file(MATCH_FLOW_SCENE)
+
 func _build_story_panel(layer: CanvasLayer) -> void:
     # Doc 07 §11-16: the Encounter Briefing scene owns the Story visual layer
     # (enemy presentation, objective/rules, fighter selection, rail action).
@@ -305,6 +380,9 @@ func _launch_match() -> void:
     char_select.reopen()
 
 func _on_result_change_fighters() -> void:
+    if _launched_from_flow:
+        _reenter_match_flow("results")
+        return
     result_panel.hide()
     if selection_state != null:
         # VS flow: back to the character select with everything preserved.
@@ -314,6 +392,10 @@ func _on_result_change_fighters() -> void:
         show_setup()
 
 func _on_result_change_stage() -> void:
+    if _launched_from_flow:
+        # Doc 02 §5: Results -> Change Stage PUSHes the SSS with origin RESULTS.
+        _reenter_match_flow("stage")
+        return
     if selection_state == null:
         return
     result_panel.hide()
@@ -693,7 +775,9 @@ func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
     var result = MatchResultScript.resolve(fighters, teams_enabled, _elimination_order)
     result_panel.show()
     winner_label.visible = true
-    result_screen.show_result(result, selection_state != null)
+    # Change Stage stays offered when the configuration lives in the MatchFlow
+    # host (the shipped Results grammar keeps all four actions).
+    result_screen.show_result(result, selection_state != null or _launched_from_flow)
 
 func _reset_match() -> void:
     if story_state in ["complete", "lost"]:
