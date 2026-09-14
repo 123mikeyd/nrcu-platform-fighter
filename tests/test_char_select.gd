@@ -11,8 +11,23 @@ extends SceneTree
 #   * Ready is decided by the ONE validation authority (>= 2 active, >= 1
 #     Human, valid devices, both teams) — never a rule set in the screen.
 #
+# The three suites at the END of this file are the OWNER-directed ones and each
+# drives the REAL path the finding came from:
+#   * real_route_entry_suite   (1) the pose in the first visible CSS frame after
+#                              the shipped Main PLAY route — pad accept and
+#                              mouse click — asserted before any input reaches
+#                              the CSS;
+#   * roster_tile_anchor_suite (2) the roster tile's focus-hand anchor: the
+#                              fingertip in the tile's lower-right region and
+#                              the drawn body clear of the name's font-measured
+#                              extent, on EVERY tile;
+#   * hover_pose_gate_suite    (3) the pinch belongs to the chip's OWN tile —
+#                              hovering any other fighter while a chip is
+#                              committed draws the ordinary pointer.
+#
 # Composition/geometry invariants live in tests/test_css_composition.gd; the
 # Doc 08 §4 public-input state matrices live in tests/test_css_state.gd.
+const Support = preload("res://tools/acceptance_support.gd")
 var failures := 0
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
@@ -336,6 +351,13 @@ func run():
     await browse_survival_suite(vs, hand)
     await committed_chip_hover_suite(vs, hand)
     await entry_pose_suite(vs, hand)
+    # --- the OWNER-directed suites (findings 1-3), each on its own real path:
+    # the pinch belongs to the chip's own tile, the roster anchor sits in the
+    # tile's lower-right region with the name clear, and the pose is already
+    # right in the first visible frame of the shipped Main PLAY route.
+    await hover_pose_gate_suite(vs, hand)
+    await roster_tile_anchor_suite(vs, hand)
+    await real_route_entry_suite(vs, hand)
 
     # --- Back cancels a carried token (fresh host: the route itself is a scene
     # change owned by the flow, so only the local contract is asserted)
@@ -956,3 +978,335 @@ func staged_cancel_from_results(vs, hand) -> void:
     check(self.current_scene == scene_before, "stage 4: the route did NOT switch scene to Main")
     post.queue_free()
     await process_frame
+
+# --- (3) THE POSE RULE: the pinch belongs to the chip's OWN tile -------------
+#
+# OWNER REPORT (live pad + mouse, current build): while a chip was COMMITTED,
+# hovering a DIFFERENT fighter also drew the empty pinch, so the hand read as
+# "about to pick something up" over every tile. The rule — single-sourced in
+# char_select._cursor_pose_visual(), the ONE place that writes the hand's visual
+# mode (CARRY while a chip is in the hand; HOVER only on the hold the hand
+# ADDRESSES: the tile that HOLDS the active player's committed chip, or any
+# browsed hold while that player has no committed pick; the ordinary pointer
+# everywhere else) — is asserted here. Every hover below is a REAL pointer
+# motion through the engine's dispatch (the hover-survival helper convention)
+# plus the tile's own `mouse_entered` entry, never a private call.
+
+func hover_pose_gate_suite(vs, hand) -> void:
+    var host = await vs.enter(self)
+    var css = host.char_select()
+    if css == null or not await vs.wait_css_ready(host, self):
+        check(false, "pose gate: a CSS is mounted and idle")
+        return
+    var state = host.selection_state
+    var tiles: Array = css.get_tiles()
+    var ggb: int = css._tile_index_of("ggb")
+    var other: int = css._tile_index_of("mephisto")
+    var third: int = css._tile_index_of("turbofit")
+    check(ggb >= 0 and other >= 0 and third >= 0 and other != ggb and third != ggb and third != other,
+        "pose gate: three distinct roster tiles are available (%d/%d/%d)" % [ggb, other, third])
+    await create_timer(0.4).timeout
+
+    # --- the ACTIVE station commits through the real pointer path -----------
+    await hover_tile_mouse(hand, css, ggb)
+    await pointer_click(hand, tiles[ggb], tiles[ggb].get_global_rect().get_center())
+    await create_timer(0.4).timeout
+    check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED,
+        "pose gate: P1's chip is COMMITTED and PLACED (state %d)" % css.token_state(0))
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "pose gate: nothing is in the hand after the commit (carried_by %d)" % int(css.get_carried_by()))
+
+    # --- the chip's OWN tile: the empty pinch -------------------------------
+    await hover_tile_mouse(hand, css, ggb)
+    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
+        "pose gate: hovering the tile that HOLDS the player's chip draws the empty pinch (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+
+    # --- every OTHER tile: the ordinary pointer -----------------------------
+    for index in [other, third]:
+        await hover_tile_mouse(hand, css, index)
+        check(int(hand.visual) == 0 and texture_path_of(hand.active_texture()) == POINT_SPRITE,
+            "pose gate: hovering a fighter WITHOUT the player's chip draws the ordinary pointer (tile %d, visual %d, %s)"
+            % [index, int(hand.visual), texture_path_of(hand.active_texture())])
+        check(int(css.get_candidate()) == index,
+            "pose gate (tile %d): the hover still browses (candidate %d)" % [index, int(css.get_candidate())])
+        check(str(state.slots[0]["character"]) == "ggb" and css.token_state(0) == PLACED,
+            "pose gate (tile %d): the committed pick is untouched by the hover" % index)
+
+    # --- with the chip IN the hand the grip is drawn over ANY tile ----------
+    await press_pad_b()
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying() and css.token_state(0) == CARRIED,
+        "pose gate: pad-B takes the committed chip into the hand (carried_by %d)" % int(css.get_carried_by()))
+    await hover_tile_mouse(hand, css, third)
+    check(int(hand.visual) == 1 and texture_path_of(hand.active_texture()) == CARRY_SPRITE,
+        "pose gate: carrying keeps the approved grip whatever the pointer is over (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    check(str(css.token_view(0).get_parent().name) == "CursorCarryLayer",
+        "pose gate: the carried chip rides the cursor carry layer")
+
+    # --- and the pinch returns once nothing is committed --------------------
+    await press_pad_b()
+    await create_timer(0.2).timeout
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "pose gate: the carry cancels (carried_by %d)" % int(css.get_carried_by()))
+    check(str(state.slots[0]["character"]) == "", "pose gate: the take-back left the pick uncommitted")
+    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
+        "pose gate: nothing is committed and the hand rests on a hold, so the pinch returns (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    if is_instance_valid(host):
+        host.queue_free()
+    await process_frame
+
+# --- (2) the roster tile's focus-hand anchor (owner direction) ---------------
+#
+# The owner's direction supersedes the old centre-top calibration: the hand
+# belongs LOWER-RIGHT on the addressed tile — the fingertip in the tile's
+# lower-right region — and the drawn body must never cover the fighter's name
+# (the Main rail rows' own clearance discipline). The name is measured as its
+# FONT-MEASURED extent (the shaped text), which is also what the optical
+# manifest's label rect now is, so the meter and the assertion read one box.
+
+func name_glyph_box(tile: Control) -> Rect2:
+    # The fighter name's shaped box, measured from the font (independent of the
+    # widget's own rect), centred in the tile's name band the way the label
+    # draws it.
+    var label: Label = tile.get_node("NameBand/FighterName")
+    var font := label.get_theme_font("font")
+    var fs: int = label.get_theme_font_size("font_size")
+    var shaped := font.get_string_size(str(label.text), HORIZONTAL_ALIGNMENT_LEFT, -1.0, fs)
+    var glyph_h := font.get_height(fs)
+    var band: Rect2 = tile.name_band_rect()
+    return Rect2(tile.get_global_rect().position + Vector2(
+        (band.size.x - shaped.x) * 0.5, band.position.y + (band.size.y - glyph_h) * 0.5),
+        Vector2(shaped.x, glyph_h))
+
+func roster_tile_anchor_suite(vs, hand) -> void:
+    var host = await vs.enter(self)
+    var css = host.char_select()
+    if css == null or not await vs.wait_css_ready(host, self):
+        check(false, "roster anchor: a CSS is mounted and idle")
+        return
+    var tiles: Array = css.get_tiles()
+    check(tiles.size() == 7, "roster anchor: seven roster tiles (%d)" % tiles.size())
+    await create_timer(0.4).timeout
+    # A committed pick keeps focus browsing from lifting a chip, so the hand can
+    # be authored onto every tile's own anchor without a carry in flight.
+    css._on_tile_pressed("ggb")
+    await create_timer(0.4).timeout
+    hand.claim_focus()
+    var anchored := 0
+    for i in tiles.size():
+        var tile: Control = tiles[i]
+        tile.grab_focus()
+        await Support.settle_hand(self)
+        var rect: Rect2 = tile.get_global_rect()
+        var tip: Vector2 = tile.anchor().get_global_rect().position
+        var rel: Vector2 = tip - rect.position
+        check(rect.has_point(tip),
+            "roster anchor (%s): the fingertip is ON the tile (%s)" % [str(tile.fighter_id), str(tip)])
+        check(rel.x >= rect.size.x * 0.75 and rel.y >= rect.size.y * 0.75,
+            "roster anchor (%s): the fingertip sits in the tile's LOWER-RIGHT region (rel %.2f / %.2f of %s)"
+            % [str(tile.fighter_id), rel.x / rect.size.x, rel.y / rect.size.y, str(rect.size)])
+        check(hand.hotspot.distance_to(tip) <= Support.REACH_TOLERANCE_PX + 1.0,
+            "roster anchor (%s): the hand settles on the authored anchor (%.3f px)"
+            % [str(tile.fighter_id), hand.hotspot.distance_to(tip)])
+        var glyph := name_glyph_box(tile)
+        var authored := Support.hand_body_rect(hand, "authored")
+        check(Support.intersect_area(authored, glyph) == 0.0,
+            "roster anchor (%s): the drawn hand body never crosses the name's font-measured extent %s (overlap %.2f px^2)"
+            % [str(tile.fighter_id), str(glyph), Support.intersect_area(authored, glyph)])
+        var observed := Support.hand_body_rect(hand, "observed")
+        check(Support.intersect_area(observed, glyph) == 0.0,
+            "roster anchor (%s): the pose actually drawn at the anchor clears the name too (overlap %.2f px^2)"
+            % [str(tile.fighter_id), Support.intersect_area(observed, glyph)])
+        var label_rect: Rect2 = (tile.get_node("NameBand/FighterName") as Label).get_global_rect()
+        check(absf(label_rect.size.x - glyph.size.x) < 0.51,
+            "roster anchor (%s): the measurable label rect IS the shaped name (%s vs %.1f px)"
+            % [str(tile.fighter_id), str(label_rect.size), glyph.size.x])
+        var optical := Support.measure_placement(hand, tile)
+        check(bool(optical["placement_pass"]),
+            "roster anchor (%s): the manifest's own optical verdict stays green (%s, %.2f px from the surface)"
+            % [str(tile.fighter_id), str(optical["placement"]), optical["distance_to_action_surface_px"]])
+        check(not bool(optical["label_obscured"]),
+            "roster anchor (%s): the manifest's label_obscured stays 0 (%.2f px^2)"
+            % [str(tile.fighter_id), optical["label_obscured_px2"]])
+        anchored += 1
+    check(anchored == tiles.size(), "roster anchor: every roster tile was measured at its own anchor (%d)" % anchored)
+    if is_instance_valid(host):
+        host.queue_free()
+    await process_frame
+
+    # --- the DRAWN pinch at the entry anchor (nothing committed) ------------
+    hand.claim_focus()
+    var fresh_host = await vs.enter(self)
+    var fresh = fresh_host.char_select()
+    if fresh == null or not await vs.wait_css_ready(fresh_host, self):
+        check(false, "roster anchor: a fresh CSS is mounted and idle")
+        return
+    await create_timer(0.4).timeout
+    check(int(fresh.get_carried_by()) == -1 and not hand.is_carrying(),
+        "roster anchor: the entry seed lifts no chip")
+    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
+        "roster anchor: the entry draws the empty pinch (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    await Support.settle_hand(self)
+    var first: Control = fresh.get_tiles()[0]
+    var entry_body := Support.hand_body_rect(hand, "observed")
+    var entry_glyph := name_glyph_box(first)
+    check(Support.intersect_area(entry_body, entry_glyph) == 0.0,
+        "roster anchor: the PINCH drawn at the entry anchor clears the first tile's name (overlap %.2f px^2)"
+        % Support.intersect_area(entry_body, entry_glyph))
+    if is_instance_valid(fresh_host):
+        fresh_host.queue_free()
+    await process_frame
+
+# --- (1) THE ENTRY POSE ON THE REAL PLAY ROUTE -------------------------------
+#
+# OWNER REPORT (live pad + mouse, current build): right after Play, the hand sat
+# on the first roster tile but drew the WRONG pose until the first controller
+# input arrived, which then fixed it. The previous entry-pose suite missed this
+# because it never took the real route (it mounted the MatchFlow fixture
+# directly and forced FOCUS with a direct hand.claim_focus() call) and because
+# it asserted the pose only AFTER the entry guard and the hand's flight had
+# settled — by then the old geometric fallback (_cursor_in_roster(), the
+# fingertip inside the roster envelope) had become true, so the stale window was
+# invisible to it.
+#
+# The pose is now read from the screen's STATE — the tile the focus owns, or the
+# tile the pointer rests on — so it is correct in the FIRST frame the screen is
+# visible. Both passes below press the shipped Main PLAY row through the real
+# route (the MatchFlow host is entered by the runtime's scene change) and assert
+# in that first visible frame, while the CSS entry guard is still running and NO
+# input event has been delivered to the Character Select.
+
+func mount_main() -> Control:
+    # The shipped Main Menu as the current scene, exactly like the runtime: the
+    # PLAY route replaces it with the MatchFlow host.
+    var home = (load("res://scenes/home.tscn") as PackedScene).instantiate()
+    root.add_child(home)
+    if current_scene == null:
+        current_scene = home
+    await frames(14)
+    return home
+
+func await_css_entry(previous: Array) -> Array:
+    # The FIRST frame a NEW MatchFlow host shows its Character Select — the frame
+    # the runtime's PLAY route lands. No input is delivered after the press.
+    for i in 600:
+        await process_frame
+        for child in root.get_children():
+            if not child.has_method("char_select"):
+                continue
+            if child.get_instance_id() in previous:
+                continue
+            var css = child.char_select()
+            if css != null and css.is_visible_in_tree():
+                return [child, css]
+    return [null, null]
+
+func cleanup_real_route(host, home) -> void:
+    # Test hygiene: the route's own scene change made the flow the current
+    # scene, so the pointer is cleared first (never a dangling current_scene)
+    # before this suite hands the tree back.
+    if home != null and is_instance_valid(home):
+        home.queue_free()
+    if host != null and is_instance_valid(host):
+        host.hide()
+        if current_scene == host:
+            current_scene = null
+        host.queue_free()
+    await process_frame
+    await process_frame
+
+func real_route_entry_suite(vs, hand) -> void:
+    await real_route_entry_pad(vs, hand)
+    await real_route_entry_mouse(vs, hand)
+
+func real_route_entry_pad(vs, hand) -> void:
+    var previous: Array = vs.host_ids(self)
+    var home = await mount_main()
+    var play: Button = home.menu_rows()[0].get_node("HitArea")
+    play.grab_focus()
+    await frames(3)
+    await pad_nav(JOY_BUTTON_A)          # a REAL pad accept on the shipped PLAY row
+    check(hand.mode == 1, "real route (pad): the pad accept claims FOCUS for the route (mode %d)" % int(hand.mode))
+    var entry := await await_css_entry(previous)
+    var host = entry[0]
+    var css = entry[1]
+    check(css != null, "real route (pad): the shipped PLAY row opens the Character Select through MatchFlow")
+    if css == null:
+        await cleanup_real_route(host, home)
+        return
+    # THE ASSERTION WINDOW: visible, still entering, nothing delivered to it.
+    check(int(css.get_phase()) == 0 and css.get_input_guard() > 0.0,
+        "real route (pad): the pose is asserted DURING the entry choreography (phase %d, guard %.2f)"
+        % [int(css.get_phase()), css.get_input_guard()])
+    check(hand.mode == 1, "real route (pad): the hand is in FOCUS modality (mode %d)" % int(hand.mode))
+    check(not hand.is_carrying() and int(css.get_carried_by()) == -1,
+        "real route (pad): the entry seed lifts no chip (carried_by %d)" % int(css.get_carried_by()))
+    var tiles: Array = css.get_tiles()
+    check(hand._focus_anchor == tiles[0].anchor(),
+        "real route (pad): the hand is authored onto the FIRST roster tile")
+    check(int(hand.visual) == 2 and texture_path_of(hand.active_texture()) == HOVER_SPRITE,
+        "real route (pad): the first visible frame draws the empty pinch, with no input event delivered (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    check(texture_path_of(hand.active_texture()) != POINT_SPRITE,
+        "real route (pad): the ordinary pointer pose is NOT what the entry draws")
+    var tip: Vector2 = tiles[0].anchor().get_global_rect().position
+    check(hand.hotspot.distance_to(tip) > 1.0,
+        "real route (pad): the pinch is already drawn while the fingertip is still %.1f px from the tile — the pose never waited for the sprite"
+        % hand.hotspot.distance_to(tip))
+    # …and the first CONTROLLER input then does what it always did: browse.
+    var idle: bool = await vs.wait_css_ready(host, self)
+    check(idle, "real route (pad): the CSS leaves its entry guard")
+    await pad_nav(JOY_BUTTON_DPAD_RIGHT)
+    await create_timer(0.2).timeout
+    var moved = Support.focus_owner(self)
+    check(moved == tiles[1],
+        "real route (pad): a real D-pad press walks the roster (%s)" % str(moved.get_path() if moved != null else "-"))
+    check(int(css.get_carried_by()) == 0 and hand.is_carrying() and int(hand.visual) == 1,
+        "real route (pad): the browse then lifts the chip and draws the carry grip (carried_by %d, visual %d)"
+        % [int(css.get_carried_by()), int(hand.visual)])
+    # The pass ends with NOTHING in flight: a chip left in the hand across a
+    # screen teardown would be a cursor-owned leftover (Doc 04 §4).
+    await pad_nav(JOY_BUTTON_B)
+    await create_timer(0.2).timeout
+    check(int(css.get_carried_by()) == -1 and not hand.is_carrying(),
+        "real route (pad): the browse carry is taken back out of the hand before the teardown")
+    await cleanup_real_route(host, home)
+
+func real_route_entry_mouse(vs, hand) -> void:
+    var previous: Array = vs.host_ids(self)
+    var home = await mount_main()
+    var play: Button = home.menu_rows()[0].get_node("HitArea")
+    var at: Vector2 = play.get_global_rect().get_center()
+    # A real pointer moving onto the row (engages hover, records the physical
+    # spot) and a real left click on it — the pointer path into PLAY.
+    var motion := InputEventMouseMotion.new()
+    motion.position = at
+    motion.relative = Vector2(26.0, 0.0)
+    root.push_input(motion, true)
+    hand._input(motion)
+    await frames(2)
+    root.push_input(Support.mouse_button_event(at, true), true)
+    root.push_input(Support.mouse_button_event(at, false), true)
+    await frames(2)
+    check(hand.mode == 0, "real route (mouse): the pointer owns the hand (mode %d)" % int(hand.mode))
+    var entry := await await_css_entry(previous)
+    var host = entry[0]
+    var css = entry[1]
+    check(css != null, "real route (mouse): the shipped PLAY row opens the Character Select")
+    if css == null:
+        await cleanup_real_route(host, home)
+        return
+    check(int(css.get_phase()) == 0 and css.get_input_guard() > 0.0,
+        "real route (mouse): the pose is asserted DURING the entry choreography (phase %d, guard %.2f)"
+        % [int(css.get_phase()), css.get_input_guard()])
+    check(hand.mode == 0, "real route (mouse): the pointer still owns the hand (mode %d)" % int(hand.mode))
+    check(not css._cursor_in_roster(), "real route (mouse): the pointer rests OFF the populated roster")
+    check(int(hand.visual) == 0 and texture_path_of(hand.active_texture()) == POINT_SPRITE,
+        "real route (mouse): off the roster the first visible frame draws the ordinary pointer (visual %d, %s)"
+        % [int(hand.visual), texture_path_of(hand.active_texture())])
+    check(not hand.is_carrying() and int(css.get_carried_by()) == -1,
+        "real route (mouse): nothing is carried by a pointer that never entered the roster")
+    await cleanup_real_route(host, home)

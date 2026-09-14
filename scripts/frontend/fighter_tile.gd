@@ -9,8 +9,14 @@ extends Control
 #                      ONE global-accent lower rule. No pulsing, no double
 #                      border, and never a layout-size change (Doc 04 §6.4)
 #   TokenLayer         where PlayerTokenView instances are parented (Doc 04 §6.5)
-#   CursorAnchor       focus-hand placement near the portrait, below the tile's
-#                      lower-left corner, so artwork/name stay uncovered
+#   CursorAnchor       focus-hand placement in the tile's LOWER-RIGHT region:
+#                      the fingertip sits there and the drawn hand body (which
+#                      extends down-right of its tip) hangs off the tile past
+#                      the name's shaped box, so portrait, chip and name all
+#                      stay readable — the same clearance discipline the Main
+#                      rail rows are authored with (owner direction: the hand
+#                      belongs lower-right on the addressed tile, never at the
+#                      portrait's centre-top)
 #
 # Fixed tile geometry belongs to the CSS screen; this component lays its
 # children out proportionally from its own size (set_tile_size / resize), with
@@ -27,9 +33,16 @@ const ACCENT_RULE := 2.0           # ONE global-accent lower rule
 const TOKEN_SIZE := 26.0           # PlayerTokenView reference (Doc 04 §13)
 const TOKEN_INSET := 4.0
 const TOKEN_GAP := 3.0
-# How far below the name band the fingertip sits: the drawn hand's own downward
-# reach (CursorAnchor.HAND_REACH_DOWN) plus a 2 px clearance, so the sprite can
-# never touch the fighter's name at any authored tile size.
+# --- the focus-hand pose (owner direction, supersedes the centre-top one) ----
+# The fingertip lands in the tile's LOWER-RIGHT region: TIP_INSET px inside the
+# tile's lower-right corner. The drawn hand body extends DOWN-RIGHT of its tip
+# (and reaches HAND_REACH_LEFT px back over it), so the pose only works while
+# the body can hang off the tile past the fighter's name — which is why the
+# name's shaped box decides the clearance below, never a guessed margin.
+const TIP_INSET := Vector2(5.0, 2.0)
+# The minimum gap kept between the name's shaped box and the drawn body's own
+# left reach (AnchorScript.HAND_REACH_LEFT). A wider name pushes the tip right;
+# it never lets the hand settle onto the glyphs.
 const HAND_CLEARANCE := 2.0
 const AnchorScript = preload("res://scripts/frontend/cursor_anchor.gd")
 
@@ -91,6 +104,12 @@ func setup(id: String, name: String, portrait_tex: Texture2D = null) -> void:
 	fighter_id = id
 	fighter_name.text = name.to_upper()
 	set_portrait(portrait_tex)
+	# The name's shaped box feeds both the label's own rect and the focus-hand
+	# clearance, so a new name re-runs the layout (guarded: a caller may arm the
+	# component before it enters the tree, where the @onready children are not
+	# resolved yet — _ready lays it out then).
+	if is_node_ready():
+		_layout()
 
 func set_portrait(tex: Texture2D) -> void:
 	if tex == null and fighter_id != "":
@@ -154,20 +173,44 @@ func _layout() -> void:
 	accent_rule.size = Vector2(s.x, ACCENT_RULE)
 	name_band.position = Vector2(0.0, s.y - band)
 	name_band.size = Vector2(s.x, band)
-	fighter_name.position = Vector2(4.0, 0.0)
-	fighter_name.size = Vector2(maxf(s.x - 8.0, 8.0), band)
 	fighter_name.add_theme_font_size_override("font_size", clampi(int(roundf(s.y * 0.155)), 10, 15))
+	# The label's OWN rect IS the shaped name, centred in the band: the
+	# measurable version of what the player reads. A band-wide label rect is a
+	# measurement artefact (the same resolution the READY band's wordmark
+	# carries), and the focus-hand pose below is authored against this box.
+	# CENTER alignment is kept and the box is centred, so the glyphs land on
+	# exactly the pixels they landed on before.
+	var name_w: float = _name_box(band).x
+	fighter_name.size = Vector2(name_w, band)
+	fighter_name.position = Vector2((s.x - name_w) * 0.5, 0.0)
 	_tokens.position = portrait.position
 	_tokens.size = portrait.size
-	# Focus hand: the fingertip lands CENTRE-ON-PORTRAIT — the tile IS the
-	# roster cell the player clicks, so the hand reads as direct manipulation
-	# instead of pointing at the tile from the side. It sits high enough that
-	# the hand sprite (which draws DOWN-RIGHT from its tip) ends above the name
-	# band, so the fighter's name stays readable at every authored tile size
-	# (108x82 Character Select, 90x72 Story Briefing, 96x78 How to Play).
-	var portrait_mid := portrait.position.x + portrait.size.x * 0.5
-	_anchor.place_at(Vector2(portrait_mid,
-		maxf(s.y - band - AnchorScript.HAND_REACH_DOWN - HAND_CLEARANCE, 0.0)))
+	_layout_anchor(s, band)
+
+func _name_box(band: float) -> Vector2:
+	# The fighter name's shaped box: the text's own advance at the size the
+	# label draws it (clamped to the tile's inner width, where clip_text +
+	# ellipsis own a name too long for its tile — as before).
+	var font := fighter_name.get_theme_font("font")
+	var fs: int = fighter_name.get_theme_font_size("font_size")
+	var shaped: float = font.get_string_size(str(fighter_name.text), HORIZONTAL_ALIGNMENT_LEFT, -1.0, fs).x
+	return Vector2(clampf(shaped, 1.0, maxf(size.x - 8.0, 8.0)), band)
+
+func _layout_anchor(s: Vector2, band: float) -> void:
+	# Focus hand: the fingertip lands in the tile's LOWER-RIGHT region (owner
+	# direction) while the drawn body — which draws DOWN-RIGHT of the tip and
+	# reaches HAND_REACH_LEFT px back over it — stays clear of the fighter's
+	# name, exactly like the Main rail rows keep their body off the label.
+	# The tip takes the authored inset from the tile's lower-right corner and is
+	# pushed right only when the name's shaped box would otherwise reach into
+	# the body's own left reach: a longer name (or another font) moves the tip,
+	# it never puts the drawn hand on the glyphs.
+	var glyph_right: float = (s.x + _name_box(band).x) * 0.5
+	var tip := Vector2(s.x - TIP_INSET.x, s.y - TIP_INSET.y)
+	tip.x = clampf(maxf(tip.x, glyph_right + AnchorScript.HAND_REACH_LEFT + HAND_CLEARANCE),
+		s.x * 0.5, maxf(s.x - 1.0, 0.0))
+	tip.y = clampf(tip.y, s.y * 0.5, maxf(s.y - 1.0, 0.0))
+	_anchor.place_at(tip)
 
 # --- token placement helpers (never over the name band) --------------------
 

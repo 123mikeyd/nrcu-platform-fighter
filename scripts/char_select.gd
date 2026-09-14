@@ -43,6 +43,12 @@ extends Control
 #   * the hand carries the active player's SEPARATE token while browsing a
 #     fighter (Doc 01 §5); the carry pose is the clean grab/pinch hand and no
 #     player identity is baked into hand art (ledger C-008).
+#   * the drawn POSE is one rule, single-sourced in _cursor_pose_visual(): CARRY
+#     while a chip is in the hand; HOVER (the empty pinch) only on the hold the
+#     hand ADDRESSES — the tile that holds the active player's committed chip,
+#     or any browsed hold while that player has no committed pick; the ordinary
+#     pointer everywhere else. It is read from the screen's state (focus/pointer
+#     + the committed picks), never from where the sprite happens to be flying.
 #   * Ready is decided by the ONE validation authority (MatchFlowState, reached
 #     through the screen's selection mirror) — this screen holds no rule set of
 #     its own (Doc 02 §2).
@@ -907,29 +913,85 @@ func _clear_carry() -> void:
 
 func _cursor_in_roster() -> bool:
 	# The hand's authoritative hotspot sits inside the populated roster envelope
-	# (the same boundary the carry uses): "the hand is on a chip it does not hold
-	# yet" — true whether the hand is anchored on a tile (FOCUS entry seed) or
-	# resting on one (MOUSE).
+	# (the same boundary the carry uses): the mouse arm of the pose rule below
+	# asks this before it asks which tile the pointer is on, so a pointer in the
+	# internal gutters keeps the roster interaction alive.
 	if cursor == null or _tiles.is_empty():
 		return false
 	return roster_bounds().has_point(cursor.hotspot)
 
+# --- THE POSE RULE (single source: nothing else writes cursor.set_visual_mode)
+#
+# Doc 03 §5/§6 + the carry-art contract: the hand's POSE is a function of THIS
+# screen's state at the moment it is read — on entry, on every candidate/focus/
+# target change and every frame while the screen owns the cursor — never of the
+# sprite's own flight position and never of the next input event (owner report:
+# the hand sat on the first roster tile drawing the ordinary pose until the
+# first controller input, and — after a commit — the pinch followed the pointer
+# across every tile).
+#
+#   CARRY   — a chip is IN the hand (carried_by >= 0): the approved grip.
+#   HOVER   — the empty pinch: the hand addresses a hold it does not hold —
+#             the tile that HOLDS the active player's committed chip (the one
+#             tile the staged take-back returns the chip to), or any browsed
+#             hold while the active player has NO committed pick (the entry
+#             seed, focus browsing, a resting pointer).
+#   REGULAR — the ordinary pointer: everywhere else. A committed chip makes its
+#             OWN tile the only pinch target, so hovering any other fighter is
+#             plain navigation.
 func _sync_cursor_pose() -> void:
-	# Doc 03 §5/§6 + the carry-art contract: the hand's POSE follows THIS screen's
-	# state immediately — on entry, on every candidate/focus/target change and
-	# after every state transition — never on the next input event (owner report:
-	# the hand sat on the first roster tile still drawing the ordinary pose).
-	#   carrying            -> CARRY  (the approved grip that holds the chip)
-	#   over a browsed hold -> HOVER  (the empty pinch: over a chip not yet held)
-	#   nothing             -> REGULAR (the ordinary pointer)
 	if cursor == null or not cursor.has_method("set_visual_mode"):
 		return
+	cursor.set_visual_mode(_cursor_pose_visual())
+
+func _cursor_pose_visual() -> int:
 	if _carried_by >= 0:
-		cursor.set_visual_mode(1)
-	elif _candidate >= 0 or _cursor_in_roster():
-		cursor.set_visual_mode(2)
-	else:
-		cursor.set_visual_mode(0)
+		return 1
+	var hold := _cursor_hold_tile()
+	if hold < 0:
+		return 0
+	if _has_committed_pick(_active) and not _tile_holds_active_pick(hold):
+		return 0
+	return 2
+
+func _cursor_hold_tile() -> int:
+	# WHICH hold is the hand addressing? -1 = none (the hand is off the roster).
+	#   FOCUS — the tile the engine's focus owns: the hand is authored onto that
+	#           tile's anchor (the entry seed, then every navigation step). The
+	#           answer is the screen's STATE, never the sprite's flight position,
+	#           so the pose is right the moment the screen is visible.
+	#   MOUSE — the pointer IS the hand: the tile under the authoritative
+	#           hotspot, else the tile the pointer last entered (its gutters).
+	if cursor == null or _tiles.is_empty():
+		return -1
+	if cursor.mode == 1:
+		var owner := FrontendInput.focus_owner()
+		if owner != null:
+			var focused: int = _tiles.find(owner)
+			if focused >= 0:
+				return focused
+		return _candidate
+	if not _cursor_in_roster():
+		return -1
+	return _tile_under_hotspot()
+
+func _tile_under_hotspot() -> int:
+	if cursor == null:
+		return -1
+	for i in _tiles.size():
+		if is_instance_valid(_tiles[i]) and _tiles[i].get_global_rect().has_point(cursor.hotspot):
+			return i
+	return _candidate
+
+func _tile_holds_active_pick(index: int) -> bool:
+	# Does the ACTIVE player's committed chip rest on this tile? (The tile the
+	# staged take-back returns the chip to — the pinch's own target.)
+	if _state == null or index < 0 or index >= _cards.size():
+		return false
+	var slot: Dictionary = _state.slots[_active]
+	if str(slot.get("kind", "empty")) == "empty":
+		return false
+	return str(slot.get("character", "")) == str(_cards[index]["id"])
 
 func _cancel_roster_interaction() -> void:
 	# THE one shared cancellation transition (ledger C-005/C-006): candidate
