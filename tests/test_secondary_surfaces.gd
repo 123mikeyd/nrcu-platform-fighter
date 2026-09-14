@@ -310,52 +310,55 @@ func _story_briefing_surface() -> void:
     story.queue_free()
     await process_frame
 
-# --- D. Story route through the arena (main.gd state machine) ---------------
+# --- D. Story route through the MatchFlow frontend (WP-0 step 4) ------------
 func _story_route() -> void:
-    var AppState = load("res://scripts/app_state.gd")
-    AppState.enter_mode = "story"
-    var arena = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena)
-    await settle(12)
-    check(arena.story_state == "ready" and arena.story_panel.visible, "the Story route opens the briefing")
-    var briefing = arena.find_child("StoryBriefing", true, false)
-    check(briefing != null, "the Story panel is the briefing scene, not the inline debug panel")
-    check(briefing.action_button() == arena.story_action and briefing.back_button() == arena.story_back,
-        "the story state machine drives the briefing controls")
-    check(arena.story_action.text == "START ENCOUNTER", "the briefing exposes the screen-level START ENCOUNTER action")
-    check(arena.story_back.text == "BACK" and arena.story_back.visible, "Back stays visible on the briefing")
-    check(arena.setup.visible == false, "the debug setup vocabulary is off-screen in the story flow")
-    var playable: Array = []
-    for index in arena.story_character.item_count:
-        playable.append(arena.story_character.get_item_metadata(index))
-    check(playable == story_ids(), "the story selection model keeps stable fighter ids")
-    check(arena.story_character.get_selected_metadata() == "turbofit", "the story model opens on the default fighter")
+    var story = load("res://tests/fixtures/story_route.gd").new()
+    var host = await story.enter(self)
+    check(host.entry_mode() == "story" and host.active_surface() == "story", "the Story route opens in the MatchFlow host")
+    var briefing = host.story_briefing()
+    check(briefing != null and briefing.visible, "the host presents the Encounter Briefing")
+    check(briefing.get_parent().get_parent() == host, "the briefing is hosted by MatchFlow, outside gameplay")
+    check(str(briefing.action_button().text) == "START ENCOUNTER", "the briefing exposes the screen-level START ENCOUNTER action")
+    check(str(briefing.back_button().text) == "BACK" and briefing.back_button().visible, "Back stays visible on the briefing")
+    check(briefing.roster_ids() == story_ids(), "the briefing uses the encounter's playable ids")
+    check(briefing.selected_fighter_id() == "turbofit", "the briefing opens on the default fighter")
     var offending := false
     for text in visible_strings(briefing):
         if text.to_upper().find("MATCH SETUP") != -1:
             offending = true
     check(not offending, "no MATCH SETUP vocabulary is player-facing in the briefing")
-    arena.story_action.pressed.emit()
-    await settle(10)
-    check(arena.story_state == "playing", "START launches the encounter")
+    # Back: the player route Story -> Main (before any launch)
+    briefing.back_button().pressed.emit()
+    await settle(2)
+    check(briefing.is_exiting(), "Back runs the briefing exit instead of a debug route")
+    var home_scene = await story.wait_for_scene(self, "home.tscn")
+    check(home_scene != null, "Back returns to the Main route")
+    check(root.get_node_or_null("MainArena") == null, "no arena was constructed for a Back return")
+    if home_scene != null:
+        home_scene.queue_free()
+    await story.free_hosts(self)
+    # START: gameplay launches from the frozen story config
+    var launch_host = await story.enter(self)
+    var arena = await story.start_encounter(self, launch_host)
+    check(arena != null and arena.story_state == "playing", "START launches the encounter from the story config")
+    if arena == null:
+        return
+    var playable: Array = []
+    for id in launch_host_story_ids():
+        playable.append(str(id))
     check(arena.fighters.size() == 2 and arena.player_one.character_id in playable,
         "the launch uses a valid playable fighter id")
+    check(arena.find_child("StoryBriefing", true, false) == null,
+        "gameplay hosts no story panel of its own (frontend-owned since step 4)")
+    check(arena.setup.visible == false, "the debug setup vocabulary is off-screen in the story flow")
     var hud = arena.find_child("MatchControls", true, false)
     check(hud != null and str(hud.text).to_upper().find("MATCH SETUP") == -1,
         "the story HUD keeps player-facing vocabulary")
-    arena.open_story()
-    await settle(8)
-    check(arena.story_state == "ready" and arena.story_panel.visible, "re-entry returns to the briefing")
-    arena.story_back.pressed.emit()
-    await settle(12)
-    check(briefing.is_exiting(), "Back runs the briefing exit instead of a debug route")
-    await settle(60)
-    check(current_scene != null and str(current_scene.scene_file_path).find("home.tscn") != -1,
-        "Back returns to the Main route")
     arena.queue_free()
-    if current_scene != null:
-        current_scene.queue_free()
-    await process_frame
+    await story.free_hosts(self)
+
+func launch_host_story_ids() -> Array:
+    return load("res://scripts/catalogs/story_encounter_catalog.gd").allowed_fighter_ids("story_01")
 
 func story_ids() -> Array:
     var ids: Array = load("res://scripts/roster.gd").ids()

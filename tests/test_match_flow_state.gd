@@ -298,7 +298,9 @@ func _launch_rules() -> void:
 	var story = State.fresh_story("story_01", "turbofit")
 	check(story.is_story(), "the story factory produces a story state")
 	check(str(story.story_encounter_id) == "story_01", "the encounter id is recorded")
-	check(str(story.slots[1].fighter_id) == "bobo", "the encounter owns the opponent slot (main.gd start_story layout)")
+	check(str(story.slots[1].fighter_id) == "bobo", "the encounter owns the opponent slot (StoryEncounterCatalog)" + ""
+		+ " — consumed by gameplay only through the launch config's story payload")
+	check(int(story.slots[1].team_id) == 1, "the encounter records the opponent side from the catalog")
 	check(story.validate_for_stage_select() == "", "a complete story state passes the shared rules")
 	check(story.validate_for_launch("") == State.MESSAGE_STAGE_REQUIRED, "a story launch still needs a stage")
 	check(story.validate_for_launch("toy_room") == "", "a story state launches through the same authority")

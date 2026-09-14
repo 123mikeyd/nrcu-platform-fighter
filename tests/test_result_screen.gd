@@ -297,13 +297,19 @@ func run():
     check(anchor != null and anchor.get_script() != null, "REMATCH exposes an authored CursorAnchor")
     hand.set_mode(0)
 
-    # Story vocabulary: the player route is Story -> Main (no MATCH SETUP).
-    check(arena.story_back.text == "BACK TO MAIN", "story back uses the player route vocabulary")
-    arena.setup.find_child("StoryModeButton", true, false).pressed.emit()
-    check(arena.story_panel.visible, "story panel opens")
-    arena.story_back.pressed.emit()
-    await create_timer(0.7).timeout
-    check(arena.setup.visible and arena.story_state == "", "story back leaves the story flow without the Match Setup wording")
+    # Story vocabulary: the player route is Story -> Main and the story surface
+    # is frontend-owned since WP-0 step 4 — the arena mounts no story panel of
+    # its own, and the briefing's at-rest Back samples the player route.
+    var briefing = load("res://scenes/story_briefing.tscn").instantiate()
+    root.add_child(briefing)
+    await process_frame
+    check(str(briefing.back_button().text) == "BACK TO MAIN", "story back uses the player route vocabulary")
+    briefing.queue_free()
+    await process_frame
+    check(arena.find_child("StoryBriefing", true, false) == null, "gameplay mounts no story panel")
+    check(arena.find_child("StoryCharacterSelect", true, false) == null,
+        "no hidden story selection model inside gameplay (superseded by MatchFlowState)")
+    check(arena.story_state == "", "the arena carries no story state outside a story launch")
 
     arena.queue_free()
     await process_frame

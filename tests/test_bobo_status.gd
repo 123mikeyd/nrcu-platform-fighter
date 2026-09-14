@@ -1,20 +1,26 @@
 extends SceneTree
+# Bobo status/freeze contract — MIGRATED for WP-0 step 4: the encounter launches
+# through the MatchFlow story route (briefing -> immutable story config).
 var failures := 0
+var story
 func _initialize(): call_deferred("run")
 func check(ok: bool,message: String):
     if not ok:
         failures += 1
         printerr("FAIL: ",message)
 func run():
-    var arena = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena)
-    await process_frame
-    arena.open_story()
-    arena.story_character.select(0)
-    arena.start_story()
-    arena._physics_process(arena.ready_remaining)
+    root.size = Vector2i(1280, 720)
+    story = load("res://tests/fixtures/story_route.gd").new()
+    var host = await story.enter(self, "teknium")
+    var arena = await story.start_encounter(self, host)
+    check(arena != null, "the encounter launches through the MatchFlow story route")
+    if arena == null:
+        quit(1)
+        return
+    story.run_ready(arena)
     var hero = arena.player_one
     var bobo = arena.player_two
+    check(bobo.character_id == "bobo", "the encounter opponent is Bobo")
     hero.set_physics_process(false)
     bobo.set_physics_process(false)
     check(bobo.has_method("apply_status_damage"), "Bobo status ticks deplete HP instead of percent")
@@ -45,5 +51,6 @@ func run():
         bobo.apply_status_damage(1000)
         check(bobo.health == 0 and arena.story_state == "complete", "status damage can win")
     arena.queue_free()
+    await story.free_hosts(self)
     await process_frame
     quit(1 if failures else 0)

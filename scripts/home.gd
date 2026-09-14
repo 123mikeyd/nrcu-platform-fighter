@@ -487,12 +487,12 @@ func _go_to_match(mode: String) -> void:
     get_tree().change_scene_to_file(_destination_scene(mode))
 
 func _destination_scene(mode: String) -> String:
-    # PLAY / STORY route decision (Doc 02 §10). VS configuration is not gameplay
-    # and no longer loads the arena: it enters MatchFlow, which constructs the
-    # arena only after a validated MatchLaunchConfig exists. Story Select /
-    # Briefing move into MatchFlow in WP-0 step 4 and the F10 debug launcher
-    # stays arena-side (Doc 02 §9), so those two still load main.tscn.
-    if mode == "story" or mode == "debug":
+    # PLAY / STORY route decision (Doc 02 §10). Both player-facing configuration
+    # routes enter MatchFlow, which constructs the arena only after a validated
+    # MatchLaunchConfig exists: VS (CSS/SSS, step 3) and Story (Fighter
+    # Select/Briefing, step 4). Only the F10 debug launcher stays arena-side
+    # (Doc 02 §9).
+    if mode == "debug":
         return MATCH_SCENE
     return MATCH_FLOW_SCENE
 

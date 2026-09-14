@@ -1,20 +1,24 @@
 extends Node3D
 # Gameplay arena (Doc 02 §1: "main.tscn may keep its name; its responsibility
-# becomes gameplay"). The player-facing VS route no longer loads this scene
-# directly — scenes/match_flow.tscn hosts CSS/SSS and constructs the arena with
-# an immutable MatchLaunchConfig (WP-0 steps 3 and 5).
+# becomes gameplay"). The player-facing routes no longer load this scene
+# directly — scenes/match_flow.tscn hosts Character Select / Stage Select / the
+# Story Encounter Briefing and constructs the arena with an immutable
+# MatchLaunchConfig (WP-0 steps 3-4).
 #
 # Two ways in:
 #   * the MatchFlow router sets `launch_config` BEFORE tree entry; _ready then
 #     skips the legacy screen entry routes, prewarms gameplay and reports
 #     `presentation_ready` (Doc 02 §6). The match starts through
-#     start_match_from_config(), which consumes only the frozen snapshot.
-#   * a direct load (tests, F10 debug launcher, the Story route until step 4)
-#     keeps the shipped behaviour: AppState.enter_mode picks the entry route.
+#     start_match_from_config(), which consumes only the frozen snapshot — mode,
+#     resolved slots, the launch stage and, for Story, the encounter payload.
+#   * a direct load (tests, F10 debug launcher) keeps the shipped behaviour:
+#     AppState.enter_mode picks the entry route.
 #
-# The legacy Char/Stage/Story/Result panels below are still constructed here so
-# the debug launcher and the existing tests keep working, but they are NOT part
-# of the production VS path any more (removing them outright is WP-0 steps 6-7).
+# The legacy Char/Stage/Result panels below are still constructed here so the
+# debug launcher and the existing tests keep working, but they are NOT part of
+# the production routes any more (removing them outright is WP-0 steps 6-7).
+# The Story panel is already gone: the Story route is frontend-owned and what
+# remains here is the Story state machine over the launch config's payload.
 
 signal presentation_ready
 
@@ -34,6 +38,10 @@ const StateScript = preload("res://scripts/match_flow_state.gd")
 
 const MATCH_FLOW_SCENE := "res://scenes/match_flow.tscn"
 
+# Shipped Story HUD sentence (main.gd start_story), now built from the launch
+# config's Story payload: enemy identity + HP come from the snapshot.
+const STORY_CONTROLS_TEMPLATE := "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\n%s: %d HP, stationary, no attacks. Deplete his HP! · Esc: back to main"
+
 # The immutable launch snapshot handed over by the MatchFlow router (Doc 02 §3).
 # Set before tree entry; null for every direct load.
 var launch_config = null
@@ -52,15 +60,13 @@ var hud_labels: Array[Label] = []
 var setup: Control
 var teams_enabled := false
 var active_slots: Array = []
-# One encounter only. Empty state means ordinary freeplay.
+# Story state machine (Doc 07 §11-16). One encounter only, driven entirely by
+# the MatchLaunchConfig's Story payload: "" = freeplay, "playing" while the
+# encounter runs, "complete"/"lost" at resolution (the Story Result itself is a
+# frontend surface — the arena returns to the MatchFlow host).
 var story_state := ""
-var story_panel: Control
-var story_briefing                      # Story Encounter Briefing scene (Doc 07 §11-16)
-var story_title: Label
-var story_detail: Label
-var story_action: Button
-var story_back: Button
-var story_character: OptionButton
+var _story_encounter := false
+var _story_won := false
 var stage_panel: Control
 var stage_select: Control
 var char_panel: Control
@@ -109,10 +115,8 @@ func _ready() -> void:
     setup = SetupScript.new()
     menu_layer.add_child(setup)
     setup.start_requested.connect(start_match)
-    setup.story_requested.connect(open_story)
     setup.stage_select_requested.connect(open_stage_select)
     setup.back_requested.connect(back_to_menu)
-    _build_story_panel(menu_layer)
     _build_stage_panel(menu_layer)
     _build_char_panel(menu_layer)
     var entry: String = AppStateScript.enter_mode
@@ -128,8 +132,6 @@ func _ready() -> void:
         call_deferred("_announce_presentation_ready")
     elif entry == "vs":
         open_vs()
-    elif entry == "story":
-        open_story()
     # Arriving through the persistent transition layer: the previous screen
     # may have held its frame for the crossfade (Main Menu PLAY). Reveal this
     # scene underneath it — never leave a stale hold covering the arena.
@@ -148,13 +150,16 @@ func _process(_delta: float) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
         if setup.visible and setup.close_help(): return
+        # Consume the event BEFORE the route action: the arena is the current
+        # scene on a flow launch, so a route change frees this node and any
+        # later statement here would run on a freed instance.
+        get_viewport().set_input_as_handled()
         if char_panel != null and char_panel.visible:
             back_to_menu()
         elif stage_panel != null and stage_panel.visible:
             stage_select.request_back()
         elif setup.visible: back_to_menu()
         else: _leave_story()
-        get_viewport().set_input_as_handled()
     elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R and match_over:
         _reset_match()
     # Results owns its own reveal/accelerate input (see result_screen.gd).
@@ -165,11 +170,9 @@ func back_to_menu() -> void:
 
 func show_setup() -> void:
     _cancel_ready()
-    if story_briefing != null:
-        story_briefing.reset()
     result_panel.hide()
     story_state = ""
-    story_panel.hide()
+    _story_encounter = false
     if stage_panel != null:
         stage_panel.hide()
     if stage_select != null:
@@ -207,7 +210,8 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
     for label in hud_labels:
         label.text = ""
     story_state = ""
-    story_panel.hide()
+    _story_encounter = false
+    _story_won = false
     if stage_panel != null:
         stage_panel.hide()
     if char_panel != null:
@@ -263,7 +267,7 @@ func start_match_from_config(cfg) -> bool:
     # Gameplay consumes the immutable snapshot only (Doc 02 §3): the config
     # carries the mode, the resolved slots, the launch stage and the Story
     # payload, so nothing here reaches into Character Select, Stage Select, the
-    # Debug Setup model or any screen node.
+    # Story Briefing, the Debug Setup model or any screen node.
     if cfg == null or not cfg.is_valid():
         return false
     var slots: Array = []
@@ -276,52 +280,46 @@ func start_match_from_config(cfg) -> bool:
             "difficulty": str(slot.get("difficulty", "normal")),
             "device": StateScript.input_source_to_legacy_device(slot.get("input_source", {})),
         })
-    return start_match(slots, int(cfg.mode()) == 1, cfg.has_story(), str(cfg.stage_id()))
+    var started: bool = start_match(slots, int(cfg.mode()) == 1, cfg.has_story(), str(cfg.stage_id()))
+    if started and cfg.has_story():
+        _begin_story_encounter(cfg.story_payload())
+    return started
 
-func _reenter_match_flow(origin: String) -> void:
-    # Gameplay end -> post-match configuration (Doc 02 §1/§5: the flow is
-    # re-entered for CSS/SSS). The route origin rides the existing entry-mode
-    # string until WP-0 step 6 introduces the PostMatch payload (MatchResult +
-    # preserved configuration); this scene change tears the completed arena down
+func _begin_story_encounter(payload: Dictionary) -> void:
+    # The Story state machine over the frozen payload (Doc 02 §3/§4): the
+    # encounter's HUD copy and its spawn/facing metadata arrive in the snapshot,
+    # exactly the values the shipped start_story() applied from the briefing.
+    _story_encounter = true
+    _story_won = false
+    story_state = "playing"
+    hud_title.text = str(payload.get("hud_title_template", "STORY 01 — %s VS BOBO")) % player_one.fighter_name
+    # The encounter owns the enemy identity and its HP; the shipped HUD sentence
+    # is kept with the catalog's values (BOBO -> "Bobo" sentence case).
+    var enemy_name := str(payload.get("enemy_display_name", "BOBO")).capitalize()
+    var enemy_hp := int(payload.get("enemy_hp", 400))
+    hud_controls.text = STORY_CONTROLS_TEMPLATE % [enemy_name, enemy_hp]
+    player_one.reset_fighter(Vector3(payload.get("player_spawn", p1_spawn)), true)
+    # Central floor lane keeps this large opponent clear of side platforms.
+    player_two.reset_fighter(Vector3(payload.get("enemy_spawn", Vector3(0.6, 1.0, 0.0))), true)
+    player_one.facing = float(payload.get("player_facing", 1.0))
+    player_two.facing = float(payload.get("enemy_facing", -1.0))
+    _begin_ready()
+
+func _reenter_match_flow(entry: String) -> void:
+    # Gameplay end -> the frontend owns post-match (Doc 02 §1/§5): the flow is
+    # re-entered for post-match VS configuration ("vs:results" / "vs:stage") or
+    # for the Story Result ("story:result:won" / ":lost"). The route entry rides
+    # the existing mode string until WP-0 step 6 introduces the MatchResult /
+    # StoryOutcome payload; this scene change tears the completed arena down
     # before the flow returns.
     result_panel.hide()
-    AppStateScript.enter_mode = "vs:" + str(origin)
+    AppStateScript.enter_mode = str(entry)
     get_tree().change_scene_to_file(MATCH_FLOW_SCENE)
 
-func _build_story_panel(layer: CanvasLayer) -> void:
-    # Doc 07 §11-16: the Encounter Briefing scene owns the Story visual layer
-    # (enemy presentation, objective/rules, fighter selection, rail action).
-    # This screen keeps the state machine: ready / playing / complete / lost,
-    # the encounter launch and the Story -> Main route.
-    story_briefing = (load("res://scenes/story_briefing.tscn") as PackedScene).instantiate()
-    story_panel = story_briefing as Control
-    layer.add_child(story_panel)
-    story_title = story_briefing.title_label()
-    story_detail = story_briefing.objective_label()
-    story_action = story_briefing.action_button()
-    story_back = story_briefing.back_button()
-    # Hidden selection model: stable fighter ids, kept for state + tests.
-    var roster = load("res://scripts/roster.gd")
-    var playable_ids := _story_playable_ids()
-    story_character = OptionButton.new()
-    story_character.name = "StoryCharacterSelect"
-    story_character.custom_minimum_size = Vector2(300, 48)
-    for id in playable_ids:
-        story_character.add_item(roster.display_name(id))
-        story_character.set_item_metadata(story_character.item_count - 1, id)
-    story_character.select(playable_ids.find("turbofit"))
-    story_character.hide()
-    story_panel.add_child(story_character)
-    story_briefing.build(playable_ids)
-    story_action.pressed.connect(start_story)
-    story_back.pressed.connect(_leave_story)
-    story_briefing.chosen.connect(_on_story_card_chosen)
-    story_briefing.exit_finished.connect(_on_story_exit_finished)
-    story_panel.hide()
-
 func _build_stage_panel(layer: CanvasLayer) -> void:
-    # Stage page (SSS grammar). It owns its own full-rect layer like the story
-    # panel; the setup screen is the hub it returns to.
+    # Stage page (SSS grammar), used by the debug launcher and the legacy
+    # Results -> Change Stage path; the production route hosts its own SSS
+    # inside MatchFlow.
     stage_panel = Control.new()
     stage_panel.name = "StagePanel"
     stage_panel.theme = DemoStyle.make()
@@ -381,7 +379,7 @@ func _launch_match() -> void:
 
 func _on_result_change_fighters() -> void:
     if _launched_from_flow:
-        _reenter_match_flow("results")
+        _reenter_match_flow("vs:results")
         return
     result_panel.hide()
     if selection_state != null:
@@ -394,7 +392,7 @@ func _on_result_change_fighters() -> void:
 func _on_result_change_stage() -> void:
     if _launched_from_flow:
         # Doc 02 §5: Results -> Change Stage PUSHes the SSS with origin RESULTS.
-        _reenter_match_flow("stage")
+        _reenter_match_flow("vs:stage")
         return
     if selection_state == null:
         return
@@ -495,54 +493,6 @@ func apply_level(id: String) -> void:
         stage_theme = preload("res://scripts/stage_theme.gd").new()
         stage_theme.level_id = id
         add_child(stage_theme)
-
-func open_story() -> void:
-    show_setup()
-    setup.hide()
-    story_state = "ready"
-    # Doc 07 §11-14: the briefing scene presents ENCOUNTER 01 (Bobo, the
-    # objective, the rules, the player's fighter selection) and its own
-    # rail/action; this screen keeps the state and the launch.
-    var current_meta = story_character.get_selected_metadata()
-    var current: String = current_meta if current_meta is String and current_meta != "" else "turbofit"
-    story_panel.show()
-    story_briefing.open(current)
-    Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
-
-func _story_playable_ids() -> Array[String]:
-    # The prototype remains available to encounters and freeplay, not Story P1.
-    var ids: Array[String] = load("res://scripts/roster.gd").ids()
-    ids.erase("ice_mage")
-    return ids
-
-func start_story() -> void:
-    var slots := Config.default_slots()
-    var selected = story_character.get_selected_metadata()
-    if not selected is String or selected not in _story_playable_ids():
-        selected = "turbofit"
-        for index in story_character.item_count:
-            if story_character.get_item_metadata(index) == selected:
-                story_character.select(index)
-                break
-    story_briefing.set_selected_id(selected)
-    slots[0].character = selected
-    slots[0].kind = "human"
-    slots[0].device = -1
-    slots[1].character = "bobo"
-    slots[1].kind = "bot"
-    slots[1].difficulty = "normal"
-    slots[2].kind = "empty"
-    slots[3].kind = "empty"
-    if start_match(slots, false, true):
-        story_state = "playing"
-        hud_title.text = "STORY 01 — %s VS BOBO" % player_one.fighter_name
-        hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\nBobo: 400 HP · slow two-hit claws · punish his recovery! · Esc: back to main"
-        player_one.reset_fighter(p1_spawn, true)
-        # Central floor lane keeps this large opponent clear of side platforms.
-        player_two.reset_fighter(Vector3(0.6, 1.0, 0.0), true)
-        player_one.facing = 1.0
-        player_two.facing = -1.0
-        _begin_ready()
 
 func _build_environment() -> void:
     var environment := WorldEnvironment.new()
@@ -760,14 +710,15 @@ func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
         projectile.queue_free()
     if story_state == "playing":
         Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
-        var won: bool = player_one.stocks > 0 and player_two.stocks <= 0
-        story_state = "complete" if won else "lost"
+        _story_won = player_one.stocks > 0 and player_two.stocks <= 0
+        story_state = "complete" if _story_won else "lost"
         winner_label.visible = false
-        story_panel.show()
-        # Doc 07 §16: the result is the briefing's own lightweight state
-        # (shipped Story result wording + replay/retry + MAIN MENU), never
-        # the multiplayer Results screen.
-        story_briefing.show_result(won)
+        # Doc 02 §1: the Story Result is a frontend surface, not a panel inside
+        # gameplay. The arena RETURNs to the MatchFlow host with the outcome;
+        # the host presents the shipped Story result state (Doc 07 §16: the
+        # story wording with replay/retry + MAIN MENU, never the multiplayer
+        # Results screen). Deferred so this frame's resolution stays intact.
+        call_deferred("_reenter_match_flow", "story:result:" + ("won" if _story_won else "lost"))
         return
     # Explicit result snapshot at match resolution, before any reset mutates
     # the fighter state (Doc 06 §23, Doc 09 §11): stable fighter ids, explicit
@@ -780,8 +731,10 @@ func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
     result_screen.show_result(result, selection_state != null or _launched_from_flow)
 
 func _reset_match() -> void:
-    if story_state in ["complete", "lost"]:
-        start_story()
+    if _story_encounter and match_over:
+        # A finished Story encounter is replayed through the Story Result's
+        # REPLAY/RETRY (the arena is a fresh launch by then), so R never
+        # restarts a resolved encounter in place.
         return
     _elimination_order.clear()
     match_over = false
@@ -827,31 +780,16 @@ func _physics_process(delta: float) -> void:
         if go_remaining == 0: ready_label.hide()
 
 func _leave_story() -> void:
-    # Animated leave (Melee EXIT_FROM); instant for states without the ready
-    # selection (e.g. mid-match). The way back follows the entry route:
-    # story -> main menu, VS -> character select (selections kept), the debug
+    # Esc during a Story encounter follows the player route Story -> Main (Doc
+    # 07 §15: no "MATCH SETUP" in the story flow). The other routes keep the
+    # shipped behaviour: VS -> character select (selections kept), debug
     # launcher -> its setup screen.
-    if story_state == "ready":
-        story_briefing.play_exit()
-        return
-    if _entry_mode == "story":
+    if _story_encounter or _entry_mode == "story":
         back_to_menu()
-    elif _entry_mode == "vs":
+        return
+    if _entry_mode == "vs":
         char_panel.show()
         char_select.reopen()
-    else:
-        show_setup()
-
-func _on_story_exit_finished() -> void:
-    # Story Back follows the player route: Story -> Main. The debug launcher
-    # keeps its setup screen (Doc 07 §15: no "MATCH SETUP" in the story flow).
-    if _entry_mode == "story":
-        back_to_menu()
-    else:
-        show_setup()
-
-func _on_story_card_chosen(id: String) -> void:
-    var index := _story_playable_ids().find(id)
-    if index >= 0:
-        story_character.select(index)
+        return
+    show_setup()
 

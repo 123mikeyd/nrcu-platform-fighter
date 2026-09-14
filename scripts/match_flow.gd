@@ -40,11 +40,14 @@ extends Control
 #   play_entry / play_exit     the screen's own entry/exit choreography
 #
 # STEP SCOPE (what is deliberately left for later, per Doc 02 §10):
-#   * Story Fighter Select/Briefing move in (step 4); the Story entry still
-#     loads main.tscn directly.
+#   * Story Fighter Select (the two-step split of Doc 01 §9) and the standalone
+#     Story Result redesign are WP-4/WP-5: today the host presents the shipped
+#     Encounter Briefing (roster strip included) and its Back follows the player
+#     route Story -> Main with the selection preserved.
 #   * Multiplayer Results / Story Result become a PostMatch surface here in
-#     step 6; today the shipped Results screen inside gameplay routes back into
-#     MatchFlow for post-match configuration (main.gd _reenter_match_flow).
+#     step 6; today gameplay RETURNs to this host with the route entry
+#     (main.gd _reenter_match_flow) both for post-match VS configuration and for
+#     the Story Result state the briefing already owns.
 #   * Debug Match Setup stays gameplay-side (Doc 02 §9) and is not reachable
 #     from this host yet.
 
@@ -60,6 +63,8 @@ const CssScene = preload("res://scenes/character_select.tscn")
 const StageSelectScript = preload("res://scripts/stage_select.gd")
 const StageCatalog = preload("res://scripts/catalogs/stage_catalog.gd")
 const FighterCatalog = preload("res://scripts/catalogs/fighter_catalog.gd")
+const EncounterCatalog = preload("res://scripts/catalogs/story_encounter_catalog.gd")
+const StoryBriefingScene = preload("res://scenes/story_briefing.tscn")
 const Tokens = preload("res://scripts/ui_tokens.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
 
@@ -69,11 +74,26 @@ const SELF_SCENE := "res://scenes/match_flow.tscn"
 
 const SURFACE_CSS := "css"
 const SURFACE_SSS := "sss"
+const SURFACE_STORY := "story"
+
+# Entry modes (AppState.enter_mode, the pre-PostMatch route channel).
+const MODE_VS := "vs"
+const MODE_STORY := "story"
+const MODE_DEBUG := "debug"
 
 # Route origins (Doc 02 §5): the surface a route was entered from.
 const ORIGIN_MAIN := "main"
 const ORIGIN_RESULTS := "results"
 const ORIGIN_STAGE := "stage"
+# Gameplay -> Story Result (Doc 02 §1: the post-match Story Result is a
+# frontend surface; the flow is re-entered with the outcome token).
+const ORIGIN_RESULT := "result"
+
+const STORY_RESULT_WON := "won"
+const STORY_RESULT_LOST := "lost"
+# The shipped Story ready-screen default (main.gd _build_story_panel selected
+# turbofit); an invalid model resolves to it, exactly as start_story() did.
+const STORY_DEFAULT_FIGHTER := "turbofit"
 
 const INPUT_SCOPE_FRONTEND := "frontend"
 const INPUT_SCOPE_GAMEPLAY := "gameplay"
@@ -95,12 +115,14 @@ var flow                              # MatchFlowState — the typed authority
 var selection_state = null            # the screen-facing legacy mirror
 var pending_launch = null             # MatchLaunchConfig handed to gameplay
 
+var _mode := MODE_VS                  # the entry mode being hosted
 var _active_surface := ""             # the ONE active frontend surface
 var _route_stack: Array = []
 var _scope := INPUT_SCOPE_FRONTEND
 
 var _css: Control = null
 var _sss: Control = null
+var _briefing: Control = null         # Story Encounter Briefing (the Story surface)
 var _surfaces: Dictionary = {}
 var _presented: Dictionary = {}
 var _entered: Dictionary = {}
@@ -119,14 +141,18 @@ var _readiness_received := false
 var _readiness_timed_out := false
 var _ready_wait := 0.0
 var _frontend_exited := false
-var _sss_confirmed := false
+var _launch_confirmed := false
 var _match_started := false
 
 func _ready() -> void:
     _style_backdrop()
     _build_surfaces()
     var entry := _consume_entry()
-    _open_vs(str(entry["origin"]))
+    _mode = str(entry["mode"])
+    if _mode == MODE_STORY:
+        _open_story(str(entry["result"]))
+    else:
+        _open_vs(str(entry["origin"]))
     # The previous screen may be holding its frame (Main PLAY): reveal this host
     # underneath it — one continuous surface, never a cut to black.
     Frontend.release(0.28)
@@ -174,8 +200,21 @@ func _build_surfaces() -> void:
     _sss.exit_finished.connect(_on_surface_exit_finished.bind(SURFACE_SSS))
     _sss.hide()
 
-    _surfaces = {SURFACE_CSS: _css, SURFACE_SSS: _sss}
-    _presented = {SURFACE_CSS: false, SURFACE_SSS: false}
+    # Story (Doc 01 §9, Doc 07 §11-16): the Encounter Briefing is the Story
+    # surface of this host. It is mounted here and inert until the Story route
+    # opens it; the briefing's own visuals are unchanged (WP-4 owns the redesign).
+    _briefing = StoryBriefingScene.instantiate()
+    _briefing.name = "StoryBriefing"
+    layer.add_child(_briefing)
+    _briefing.build(_story_playable_fighters())
+    _briefing.action_button().pressed.connect(_on_story_start)
+    _briefing.back_button().pressed.connect(_on_story_back)
+    _briefing.chosen.connect(_on_story_chosen)
+    _briefing.exit_finished.connect(_on_story_exit_finished)
+    _briefing.hide()
+
+    _surfaces = {SURFACE_CSS: _css, SURFACE_SSS: _sss, SURFACE_STORY: _briefing}
+    _presented = {SURFACE_CSS: false, SURFACE_SSS: false, SURFACE_STORY: false}
 
 func _roster_cards() -> Array:
     # Roster data comes from the catalog (Doc 02 §8), never from a screen or a
@@ -197,21 +236,87 @@ func _stage_slots() -> Array:
         })
     return slots
 
+# --- Story content (Doc 02 §8 StoryEncounterCatalog) ------------------------
+func _current_encounter_id() -> String:
+    # One encounter today; the catalog owns the list, so a second entry only
+    # needs to appear there to be launchable later.
+    var ids: Array = EncounterCatalog.ids()
+    return str(ids[0]) if not ids.is_empty() else ""
+
+func _story_playable_fighters() -> Array[String]:
+    # The encounter's allowed fighters (the roster minus the prototype Ice
+    # Mage) come from StoryEncounterCatalog, never from a screen or a hidden
+    # OptionButton (Doc 10: the hidden production StoryCharacterSelect is
+    # superseded by MatchFlowState + the catalogs).
+    var out: Array[String] = []
+    for id in EncounterCatalog.allowed_fighter_ids(_current_encounter_id()):
+        if not out.has(id):
+            out.append(id)
+    return out
+
+func _allowed_story_fighter(id: String) -> String:
+    return id if id != "" and (id in _story_playable_fighters()) else ""
+
+func _coerce_story_fighter() -> String:
+    # The shipped fallback (main.gd start_story): an unknown or disallowed
+    # Story selection resolves to the encounter default, and the STATE is
+    # repaired, not just the launch, so an invalid model can never launch.
+    var allowed := _story_playable_fighters()
+    var chosen := story_selection_id()
+    if _allowed_story_fighter(chosen) == "":
+        chosen = STORY_DEFAULT_FIGHTER if allowed.has(STORY_DEFAULT_FIGHTER) else (str(allowed[0]) if not allowed.is_empty() else "")
+    if flow != null and not flow.slots.is_empty():
+        flow.slots[0].fighter_id = chosen
+    AppStateScript.story_fighter_id = chosen
+    return chosen
+
+func story_stage_id() -> String:
+    # The encounter's stage comes from the catalog (Doc 02 §8). The shipped
+    # launch left the level to the Debug Setup default ("debug"), which is
+    # exactly what the catalog records as the encounter's effective stage.
+    var encounter: Dictionary = EncounterCatalog.by_id(_current_encounter_id())
+    var id := str(encounter.get("stage_id", ""))
+    if id != "" and StageCatalog.is_selectable(id):
+        return id
+    var selectable: Array = StageCatalog.selectable_ids()
+    return str(selectable[0]) if not selectable.is_empty() else ""
+
+func _apply_encounter_slots() -> void:
+    # The encounter's slot metadata (Doc 02 §8). MatchFlowState.fresh_story()
+    # already carries the enemy station; the player station's TEAM ID is applied
+    # here because gameplay's shipped slot validator (match_config.validate)
+    # rejects an active slot without team A/B while the typed state leaves an
+    # FFA human at NO_TEAM. The catalog records the shipped layout
+    # (player_slot team 0, enemy_slot team 1), so this is not a new decision.
+    var encounter: Dictionary = EncounterCatalog.by_id(_current_encounter_id())
+    if encounter.is_empty() or flow == null:
+        return
+    var player: Dictionary = encounter.get("player_slot", {})
+    if not flow.slots.is_empty() and player.has("team"):
+        flow.slots[0].team_id = int(player.get("team", StateScript.NO_TEAM))
+    var enemy: Dictionary = encounter.get("enemy_slot", {})
+    if flow.slots.size() > 1 and enemy.has("team"):
+        flow.slots[1].team_id = int(enemy.get("team", StateScript.NO_TEAM))
+
 # ---------------------------------------------------------------------------
 # Entry
 # ---------------------------------------------------------------------------
 func _consume_entry() -> Dictionary:
     # The entry flag is consumed here (like main.gd did). Until the PostMatch
-    # payload exists (step 6) the route origin rides the existing string:
-    #   "vs"          fresh VS entry (Main -> PLAY)
-    #   "vs:results"  Results -> Change Fighters
-    #   "vs:stage"    Results -> Change Stage (PUSH the SSS with origin RESULTS)
+    # payload exists (step 6) the route rides the existing colon string:
+    #   "vs"                   fresh VS entry (Main -> PLAY)
+    #   "vs:results"           Results -> Change Fighters
+    #   "vs:stage"             Results -> Change Stage (PUSH the SSS with origin RESULTS)
+    #   "story"                fresh Story entry (Main -> STORY MODE)
+    #   "story:result:won"     gameplay -> Story Result (briefing result state)
+    #   "story:result:lost"
     var raw := str(AppStateScript.enter_mode)
     AppStateScript.enter_mode = "debug"
     var parts := raw.split(":", false)
-    var mode := str(parts[0]) if parts.size() > 0 else "debug"
+    var mode := str(parts[0]) if parts.size() > 0 else MODE_DEBUG
     var origin := str(parts[1]) if parts.size() > 1 else ""
-    return {"mode": mode, "origin": origin}
+    var result := str(parts[2]) if parts.size() > 2 else ""
+    return {"mode": mode, "origin": origin, "result": result}
 
 func open_vs(origin: String = "") -> void:
     _open_vs(origin)
@@ -221,6 +326,7 @@ func _open_vs(origin: String) -> void:
     # the shipped selection state, so the shipped defaults (P1 Human + CPU
     # stations) and the produced MatchLaunchConfig stay identical to the old
     # path while the typed object becomes the authority.
+    _mode = MODE_VS
     flow = StateScript.from_selection_state(SelectionStateScript.new())
     flow.origin = origin if origin != "" else ORIGIN_MAIN
     flow.push_return(flow.origin)
@@ -235,6 +341,37 @@ func _open_vs(origin: String) -> void:
     if origin == ORIGIN_STAGE:
         # Results -> Change Stage (Doc 02 §5): PUSH with origin RESULTS.
         call_deferred("_push_stage_from_results")
+
+func open_story(result: String = "") -> void:
+    _open_story(result)
+
+func _open_story(result: String = "") -> void:
+    # Story route (Doc 01 §9): Main -> Story Fighter Select/Briefing ->
+    # gameplay. The host owns the surface; the encounter metadata and the
+    # playable roster come from StoryEncounterCatalog (Doc 02 §8) and the
+    # selected fighter survives the route through AppState (the pre-PostMatch
+    # cross-scene channel) — that is what keeps the choice when Back returns to
+    # Main and when gameplay returns for the Story Result.
+    _mode = MODE_STORY
+    var fighter := _allowed_story_fighter(str(AppStateScript.story_fighter_id))
+    if fighter == "":
+        fighter = STORY_DEFAULT_FIGHTER
+    flow = StateScript.fresh_story(_current_encounter_id(), fighter)
+    AppStateScript.story_fighter_id = str(flow.slots[0].fighter_id)
+    _apply_encounter_slots()
+    flow.origin = ORIGIN_MAIN
+    flow.push_return(flow.origin)
+    # The Story route has no legacy VS screen mirror to keep in sync.
+    selection_state = null
+    _route_stack = [SURFACE_STORY]
+    _active_surface = SURFACE_STORY
+    _entered = {}
+    _entered[SURFACE_STORY] = true
+    set_input_scope(INPUT_SCOPE_FRONTEND)
+    prepare_fresh_entry(SURFACE_STORY)
+    play_entry(SURFACE_STORY)
+    if result == STORY_RESULT_WON or result == STORY_RESULT_LOST:
+        _show_story_result(result == STORY_RESULT_WON)
 
 func _push_stage_from_results() -> void:
     push_surface(SURFACE_SSS, ORIGIN_RESULTS)
@@ -296,6 +433,13 @@ func return_to_flow(origin: String = ORIGIN_RESULTS) -> void:
     AppStateScript.enter_mode = "vs:" + str(origin)
     get_tree().change_scene_to_file(SELF_SCENE)
 
+func return_to_story_result(won: bool) -> void:
+    # RETURN (gameplay end -> Story Result, Doc 02 §1). The mirrored entry
+    # channel gameplay uses is main.gd _reenter_match_flow(); this verb exists
+    # for the host's own tests and for the step-6 PostMatch hand-off.
+    AppStateScript.enter_mode = "story:" + ORIGIN_RESULT + ":" + (STORY_RESULT_WON if won else STORY_RESULT_LOST)
+    get_tree().change_scene_to_file(SELF_SCENE)
+
 # --- internal transition completion ----------------------------------------
 func _enter_surface(surface_name: String) -> void:
     _transition_from = ""
@@ -311,7 +455,7 @@ func _enter_surface(surface_name: String) -> void:
 
 func _on_surface_exit_finished(surface_name: String) -> void:
     _hide_surface(surface_name)
-    if surface_name == SURFACE_SSS and _sss_confirmed:
+    if surface_name == SURFACE_SSS and _launch_confirmed:
         # The confirm exit belongs to the launch, not to a POP: hold here and
         # let the readiness handshake release the flow (§6).
         _frontend_exited = true
@@ -339,6 +483,8 @@ func prepare_fresh_entry(surface_name: String, _context: Dictionary = {}) -> voi
     _restore_presentation(surface_name)
     if surface_name == SURFACE_SSS and _sss != null:
         _sss.reset()
+    elif surface_name == SURFACE_STORY and _briefing != null:
+        _briefing.reset()
 
 func prepare_return_entry(surface_name: String, _context: Dictionary = {}) -> void:
     _restore_presentation(surface_name)
@@ -348,6 +494,8 @@ func prepare_return_entry(surface_name: String, _context: Dictionary = {}) -> vo
         _css.reopen()
     elif surface_name == SURFACE_SSS and _sss != null:
         _sss.reset()
+    elif surface_name == SURFACE_STORY and _briefing != null:
+        _briefing.reset()
 
 func play_entry(surface_name: String, _context: Dictionary = {}) -> void:
     match surface_name:
@@ -365,6 +513,13 @@ func play_entry(surface_name: String, _context: Dictionary = {}) -> void:
             # Stage Select opens against the state's stage (the shipped
             # current/focus pair) — never a hidden setup control.
             _sss.open_with(str(flow.stage_id), str(flow.stage_id))
+        SURFACE_STORY:
+            if _briefing == null:
+                return
+            _show_surface(SURFACE_STORY)
+            # The briefing opens against the stored Story selection (the
+            # encounter's player-facing copy comes from its own scene).
+            _briefing.open(story_selection_id())
         _:
             return
     set_input_scope(INPUT_SCOPE_FRONTEND)
@@ -378,6 +533,9 @@ func play_exit(surface_name: String, _destination: String = "") -> void:
         SURFACE_SSS:
             if _sss != null:
                 _sss.play_exit()
+        SURFACE_STORY:
+            if _briefing != null:
+                _briefing.play_exit()
 
 func _restore_presentation(surface_name: String) -> void:
     # Doc 02 §7: root alpha = authored baseline. This is the CSS return fix.
@@ -422,6 +580,79 @@ func _on_css_back() -> void:
 func _on_sss_confirmed(id: String) -> void:
     _begin_launch(str(id))
 
+# --- Story surface callbacks -------------------------------------------------
+func _on_story_chosen(id: String) -> void:
+    # The briefing's own selection path (tiles/pointer/keyboard) writes into the
+    # typed authority; AppState carries the choice across the Main return and
+    # the Story Result re-entry, so the selection is never lost with the scene.
+    var fighter := _allowed_story_fighter(str(id))
+    if fighter == "" or flow == null or flow.slots.is_empty():
+        return
+    flow.slots[0].fighter_id = fighter
+    AppStateScript.story_fighter_id = fighter
+
+func _on_story_start() -> void:
+    # START ENCOUNTER: freeze the validated story state into an immutable
+    # MatchLaunchConfig and launch exactly like the VS path (§6 handshake).
+    if _launch_state != LAUNCH_IDLE or _mode != MODE_STORY:
+        return
+    if not _begin_story_launch():
+        return
+    if _briefing != null:
+        # The briefing's own exit choreography covers the construction window.
+        _briefing.play_exit()
+
+func _begin_story_launch() -> bool:
+    var selected := _coerce_story_fighter()
+    if selected == "":
+        _last_route_error = str(StateScript.MESSAGE_ENCOUNTER_FIGHTER)
+        return false
+    # Story launches the encounter's own stage (Doc 02 §8); Stage Select is not
+    # part of the Story route.
+    var stage_id := story_stage_id()
+    flow.stage_id = str(stage_id)
+    var config = LaunchConfigScript.build(flow, str(stage_id))
+    if not config.is_valid():
+        _last_route_error = str(config.validation_error())
+        return false
+    _last_route_error = ""
+    pending_launch = config
+    _launch_confirmed = true
+    _frontend_exited = false
+    # §6: construct the destination NOW, while the briefing still owns the
+    # frame.
+    _construct_gameplay(config)
+    return true
+
+func _on_story_back() -> void:
+    # Story Back follows the player route Story -> Main (Doc 07 §15); the
+    # authored exit runs first so the route is never a hard cut.
+    _last_route_error = ""
+    if _launch_state != LAUNCH_IDLE:
+        return
+    if _briefing != null:
+        _briefing.play_exit()
+    else:
+        _leave_to_home()
+
+func _on_story_exit_finished() -> void:
+    _hide_surface(SURFACE_STORY)
+    if _launch_confirmed:
+        # The START exit belongs to the launch, not to a POP: hold here and let
+        # the readiness handshake release the flow (§6).
+        _frontend_exited = true
+        _maybe_launch()
+        return
+    _leave_to_home()
+
+func _show_story_result(won: bool) -> void:
+    # The shipped Story result state stays on the briefing (Doc 07 §16: wording
+    # + REPLAY/RETRY + MAIN MENU, never the multiplayer Results screen). WP-5
+    # owns the standalone Story Result redesign.
+    if _briefing == null:
+        return
+    _briefing.show_result(won)
+
 func _begin_launch(stage_id: String) -> bool:
     # Stage confirm: the selection is written into the typed state AND the
     # screen mirror, then frozen into the immutable launch snapshot.
@@ -435,7 +666,7 @@ func _begin_launch(stage_id: String) -> bool:
         return false
     _last_route_error = ""
     pending_launch = config
-    _sss_confirmed = true
+    _launch_confirmed = true
     _frontend_exited = false
     # §6: construct the destination NOW, while the SSS still owns the frame
     # (its confirm pose + exit choreography cover the construction window).
@@ -501,7 +732,7 @@ func _on_gameplay_presentation_ready() -> void:
     _maybe_launch()
 
 func _maybe_launch() -> void:
-    if not _sss_confirmed or not _frontend_exited:
+    if not _launch_confirmed or not _frontend_exited:
         return
     if _launch_state != LAUNCH_READY:
         return
@@ -551,6 +782,29 @@ func char_select() -> Control:
 func stage_select() -> Control:
     return _sss
 
+func story_briefing() -> Control:
+    return _briefing
+
+func entry_mode() -> String:
+    return _mode
+
+func is_story_mode() -> bool:
+    return _mode == MODE_STORY
+
+func story_encounter_id() -> String:
+    return str(flow.story_encounter_id) if flow != null else ""
+
+func story_selection_id() -> String:
+    if flow == null or flow.slots.is_empty():
+        return ""
+    return str(flow.slots[0].fighter_id)
+
+func story_playable_ids() -> Array:
+    return _story_playable_fighters()
+
+func story_stage() -> String:
+    return story_stage_id()
+
 func route_stack_names() -> Array:
     return _route_stack.duplicate()
 
@@ -586,6 +840,8 @@ func surface_root(surface_name: String) -> Control:
         return screen.get_node_or_null("ReferenceFrame") as Control
     if surface_name == SURFACE_SSS:
         return screen.get_node_or_null("StageContent") as Control
+    if surface_name == SURFACE_STORY:
+        return screen.get_node_or_null("ReferenceFrame") as Control
     return screen
 
 func surface_root_alpha(surface_name: String) -> float:

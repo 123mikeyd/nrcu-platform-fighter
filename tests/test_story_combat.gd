@@ -1,5 +1,12 @@
 extends SceneTree
+# Story combat contract — MIGRATED for WP-0 step 4: the encounter is launched by
+# the MatchFlow host from a story MatchLaunchConfig; gameplay keeps the combat
+# and the Story state machine, and the Story Result (with REPLAY/RETRY) is the
+# host's briefing surface. Marker line BOBO_INPUT is the suite's success
+# contract.
 var failures := 0
+var story
+
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
     if not ok:
@@ -14,12 +21,24 @@ func key(code: int, down: bool):
 func frames(count: int):
     for i in count: await physics_frame
     await process_frame
+
+func escape() -> InputEventKey:
+    var event := InputEventKey.new()
+    event.keycode = KEY_ESCAPE
+    event.pressed = true
+    return event
+
 func run():
-    var arena = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena)
-    await process_frame
-    arena.open_story()
-    arena.story_action.pressed.emit()
+    root.size = Vector2i(1280, 720)
+    story = load("res://tests/fixtures/story_route.gd").new()
+    var host = await story.enter(self)
+    var launch_host_id: int = host.get_instance_id()
+    var arena = await story.start_encounter(self, host)
+    if arena == null:
+        check(false, "the story encounter launches through MatchFlow")
+        print("BOBO_INPUT failures=", failures)
+        quit(1)
+        return
     await frames(120)
     var hero = arena.player_one
     var bobo = arena.player_two
@@ -47,17 +66,49 @@ func run():
     bobo._handle_blast_zone()
     check(not arena.match_over and bobo.health == hp-5, "knockoff never bypasses HP")
     bobo.receive_hit(1000,Vector3.RIGHT,100)
-    check(arena.story_state == "complete" and arena.story_title.text == "your pretty cool", "real lethal damage completes Story")
-    arena.story_action.pressed.emit()
+    check(arena.story_state == "complete", "real lethal damage completes Story")
+    check(not arena.winner_label.visible, "the generic freeplay winner text never appears in Story")
+    # --- the Story Result is the host's surface (REPLAY / RETRY) ---
+    var result_host = await story.wait_for_flow(self, launch_host_id)
+    check(result_host != null, "the completed encounter returns to the MatchFlow host")
+    if result_host == null:
+        print("BOBO_INPUT failures=", failures)
+        quit(1)
+        return
+    check(str(result_host.story_briefing().title_label().text) == "your pretty cool", "the shipped victory wording is preserved")
+    check(str(result_host.story_briefing().action_button().text) == "REPLAY", "the victory offers REPLAY")
+    var replay = await story.start_encounter(self, result_host)
+    check(replay != null and replay.story_state == "playing" and replay.player_two.health == 400,
+        "Replay launches a fresh encounter and restores HP")
+    if replay == null:
+        print("BOBO_INPUT failures=", failures)
+        quit(1)
+        return
     await frames(120)
-    check(arena.player_two.health == 400, "Replay restores HP")
-    for i in 3: arena.player_one._handle_blast_zone()
-    check(arena.story_state == "lost", "player stock loss remains real")
-    arena.story_action.pressed.emit()
-    check(arena.player_two.health == 400 and arena.player_one.stocks == 3, "Retry restores both fighters")
-    arena.show_setup()
-    check(not arena.bobo_health_bar.visible, "Back hides encounter-only HP bar")
-    arena.queue_free()
+    for i in 3: replay.player_one._handle_blast_zone()
+    check(replay.story_state == "lost", "player stock loss remains real")
+    var loss_host = await story.wait_for_flow(self, result_host.get_instance_id())
+    check(loss_host != null, "the loss returns to the Story Result host")
+    if loss_host != null:
+        check(str(loss_host.story_briefing().action_button().text) == "RETRY", "the loss offers RETRY")
+        var retry = await story.start_encounter(self, loss_host)
+        check(retry != null and retry.player_two.health == 400 and retry.player_one.stocks == 3,
+            "Retry restores both fighters")
+        if retry != null:
+            # Esc: the player route Story -> Main (no MATCH SETUP vocabulary).
+            await frames(20)
+            var live = root.get_node_or_null("MainArena")
+            check(live == retry and is_instance_valid(retry) and retry.is_inside_tree(),
+                "the retried encounter is the live arena before Esc")
+            if live == retry and is_instance_valid(retry) and retry.is_inside_tree():
+                retry._unhandled_key_input(escape())
+                check(not retry.bobo_health_bar.visible, "Back hides the encounter-only HP bar")
+                var home_scene = await story.wait_for_scene(self, "home.tscn")
+                check(home_scene != null, "Esc leaves the encounter for the Main route")
+                if home_scene != null:
+                    home_scene.queue_free()
+                await process_frame
+    await story.free_hosts(self)
     await process_frame
     print("BOBO_INPUT failures=", failures)
     quit(1 if failures else 0)

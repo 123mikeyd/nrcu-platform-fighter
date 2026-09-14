@@ -5,7 +5,8 @@ extends SceneTree
 #
 # This test pins the ADDITIVE catalogs to the actual current production sources:
 #   - fighter ids/names/portraits vs roster.gd + portrait_data.gd;
-#   - Story eligibility vs main.gd _story_playable_ids();
+#   - Story eligibility vs the encounter catalog (WP-0 step 4 moved the Story
+#     route into MatchFlow, so the encounter's allowed fighters are authority);
 #   - stage ids vs match_setup.LEVEL_IDS, thumbnails on disk, SSS label rule;
 #   - encounter 01 copy vs story_briefing.gd (exact literals) + bobo_fighter MAX_HEALTH;
 #   - input profiles vs how_to_play.gd PROFILES/BINDINGS and the legacy
@@ -136,8 +137,13 @@ func _fighter_catalog() -> void:
 	check(bool(catalog.by_id("ggb")["palette_policy"]["preserves_painted_materials"]), "GGB keeps the painted-material palette rule")
 	check(not bool(catalog.by_id("mephisto")["help_definition"]["curated"]), "Mephisto has no curated move list")
 	var main_source := _source("res://scripts/main.gd")
-	check(main_source.contains('ids.erase("ice_mage")'), "Story eligibility still comes from the main.gd exclusion")
-	check(main_source.contains('load("res://scripts/roster.gd").ids()'), "roster.gd is still the id source")
+	check(catalog.story_playable_ids() == expected_story, "story_playable_ids equals the Story eligibility rule")
+	# WP-0 step 4: the Story route (and its playable roster) lives in the
+	# MatchFlow host, which reads the encounter catalog; gameplay no longer owns
+	# a story playable-id list.
+	var flow_source := _source("res://scripts/match_flow.gd")
+	check(flow_source.contains("EncounterCatalog.allowed_fighter_ids"), "the hosted Story roster comes from the encounter catalog")
+	check(main_source.contains('load("res://scripts/roster.gd")'), "roster.gd is still the gameplay id/display-name source")
 
 # --- StageCatalog ---------------------------------------------------------
 func _stage_catalog() -> void:
@@ -186,7 +192,8 @@ func _encounter_catalog() -> void:
 	check(int(e["enemy_hp"]) == 400, "encounter 01 records 400 HP")
 	check(int(e["hud_health_bar_max"]) == 400, "encounter health bar max is 400")
 	check(stage_catalog.has(str(e["stage_id"])), "encounter stage resolves through the StageCatalog")
-	check(str(e["stage_mode"]) == "host_selected", "encounter 01 does not pin a stage (host selection wins)")
+	check(stage_catalog.is_selectable(str(e["stage_id"])), "the recorded stage is the launchable encounter stage")
+	check(str(e["stage_mode"]) == "host_selected", "the shipped story launch left the level to the host (recorded provenance)")
 	var briefing_source := _source("res://scripts/frontend/story_briefing.gd")
 	check(str(e["objective"]) == "Defeat Bobo.", "objective matches the briefing exactly")
 	check(e["rules"] == ["You have 3 stocks.", "Bobo does not attack."], "rules match the briefing exactly")
@@ -215,12 +222,19 @@ func _encounter_catalog() -> void:
 	check(Vector3(e["player_spawn"]) == Vector3(-4.0, 1.0, 0.0), "player spawn is p1_spawn")
 	check(main_source.contains("var p1_spawn := Vector3(-4.0, 1.0, 0.0)"), "p1_spawn literal unchanged in main.gd")
 	check(Vector3(e["enemy_spawn"]) == Vector3(0.6, 1.0, 0.0), "enemy spawn matches start_story")
-	check(main_source.contains("player_two.reset_fighter(Vector3(0.6, 1.0, 0.0), true)"), "enemy spawn placement unchanged in main.gd")
+	# WP-0 step 4: gameplay consumes the payload instead of owning a story route.
+	check(main_source.contains('payload.get("enemy_spawn"'), "enemy spawn is consumed from the launch config's story payload")
+	check(main_source.contains("_begin_story_encounter"), "the story state machine runs off the frozen payload")
 	check(float(e["player_facing"]) == 1.0 and float(e["enemy_facing"]) == -1.0, "encounter facings match start_story")
 	check(str(e["hud_title_template"]) == "STORY 01 — %s VS BOBO", "encounter HUD title template matches main.gd")
-	check(main_source.contains('hud_title.text = "STORY 01 — %s VS BOBO"'), "HUD title template still in main.gd")
-	check(main_source.contains("start_match(slots, false, true)"), "start_story launches the encounter without pinning a level")
-	check(main_source.contains('slots[1].character = "bobo"'), "slot 1 is Bobo in start_story")
+	check(main_source.contains('payload.get("hud_title_template"'), "the HUD title template is consumed from the story payload")
+	check(main_source.contains("cfg.has_story()"), "gameplay's story branch keys off the immutable config")
+	var flow_source := _source("res://scripts/match_flow.gd")
+	check(main_source.contains('"story:result:"'), "gameplay RETURNs to the flow with the Story outcome token")
+	check(flow_source.contains("ORIGIN_RESULT"), "the host owns the Story Result origin token")
+	check(flow_source.contains("LaunchConfigScript.build"), "the Story launch freezes through the same builder as the VS path")
+	check(_source("res://scripts/match_flow_state.gd").contains('encounter.get("enemy_id"'),
+		"the state factory takes the enemy slot from the encounter catalog")
 	check(main_source.contains("bobo_health_bar.max_value = 400"), "encounter health bar max still 400 in main.gd")
 	var locked: Dictionary = e["result_copy"]
 	check(str(locked["win_title"]) == "YOU'RE PRETTY COOL", "locked win title is the package copy")

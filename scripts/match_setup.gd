@@ -2,7 +2,6 @@ extends Control
 
 const Config = preload("res://scripts/match_config.gd")
 signal start_requested(slots: Array, teams: bool)
-signal story_requested
 signal stage_select_requested(focus_id: String)
 signal back_requested
 const Style = preload("res://scripts/demo_style.gd")
@@ -138,12 +137,6 @@ func _ready() -> void:
     column.add_child(actions)
     start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     actions.add_child(start)
-    var story := Button.new()
-    story.name = "StoryModeButton"
-    story.text = "Story Mode"
-    story.custom_minimum_size = Vector2(400, 48)
-    story.pressed.connect(func(): story_requested.emit())
-    actions.add_child(story)
     var navigation := HBoxContainer.new()
     column.add_child(navigation)
     var back := Button.new()
