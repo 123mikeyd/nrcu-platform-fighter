@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tools/title_idle_proof.gd" id="1_tip"]
+
+[node name="TitleIdleProof" type="Node"]
+script = ExtResource("1_tip")
