@@ -142,8 +142,9 @@ func part_a_main_to_css_and_story_no_black_gap() -> void:
         await sample_presented(host, 20)
         check(presented_violations.is_empty(),
             "Main -> Story never shows an alpha-zero/bare frame (%s)" % " | ".join(presented_violations))
-        check(host.active_surface() == "story" and host.is_surface_presented("story"),
-            "the Story briefing is the presented surface on entry")
+        check(host.active_surface() == "story_select" and host.is_surface_presented("story_select"),
+            "the Story Fighter Select is the presented surface on entry")
+        check(host.is_surface_presented("story"), "the Story route presents a Story surface on entry")
         check(host.surface_root_alpha("story") > 0.0, "the Story root enters above alpha 0")
         var story_root: Control = host.surface_root("story")
         check(story_root != null and story_root.is_visible_in_tree(), "the Story root is visible when entered")
@@ -197,7 +198,7 @@ func part_b_no_gameplay_while_configuring() -> void:
             break
         if not gameplay_absent():
             violations.append("Story state, frame %d" % i)
-    check(violations.is_empty(), "no gameplay exists while the Story briefing is up (%s)" % " | ".join(violations))
+    check(violations.is_empty(), "no gameplay exists while the Story route is up (%s)" % " | ".join(violations))
     check(host2.gameplay_node() == null, "the Story configuration owns no gameplay")
     if is_instance_valid(host2):
         host2.queue_free()

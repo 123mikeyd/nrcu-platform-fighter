@@ -47,6 +47,7 @@ func run() -> void:
     await _how_to_play_surface()
     await _help_route_and_quit_modal()
     await _story_briefing_surface()
+    await _story_result_surface()
     await _story_route()
     if failures > 0:
         print("FAILURES: %d" % failures)
@@ -259,10 +260,8 @@ func _story_briefing_surface() -> void:
     expected.erase("ice_mage")
     check(story.roster_ids() == expected, "the briefing uses the story playable ids")
     check(story.selected_fighter_id() == "turbofit", "the briefing opens on the story default fighter")
-    var tiles: Array = story.roster_tiles()
-    check(tiles.size() == expected.size(), "one selection tile per playable fighter")
-    for i in tiles.size():
-        check(str(tiles[i].fighter_id) == str(expected[i]), "selection tile %d uses a stable fighter id" % i)
+    check(story.roster_tiles().is_empty() and story.find_child("RosterStrip", true, false) == null,
+        "the Encounter Briefing embeds no roster strip (Doc 05 §108)")
     story.select_fighter("ggb")
     await settle(4)
     check(story.selected_fighter_id() == "ggb" and story.render_view().subjects() == ["ggb"],
@@ -311,29 +310,67 @@ func _story_briefing_surface() -> void:
     story.queue_free()
     await process_frame
 
+# --- C2. Story Result surface (Doc 05 §136-159) ------------------------------
+func _story_result_surface() -> void:
+    var result = load("res://scenes/story_result.tscn").instantiate()
+    root.add_child(result)
+    await settle(8)
+    result.present(true, "turbofit")
+    await settle(4)
+    check(str(result.title_label().text) == "YOU'RE PRETTY COOL" and str(result.detail_label().text) == "BOBO DEFEATED",
+        "the win copy is the package wording")
+    check(str(result.action_button().text) == "REPLAY" and str(result.menu_button().text) == "MAIN MENU",
+        "the win action group offers REPLAY and MAIN MENU")
+    check(result.change_fighter_button().visible, "the result offers CHANGE FIGHTER")
+    check(result.selected_fighter_id() == "turbofit" and result.render_view().subjects() == ["turbofit"],
+        "the result keeps the played fighter present")
+    result.present(false, "turbofit")
+    await settle(2)
+    check(str(result.title_label().text) == "TRY AGAIN"
+        and str(result.detail_label().text) == "Out of stocks. Bobo is still standing."
+        and str(result.action_button().text) == "RETRY",
+        "the loss copy is the package wording with RETRY")
+    result.queue_free()
+    await process_frame
+
 # --- D. Story route through the MatchFlow frontend (WP-0 step 4) ------------
 func _story_route() -> void:
     var story = load("res://tests/fixtures/story_route.gd").new()
     var host = await story.enter(self)
-    check(host.entry_mode() == "story" and host.active_surface() == "story", "the Story route opens in the MatchFlow host")
+    check(host.entry_mode() == "story" and host.active_surface() == "story_select",
+        "the Story route opens in the MatchFlow host on the Fighter Select")
+    var select = host.story_select()
+    check(select != null and select.visible, "the host presents the Story Fighter Select")
+    check(select.roster_ids() == story_ids(), "the Select uses the encounter's playable ids")
+    var tiles: Array = select.roster_tiles()
+    check(tiles.size() == story_ids().size(), "one selection tile per playable fighter")
+    check(select.selected_fighter_id() == "turbofit", "the Select opens on the default fighter")
+    check(await story.open_briefing(self, host), "Continue reaches the Encounter Briefing")
     var briefing = host.story_briefing()
     check(briefing != null and briefing.visible, "the host presents the Encounter Briefing")
     check(briefing.get_parent().get_parent() == host, "the briefing is hosted by MatchFlow, outside gameplay")
     check(str(briefing.action_button().text) == "START ENCOUNTER", "the briefing exposes the screen-level START ENCOUNTER action")
     check(str(briefing.back_button().text) == "BACK" and briefing.back_button().visible, "Back stays visible on the briefing")
-    check(briefing.roster_ids() == story_ids(), "the briefing uses the encounter's playable ids")
-    check(briefing.selected_fighter_id() == "turbofit", "the briefing opens on the default fighter")
+    check(briefing.selected_fighter_id() == "turbofit", "the briefing presents the committed fighter")
+    check(briefing.find_child("RosterStrip", true, false) == null,
+        "the briefing scene carries no roster strip of its own (Doc 05 §108)")
+    check(briefing.roster_tiles() == select.roster_tiles(),
+        "pre-WP-4 roster probes read the shared Select (no second selector)")
     var offending := false
     for text in visible_strings(briefing):
         if text.to_upper().find("MATCH SETUP") != -1:
             offending = true
     check(not offending, "no MATCH SETUP vocabulary is player-facing in the briefing")
-    # Back: the player route Story -> Main (before any launch)
+    # Back: Briefing -> Story Fighter Select -> Main (Doc 01 §9)
     briefing.back_button().pressed.emit()
     await settle(2)
     check(briefing.is_exiting(), "Back runs the briefing exit instead of a debug route")
+    var back_to_select: bool = await story.wait_for(self, func() -> bool:
+        return host.active_surface() == "story_select" and select.visible, 240)
+    check(back_to_select, "the Briefing Back restores the Story Fighter Select")
+    select.back_button().pressed.emit()
     var home_scene = await story.wait_for_scene(self, "home.tscn")
-    check(home_scene != null, "Back returns to the Main route")
+    check(home_scene != null, "the Select Back returns to the Main route")
     check(root.get_node_or_null("MainArena") == null, "no arena was constructed for a Back return")
     if home_scene != null:
         home_scene.queue_free()

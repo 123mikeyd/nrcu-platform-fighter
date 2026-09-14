@@ -56,36 +56,48 @@ func run() -> void:
         print("FAILURES: %d" % failures)
         quit(1)
         return
-    print("PASS: MatchFlow story route (host-owned briefing, story launch config, handshake, selection/back return, Story Result replay)")
+    print("PASS: MatchFlow story route (two-step Select/Briefing, story launch config, handshake, selection/back return, Story Result replay)")
     quit(0)
 
 # ---------------------------------------------------------------------------
 # Part A — the host owns the Story surface (no arena while briefing)
 # ---------------------------------------------------------------------------
 func part_a_host_composition() -> void:
-    print("--- part A: host owns the Story surface ---")
+    print("--- part A: host owns the two-step Story route ---")
     var host = await story.enter(self)
-    check(host.has_method("open_story") and host.has_method("story_briefing"),
-        "MatchFlow exposes the Story verb and its surface read")
+    check(host.has_method("open_story") and host.has_method("story_select")
+        and host.has_method("story_briefing") and host.has_method("story_result"),
+        "MatchFlow exposes the Story verb and its three step reads")
     check(host.entry_mode() == "story" and host.is_story_mode(), "the host entered Story mode")
-    check(host.active_surface() == "story", "a fresh Story flow activates the briefing surface")
-    check(host.route_stack_names() == ["story"], "the route stack starts at the Story surface")
-    check(host.presented_surfaces() == ["story"], "exactly one surface is presented (the briefing)")
+    check(host.active_surface() == "story_select", "a fresh Story flow activates the Fighter Select step")
+    check(host.route_stack_names() == ["story_select"], "the route stack starts at the Story Fighter Select")
+    check(host.presented_surfaces() == ["story_select"], "exactly one surface is presented (the Select)")
     check(host.input_scope() == "frontend", "the flow claims the frontend input scope while active")
     check(root.get_node_or_null("MainArena") == null and host.gameplay_node() == null,
-        "gameplay does not exist while briefing (WP-0 gate)")
-    var briefing = host.story_briefing()
-    check(briefing != null and briefing.get_parent() != null and briefing.get_parent().get_parent() == host,
-        "the Encounter Briefing is a CHILD of the MatchFlow host")
-    check(not (briefing is Node3D), "the briefing is a frontend Control, not gameplay")
+        "gameplay does not exist while the Story route is up (WP-0 gate)")
+    var select = host.story_select()
+    check(select != null and select.get_parent() != null and select.get_parent().get_parent() == host,
+        "the Story Fighter Select is a CHILD of the MatchFlow host")
+    check(not (select is Node3D), "the Select is a frontend Control, not gameplay")
     check(host.story_encounter_id() == ENCOUNTER, "the host presents encounter 01 from the catalog")
     check(host.story_selection_id() == "turbofit", "the story state opens on the encounter default fighter")
     var allowed: Array = []
     for id in host.story_playable_ids():
         allowed.append(str(id))
     check(allowed == EncounterCatalog.allowed_fighter_ids(ENCOUNTER),
-        "the briefing roster comes from the encounter catalog (never a hidden control)")
-    check(briefing.selected_fighter_id() == "turbofit", "the briefing opens on the story default fighter")
+        "the Select roster comes from the encounter catalog (never a hidden control)")
+    check(select.roster_ids() == EncounterCatalog.allowed_fighter_ids(ENCOUNTER),
+        "the Select presents exactly the encounter's fighters")
+    check(select.selected_fighter_id() == "turbofit", "the Select opens on the story default fighter")
+    # Step 2: Continue PUSHes the Briefing (Doc 01 §9).
+    check(await story.open_briefing(self, host), "Continue PUSHes the Encounter Briefing")
+    check(host.route_stack_names() == ["story_select", "story_briefing"],
+        "the Select -> Briefing edge is a real PUSH")
+    var briefing = host.story_briefing()
+    check(briefing != null and briefing.get_parent() != null and briefing.get_parent().get_parent() == host,
+        "the Encounter Briefing is a CHILD of the MatchFlow host")
+    check(not (briefing is Node3D), "the briefing is a frontend Control, not gameplay")
+    check(briefing.selected_fighter_id() == "turbofit", "the briefing presents the committed fighter")
     check(str(briefing.action_button().text) == "START ENCOUNTER", "the briefing exposes START ENCOUNTER")
     check(str(briefing.back_button().text) == "BACK", "the briefing keeps its Back affordance")
     await story.free_hosts(self)
@@ -118,12 +130,12 @@ func part_b_story_entry_from_main() -> void:
     await frames(3)
     if host == null:
         return
-    check(host.entry_mode() == "story" and host.active_surface() == "story",
-        "the production Story route enters the host in story mode on the briefing")
-    check(root.get_node_or_null("MainArena") == null, "no arena exists on the way into the briefing")
-    check(host.surface_root_alpha("story") > 0.0, "the briefing is presented visibly on entry")
-    var briefing = host.story_briefing()
-    check(briefing != null and briefing.visible, "the hosted briefing is visible")
+    check(host.entry_mode() == "story" and host.active_surface() == "story_select",
+        "the production Story route enters the host in story mode on the Fighter Select")
+    check(root.get_node_or_null("MainArena") == null, "no arena exists on the way into the Story route")
+    check(host.surface_root_alpha("story_select") > 0.0, "the Story Select is presented visibly on entry")
+    var select = host.story_select()
+    check(select != null and select.visible, "the hosted Story Fighter Select is visible")
     check(AppStateScript.enter_mode == "debug", "the entry flag is consumed by the host")
     await story.free_hosts(self)
 
@@ -133,10 +145,12 @@ func part_b_story_entry_from_main() -> void:
 func part_c_story_launch_from_config() -> void:
     print("--- part C: START -> story MatchLaunchConfig -> gameplay ---")
     var host = await story.enter(self)
-    var briefing = host.story_briefing()
-    briefing.select_fighter("ggb")
-    check(host.story_selection_id() == "ggb", "the briefing selection reaches the typed state")
+    var select = host.story_select()
+    select.select_fighter("ggb")
+    check(host.story_selection_id() == "ggb", "the Select selection reaches the typed state")
     check(AppStateScript.story_fighter_id == "ggb", "the selection is carried for the route returns")
+    check(await story.open_briefing(self, host), "Continue reaches the Encounter Briefing")
+    check(host.story_briefing().selected_fighter_id() == "ggb", "the Briefing presents the committed fighter")
 
     var captured: Dictionary = {}
     host.launch_requested.connect(func(config) -> void: captured["config"] = config)
@@ -205,19 +219,27 @@ func part_c_story_launch_from_config() -> void:
 # Part D — Back returns to Main and preserves the selection
 # ---------------------------------------------------------------------------
 func part_d_selection_and_back() -> void:
-    print("--- part D: Back -> Main, selection preserved ---")
+    print("--- part D: Briefing -> Select -> Main, selection preserved ---")
     var host = await story.enter(self)
-    var briefing = host.story_briefing()
+    var select = host.story_select()
     var playable: Array = []
     for id in host.story_playable_ids():
         playable.append(str(id))
-    briefing.select_fighter(str(playable[2]))
+    select.select_fighter(str(playable[2]))
     check(host.story_selection_id() == playable[2], "the selection reaches the typed state")
+    check(await story.open_briefing(self, host), "Continue reaches the Encounter Briefing")
+    var briefing = host.story_briefing()
     briefing.back_button().pressed.emit()
     await frames(2)
     check(briefing.is_exiting(), "Back runs the briefing exit choreography")
+    var restored: bool = await story.wait_for(self, func() -> bool:
+        return host.active_surface() == "story_select" and select.visible, 240)
+    check(restored, "the Briefing Back restores the Story Fighter Select")
+    check(select.selected_fighter_id() == playable[2], "the Briefing Back preserves the committed fighter")
+    check(host.route_stack_names() == ["story_select"], "the Briefing Back is a real POP")
+    select.back_button().pressed.emit()
     var home_scene = await story.wait_for_scene(self, "home.tscn")
-    check(home_scene != null, "Back returns to the Main route")
+    check(home_scene != null, "the Select Back returns to the Main route")
     check(AppStateScript.story_fighter_id == playable[2], "the Story selection survives the Main return")
     if home_scene != null:
         home_scene.queue_free()
@@ -225,7 +247,7 @@ func part_d_selection_and_back() -> void:
     # scene change cannot free it: this test frees it before the re-entry.
     await story.free_hosts(self)
     var reentry = await story.enter(self)
-    check(reentry.story_briefing().selected_fighter_id() == playable[2], "re-entry restores the roster choice")
+    check(reentry.story_select().selected_fighter_id() == playable[2], "re-entry restores the roster choice")
     check(reentry.story_selection_id() == playable[2], "the typed state keeps the roster choice")
     await story.free_hosts(self)
 
@@ -252,13 +274,15 @@ func part_e_story_result_and_replay() -> void:
     if result_host == null:
         return
     var host_id: int = result_host.get_instance_id()
-    var result_briefing = result_host.story_briefing()
-    check(result_host.entry_mode() == "story" and result_host.active_surface() == "story",
+    var result = result_host.story_result()
+    check(result_host.entry_mode() == "story" and result_host.active_surface() == "story_result",
         "the Story Result is the host's Story surface")
-    check(str(result_briefing.title_label().text) == "your pretty cool", "the shipped win wording is preserved")
-    check(str(result_briefing.action_button().text) == "REPLAY",
+    check(str(result.title_label().text) == "YOU'RE PRETTY COOL", "the package win wording is presented")
+    check(str(result.action_button().text) == "REPLAY",
         "the win offers REPLAY (not the multiplayer Results screen)")
-    check(str(result_briefing.back_button().text) == "MAIN MENU", "the Story Result routes to MAIN MENU")
+    check(str(result.menu_button().text) == "MAIN MENU" and str(result.back_button().text) == "BACK TO MAIN",
+        "the Story Result routes to MAIN MENU / Back to Main")
+    check(result.change_fighter_button().visible, "the Story Result offers CHANGE FIGHTER")
     check(result_host.story_selection_id() == "turbofit", "the Story Result keeps the played fighter")
 
     # REPLAY: a fresh encounter from the same selection through the same path.
@@ -282,12 +306,13 @@ func part_e_story_result_and_replay() -> void:
     var loss_host = await story.wait_for_flow(self, host_id)
     check(loss_host != null, "the loss returns to the Story Result host")
     if loss_host != null:
-        check(str(loss_host.story_briefing().title_label().text) == "TRY AGAIN",
-            "the shipped loss wording is preserved")
-        check(str(loss_host.story_briefing().title_label().text) != "your pretty cool",
+        var loss_result = loss_host.story_result()
+        check(str(loss_result.title_label().text) == "TRY AGAIN",
+            "the package loss wording is presented")
+        check(str(loss_result.title_label().text) != "YOU'RE PRETTY COOL",
             "the loss never shows the victory line")
-        check(str(loss_host.story_briefing().action_button().text) == "RETRY", "the loss offers RETRY")
-        loss_host.story_briefing().back_button().pressed.emit()
+        check(str(loss_result.action_button().text) == "RETRY", "the loss offers RETRY")
+        loss_result.menu_button().pressed.emit()
         var home_scene = await story.wait_for_scene(self, "home.tscn")
         check(home_scene != null, "MAIN MENU returns to the Main route")
         if home_scene != null:
