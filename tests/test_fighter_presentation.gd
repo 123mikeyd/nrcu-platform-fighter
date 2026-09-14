@@ -22,7 +22,7 @@ const View = preload("res://scripts/frontend/fighter_render_view.gd")
 const Roster = preload("res://scripts/roster.gd")
 const Bounds = preload("res://tests/posed_character_bounds.gd")
 
-const BAY_AREA := Vector2(267.0, 146.0)   # measured PlayerBay render area (1280x720)
+const BAY_AREA := Vector2(267.0, 296.0)   # PlayerBay render area at 1280x720, 1 occupied row (measured from the review-state capture geometry)
 const HEIGHT_TOLERANCE := 0.05
 const WIDTH_TOLERANCE := 0.06
 
@@ -381,9 +381,9 @@ func _players(subject: Node) -> Array:
 
 func _density() -> void:
 	var one_to_one := Factory.render_density(Factory.PROFILE_PLAYER_BAY, BAY_AREA, 1.0, 1.0)
-	check(one_to_one == Vector2i(267, 146), "at 720p the bay renders 1:1 with its displayed pixels (%s)" % str(one_to_one))
+	check(one_to_one == Vector2i(267, 296), "at 720p the bay renders 1:1 with its displayed pixels (%s)" % str(one_to_one))
 	var scaled := Factory.render_density(Factory.PROFILE_PLAYER_BAY, BAY_AREA, 3.0, 1.0)
-	check(scaled == Vector2i(801, 438), "at 3x output scale the bay renders at 3x density (%s)" % str(scaled))
+	check(scaled == Vector2i(801, 888), "at 3x output scale the bay renders at 3x density (%s)" % str(scaled))
 	check(absf(float(scaled.x) / float(scaled.y) - BAY_AREA.x / BAY_AREA.y) <= 0.01,
 		"the render target keeps the destination aspect (no cover crop needed)")
 	check(Factory.render_density(Factory.PROFILE_PLAYER_BAY, BAY_AREA, 4.0, 2.0).x <= 1440
@@ -402,13 +402,13 @@ func _density() -> void:
 	var rig := _make_view(BAY_AREA, 1.0)
 	var view = rig["view"]
 	view.refresh_density()
-	check(view.render_size() == Vector2i(267, 146), "view density at 1x matches the displayed pixels (%s)" % str(view.render_size()))
+	check(view.render_size() == Vector2i(267, 296), "view density at 1x matches the displayed pixels (%s)" % str(view.render_size()))
 	view.set_content_scale_override(3.0)
-	check(view.render_size() == Vector2i(801, 438), "view reallocates when the output scale changes (%s)" % str(view.render_size()))
+	check(view.render_size() == Vector2i(801, 888), "view reallocates when the output scale changes (%s)" % str(view.render_size()))
 	view.set_content_scale_override(1.0)
-	check(view.render_size() == Vector2i(267, 146), "returning to 1x restores the 1:1 target")
+	check(view.render_size() == Vector2i(267, 296), "returning to 1x restores the 1:1 target")
 	view.set_content_scale_override(1.005)
-	check(view.render_size() == Vector2i(267, 146), "no reallocation for a sub-hysteresis scale wobble")
+	check(view.render_size() == Vector2i(267, 296), "no reallocation for a sub-hysteresis scale wobble")
 	check(view.texture_fit_mode() == TextureRect.STRETCH_KEEP_ASPECT_CENTERED,
 		"the texture fit is non-destructive containment (never a cover crop)")
 	check(view.texture_fit_mode() != TextureRect.STRETCH_KEEP_ASPECT_COVERED,

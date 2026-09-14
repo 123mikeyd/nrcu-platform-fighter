@@ -13,7 +13,10 @@ extends RefCounted
 #   story_playable      res://scripts/main.gd _story_playable_ids()  (roster minus ice_mage)
 #   presentation        res://scripts/fighter.gd _build_visuals() per-id visual module;
 #                       key also indexes stage_theme.gd MODELS and
-#                       fighter_render_view.gd FRAME_OVERRIDES
+#                       fighter_presentation_factory.gd FRAME_OVERRIDES (WP-3:
+#                       per-fighter windows are derived from each fighter's
+#                       measured silhouette; this table holds only the authored
+#                       overrides a rendered silhouette proved necessary)
 #   help_definition     res://scripts/frontend/how_to_play.gd MOVE_LISTS / GENERIC_MOVES
 #   palette_policy      res://scripts/roster.gd palette() hue table and slot policy
 #
@@ -25,7 +28,7 @@ const ROSTER_NAME_FALLBACK := "Unknown"
 
 const PRESENTATION_SOURCE := "res://scripts/fighter.gd#_build_visuals"
 const MODELS_SOURCE := "res://scripts/stage_theme.gd#MODELS"
-const RENDER_VIEW_SOURCE := "res://scripts/frontend/fighter_render_view.gd#FRAME_OVERRIDES"
+const RENDER_VIEW_SOURCE := "res://scripts/frontend/fighter_presentation_factory.gd#FRAME_OVERRIDES"
 const HELP_SOURCE := "res://scripts/frontend/how_to_play.gd#MOVE_LISTS"
 const HELP_FALLBACK := "GENERIC_MOVES"
 const PALETTE_SOURCE := "res://scripts/roster.gd#palette"
