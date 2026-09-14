@@ -44,6 +44,8 @@ const StageCatalog = preload("res://scripts/catalogs/stage_catalog.gd")
 # Adapters only: the launch snapshot's typed kinds/input sources are mapped back
 # to the legacy slot vocabulary start_match() already speaks.
 const StateScript = preload("res://scripts/match_flow_state.gd")
+# WP-4 adapter: gameplay delegates Esc/Start to the shared Pause surface.
+const PauseOverlayScript = preload("res://scripts/frontend/pause_overlay.gd")
 
 const MATCH_FLOW_SCENE := "res://scenes/match_flow.tscn"
 const HOME_SCENE := "res://scenes/home.tscn"
@@ -83,6 +85,12 @@ var hud_controls: Label
 var freeplay_controls: String
 var bobo_health_bar: ProgressBar
 
+# WP-4 adapter state. The overlay itself owns only presentation/actions; this
+# gameplay node owns pause/unpause and the route handoff.
+var _pause_layer: CanvasLayer = null
+var _pause_overlay: Control = null
+var _pause_input_consumed := false
+
 var player_one: CharacterBody3D
 var player_two: CharacterBody3D
 var p1_label: Label
@@ -111,6 +119,7 @@ func _ready() -> void:
         if child is StaticBody3D:
             debug_visuals.append(child.get_child(0))
     _build_hud()
+    _build_pause_adapter()
     # The legacy entry flag selected an in-arena screen route; that route is
     # gone (WP-0 steps 7-8). The flag is consumed so a stale value can never
     # re-enter it.
@@ -159,8 +168,72 @@ func _process(_delta: float) -> void:
             bobo_health_bar.value = fighter.health
 
 
+# --- WP-4 Pause adapter -----------------------------------------------------
+func _build_pause_adapter() -> void:
+    _pause_layer = CanvasLayer.new()
+    _pause_layer.name = "PauseLayer"
+    _pause_layer.layer = 20
+    _pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+    add_child(_pause_layer)
+    _pause_overlay = PauseOverlayScript.new()
+    _pause_overlay.name = "PauseOverlay"
+    _pause_layer.add_child(_pause_overlay)
+    _pause_overlay.resume_requested.connect(_resume_from_pause)
+    _pause_overlay.leave_requested.connect(_leave_from_pause)
+    if not FrontendInput.cancel_pressed.is_connected(_on_pause_toggle):
+        FrontendInput.cancel_pressed.connect(_on_pause_toggle)
+    if not FrontendInput.start_pressed.is_connected(_on_pause_toggle):
+        FrontendInput.start_pressed.connect(_on_pause_toggle)
+
+func pause_overlay() -> Control:
+    return _pause_overlay
+
+func _on_pause_toggle() -> void:
+    # FrontendInput emits this before the old arena Escape callback. Mark the
+    # event handled so the legacy debug setup route cannot also run.
+    _pause_input_consumed = true
+    get_viewport().set_input_as_handled()
+    if _pause_overlay == null or not is_instance_valid(_pause_overlay):
+        return
+    if _pause_overlay.is_open():
+        _pause_overlay.resume()
+        return
+    if _pause_overlay.is_leaving() or fighters.is_empty() or match_over:
+        return
+    if setup != null and setup.visible:
+        return
+    if not _pause_overlay.open(_story_encounter):
+        return
+    FrontendInput.set_scope(FrontendInput.SCOPE_FRONTEND)
+    get_tree().paused = true
+    _pause_overlay.focus_default()
+    call_deferred("_clear_pause_input_consumed")
+
+func _clear_pause_input_consumed() -> void:
+    _pause_input_consumed = false
+
+func _resume_from_pause() -> void:
+    get_tree().paused = false
+    FrontendInput.set_scope(FrontendInput.SCOPE_GAMEPLAY)
+    call_deferred("_clear_pause_input_consumed")
+
+func _leave_from_pause(mode: String) -> void:
+    # Minimal route adapter only: teardown happens through scene change before
+    # MatchFlow becomes interactive. Story keeps the selected fighter in the
+    # existing cross-scene channel; VS re-enters its existing CSS route.
+    get_viewport().set_input_as_handled()
+    get_tree().paused = false
+    FrontendInput.set_scope(FrontendInput.SCOPE_FRONTEND)
+    AppStateScript.enter_mode = "story" if mode == "story" else "vs"
+    if mode == "story" and player_one != null:
+        AppStateScript.story_fighter_id = str(player_one.character_id)
+    get_tree().change_scene_to_file(MATCH_FLOW_SCENE)
+
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+        if _pause_input_consumed:
+            get_viewport().set_input_as_handled()
+            return
         if setup != null and setup.visible and setup.close_help(): return
         # Consume the event BEFORE the route action: the arena is the current
         # scene on a flow launch, so a route change frees this node and any
@@ -281,6 +354,10 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
         # production arena has no setup screen (Doc 02 §9).
         setup.hide()
     bobo_health_bar.visible = bobo_encounter
+    # A live match is the only gameplay owner of input. MatchFlow also calls
+    # this before launch; keeping the adapter idempotent supports the direct
+    # debug fixture without changing the match-start transition.
+    FrontendInput.set_scope(FrontendInput.SCOPE_GAMEPLAY)
     _begin_ready()
     return true
 
