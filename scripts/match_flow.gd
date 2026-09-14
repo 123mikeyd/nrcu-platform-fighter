@@ -1199,6 +1199,11 @@ func surface_root(surface_name: String) -> Control:
     return screen
 
 func surface_root_alpha(surface_name: String) -> float:
+    # The same pre-WP-4 "story" alias the presented/root reads honour: without
+    # it a probe that asks generically for the Story root reads alpha 0 (no
+    # surface registered under the legacy name) and reports a false failure.
+    if surface_name == "story":
+        surface_name = _active_surface if str(_active_surface).begins_with("story_") else SURFACE_STORY_SELECT
     var screen := _surfaces.get(surface_name) as Control
     var root := surface_root(surface_name)
     if screen == null or root == null:
