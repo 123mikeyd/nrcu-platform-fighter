@@ -8,6 +8,12 @@ var hand: Control
 
 func _ready() -> void:
     layer = 100
+    # WP-1 pointer contract: this service IS the visible pointer (the OS pointer
+    # is hidden below), so it must keep processing while the tree is paused -
+    # otherwise the Pause overlay opens with a frozen hand, no hover and no
+    # press feedback, and the player has no pointer at all. Pause is the only
+    # state that pauses the tree (main.gd), and its surface is frontend scope.
+    process_mode = Node.PROCESS_MODE_ALWAYS
     hand = HandCursorScript.new()
     hand.name = "HandCursor"
     add_child(hand)
