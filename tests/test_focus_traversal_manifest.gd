@@ -216,7 +216,7 @@ func anchor_for(screen: String, control: Control) -> Control:
             return css.focus_anchor_for(control)
         "sss":
             return sss.focus_anchor_for(control)
-        "story":
+        "story", "story_select", "story_briefing":
             return story.focus_anchor_for(control)
         "how_to_play":
             return howto.focus_anchor_for(control)
@@ -518,21 +518,19 @@ func run():
         "the focused stage's name is the authored preview name")
     vs.free_hosts(self)
 
-    # --- Story briefing -----------------------------------------------------
+    # --- Story Fighter Select (step 1 of the two-step Story route, Doc 01 §9) -
     host = await vs.enter(self, "story")
-    story = host.story_briefing()
-    check(story != null, "Story briefing mounted by the production route")
+    story = host.story_select()
+    check(story != null, "Story Fighter Select mounted by the production route")
     await settle(12)
     await claim_focus_mode()
-    var story_count := await visit("story", story, "semantic-nav + focus-enter")
-    check(story_count == 6 + 2, "Story covers the playable roster plus Back and the action (%d)" % story_count)
+    var story_count := await visit("story_select", story, "semantic-nav + focus-enter")
+    check(story_count == 6 + 2, "Story Select covers the playable roster plus Continue and Back (%d)" % story_count)
 
-    # §6 rear contract: the encounter resolves — the ready body (and the whole
-    # roster inside it) disappears while a tile owns the focus.
     var story_tiles: Array = story.roster_tiles()
-    check_edge("story", story_tiles[0], &"right", story_tiles[1], "the roster strip is authored in sequence")
-    check_edge("story", story_tiles[0], &"top", story.back_button(), "the roster reaches Back")
-    check_edge("story", story.back_button(), &"bottom", story.action_button(), "Back and the action are adjacent")
+    check_edge("story_select", story_tiles[0], &"right", story_tiles[1], "the roster strip is authored in sequence")
+    check_edge("story_select", story_tiles[0], &"top", story.back_button(), "the roster reaches Back")
+    check_edge("story_select", story.back_button(), &"bottom", story.continue_button(), "Back and Continue are adjacent")
     # The CSV gap: Enter/Space must ACTIVATE the focused tile through the
     # semantic accept path (focus alone already previews the selection).
     if story_tiles.size() >= 3:
@@ -553,11 +551,53 @@ func run():
         await frames(2)
         check(story.selected_fighter_id() == str(story.roster_ids()[1]),
             "Space activates the focused story tile through the semantic accept path")
+    # §6 rear contract for the step: stepping into the Briefing hides the whole
+    # Select, so the focused tile must not keep the focus and the hand must hold
+    # an authored anchor afterwards. Driven with the shipped Continue control.
     if not story_tiles.is_empty():
-        var resolve_encounter := func() -> void:
-            story.show_result(true)
-        await record_recovery("story", story_tiles[0], resolve_encounter,
-            "the encounter resolves: the ready body and its roster disappear")
+        await enter_focus(story_tiles[0])
+        await settle_hand()
+        check(story.focus_anchor_for(story.continue_button()) != null, "the Select Continue owns an authored anchor")
+        story.continue_button().pressed.emit()
+        var stepped_visible: bool = await wait_visible(host.story_briefing())
+        check(stepped_visible, "Continue steps the Select into the Encounter Briefing")
+        await settle(6)
+        var survivor := service.focus_owner() as Control
+        var survivor_text := "focus released"
+        if survivor != null:
+            survivor_text = str(survivor.get_path())
+        check(survivor != story_tiles[0],
+            "the hidden Select tile never keeps the focus after the step (%s)" % survivor_text)
+        if survivor != null:
+            var survivor_anchor := anchor_for("story_select", survivor)
+            if survivor_anchor == null:
+                survivor_anchor = Manifest.anchor_of(survivor)
+            check(survivor_anchor != null, "the step survivor owns an authored anchor: " + survivor_text)
+            if survivor_anchor != null:
+                await settle_hand()
+                var gap: float = hand.hotspot.distance_to(survivor_anchor.get_global_rect().position)
+                rows.append({
+                    "screen": "story_select",
+                    "control": str(story_tiles[0].get_path()),
+                    "control_path": str(story_tiles[0].get_path()),
+                    "input_method": "recovery",
+                    "expected_anchor": str(survivor_anchor.get_path()),
+                    "hand_target": str(hand._focus_anchor.get_path()) if hand._focus_anchor != null else "",
+                    "hand_hotspot": [snappedf(hand.hotspot.x, 0.001), snappedf(hand.hotspot.y, 0.001)],
+                    "distance_px": snappedf(gap, 0.001),
+                    "tolerance_px": TOLERANCE_PX,
+                    "pass": gap <= TOLERANCE_PX,
+                    "note": "the step to the Briefing hides the Select: the hand retargets to %s" % survivor_text,
+                })
+                check(gap <= TOLERANCE_PX,
+                    "the hand retargets to the step survivor's authored anchor (%.3f px, %s)" % [gap, survivor_text])
+    # --- Story Encounter Briefing (step 2) ----------------------------------
+    story = host.story_briefing()
+    check(story != null and story.is_visible_in_tree(), "the Briefing is presented after the step")
+    await claim_focus_mode()
+    var brief_count := await visit("story_briefing", story, "semantic-nav + focus-enter")
+    check(brief_count == 2, "the Briefing covers Back and its action (%d)" % brief_count)
+    check_edge("story_briefing", story.back_button(), &"bottom", story.action_button(), "Back and the action are adjacent")
     vs.free_hosts(self)
 
     # --- How to Play (the production help page inside Main) -----------------
@@ -643,7 +683,7 @@ func run():
             "passed": passed,
             "failed": covered - passed,
             "tolerance_px": TOLERANCE_PX,
-            "screens": ["main", "main_modal", "css", "sss", "story", "how_to_play", "results"],
+            "screens": ["main", "main_modal", "css", "sss", "story_select", "story_briefing", "how_to_play", "results"],
         },
     }
     var absolute := ProjectSettings.globalize_path(MANIFEST_PATH)
