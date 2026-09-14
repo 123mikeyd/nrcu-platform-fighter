@@ -44,12 +44,29 @@ const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 # The ONE validation authority, used for its pure palette-resolution rule too.
 const State = preload("res://scripts/match_flow_state.gd")
 
-const COLS := 10                 # Doc 04 §5.1: 10 columns, up to 3 rows
-const TILE_W := 108.0            # Doc 04 §5.2 reference tile
+# --- Doc 04 §10 adaptive composition (OCCUPIED rows only) -------------------
+# Reference 1280x720: ~56 px safe left/right, tile 108x82, roster gap 8-10,
+# first row top y 92-98, row pitch 90-92, Ready at occupied_bottom + 18,
+# PlayerBays bottom y ~690, bay height ~420/330/245 for 1/2/3 occupied rows.
+# Authored capacity stays 10x3 = 30 (Doc 10: "Capacity remains 10x3; invisible
+# rows do not consume current geometry"). Beyond capacity the locked rule is
+# "Do not shrink tiles to fit roster growth" (Doc 04 §10): growth past the
+# reserved field is a paging/category design, exactly as Doc 01 §11 prescribes
+# for >9 stages — never shrinking tiles and never reserved invisible rows.
+const COLS := 10                 # 10 columns
+const MAX_ROWS := 3              # authored capacity: 10x3 = 30 fighters
+const TILE_W := 108.0            # reference tile (never shrinks)
 const TILE_H := 82.0
-const GAP := 8.0
-const ROW_PITCH := 90.0
+const GAP := 8.0                 # roster gap 8-10
+const ROW_PITCH := 90.0          # tile + gap (reference pitch 90-92)
 const GRID_W := 1168.0
+const ROSTER_TOP := 96.0         # first roster row top (reference 92-98)
+const FIELD_BREATH := 8.0        # the roster field's own quiet lower margin
+const FIELD_RULE_OFFSET := 4.0   # the separating rail under the occupied rows
+const READY_GAP := 18.0          # Ready sits at occupied_bottom + 18
+const BAYS_BOTTOM := 690.0       # the stations' stable lower line
+# The locked bay heights (Doc 04 §10 / ledger C-019): occupied rows decide.
+const BAY_HEIGHTS := {1: 420.0, 2: 330.0, 3: 245.0}
 const ENTER_GUARD := 0.30
 const EXIT_SECONDS := 14.0 / 60.0
 const REVEAL_HEADER := 12.0 / 60.0
@@ -179,8 +196,10 @@ func _ready() -> void:
 	_ready_band.focus_mode = Control.FOCUS_ALL
 	_ready_band.focus_entered.connect(_on_ready_band_focused)
 	_ready_band.focus_exited.connect(_on_ready_band_unfocused)
-	_ready_band.apply_reference_width(Tokens.DESIGN.x)
-	_ready_band.position.x = (Tokens.DESIGN.x - _ready_band.size.x) * 0.5
+	# §10: the composition is applied once the stations exist, so the shipped
+	# roster already renders with its occupied-row geometry (no review frame
+	# with the dead reserved rows).
+	apply_composition()
 	_ready_band.hide_band()
 	if cursor != null:
 		cursor.add_target(_back)
@@ -241,7 +260,9 @@ func build(cards: Array = []) -> void:
 		tile.mouse_entered.connect(_on_tile_entered.bind(i))
 		_grid.add_child(tile)
 		# Components resolve their child nodes on tree entry: configure after.
-		tile.set_tile_size(Vector2(TILE_W, TILE_H))
+		# The fixed reference tile is also the FLOOR: roster growth never
+		# shrinks a tile (Doc 01 §8 / Doc 04 §10).
+		tile.set_tile_size(Vector2(TILE_W, TILE_H), Vector2(TILE_W, TILE_H))
 		tile.setup(str(entry["id"]), str(entry["name"]), entry.get("texture"))
 		# Keyboard/controller parity: the tile root is focusable and reports
 		# focus so the focus hand settles on its authored anchor (Step 0 §12).
@@ -251,7 +272,11 @@ func build(cards: Array = []) -> void:
 		_tiles.append(tile)
 		if cursor != null:
 			cursor.add_target(tile)
-	_wire_focus_graph()
+	# Doc 04 §10: the composition follows the OCCUPIED row count, so the roster
+	# field, the Ready slot and the four stations resolve BEFORE the topology is
+	# re-derived from the resolved geometry (C-050/C-051).
+	apply_composition()
+	_rebuild_focus_topology()
 	_refresh()
 
 func _tile_position(index: int, count: int) -> Vector2:
@@ -263,6 +288,55 @@ func _tile_position(index: int, count: int) -> Vector2:
 	var row_w: float = in_row * TILE_W + maxf(in_row - 1, 0) * GAP
 	var x0: float = (GRID_W - row_w) * 0.5
 	return Vector2(x0 + col * (TILE_W + GAP), row * ROW_PITCH)
+
+# --- adaptive composition (Doc 01 §8, Doc 04 §10, ledger C-019/C-051) ------
+func occupied_rows(count := -1) -> int:
+	# ONLY the rows the current roster actually occupies: ceil(n / 10), bounded
+	# by the authored 10x3 capacity. Never a permanent 3-row envelope.
+	var n: int = _cards.size() if count < 0 else count
+	return clampi(int(ceil(float(n) / float(COLS))), 1, MAX_ROWS)
+
+func roster_capacity() -> int:
+	return COLS * MAX_ROWS
+
+func occupied_bottom(rows: int) -> float:
+	# The upper composition's occupied lower edge: first row top + the rows
+	# that exist (row pitch = tile + gap).
+	return ROSTER_TOP + float(maxi(rows, 1) - 1) * ROW_PITCH + TILE_H
+
+func bay_height_for_rows(rows: int) -> float:
+	# The locked Doc 04 §10 table: 1 row -> 420, 2 rows -> 330, 3 rows -> 245.
+	return float(BAY_HEIGHTS[clampi(rows, 1, MAX_ROWS)])
+
+func bay_top_for_rows(rows: int) -> float:
+	# The stations keep a STABLE lower line (Doc 04 §10 "PlayerBays bottom y
+	# ~690"); the occupied rows decide how tall they get.
+	return BAYS_BOTTOM - bay_height_for_rows(rows)
+
+func apply_composition() -> void:
+	# THE adaptive composition (Doc 01 §8 / Doc 04 §10): the upper roster and
+	# the lower stations are ONE composition — only the occupied roster rows
+	# consume vertical height, tiles keep their fixed readable size, the Ready
+	# band sits directly under the occupied roster in a RESERVED slot (so the
+	# stations never jump when it appears) and the stations take the authored
+	# height for the occupied row count.
+	if not is_node_ready():
+		return
+	var rows := occupied_rows()
+	var roster_h := float(rows - 1) * ROW_PITCH + TILE_H
+	_field.size = Vector2(_field.size.x, roster_h + FIELD_BREATH)
+	_grid.size = Vector2(GRID_W, roster_h)
+	_field_rule.position = Vector2(0.0, roster_h + FIELD_RULE_OFFSET)
+	_field_rule.size = Vector2(GRID_W, 1.0)
+	var bottom := occupied_bottom(rows)
+	var height := bay_height_for_rows(rows)
+	var top := bay_top_for_rows(rows)
+	_ready_band.apply_reference_width(Tokens.DESIGN.x)
+	_ready_band.position = Vector2((Tokens.DESIGN.x - _ready_band.size.x) * 0.5, bottom + READY_GAP)
+	_stations.position = Vector2(_stations.position.x, top)
+	_stations.size = Vector2(_stations.size.x, height)
+	for bay in _bays:
+		bay.size = Vector2(bay.size.x, height)
 
 # --- lifecycle -----------------------------------------------------------
 func open_with(state) -> void:
@@ -470,10 +544,12 @@ func _refresh() -> void:
 	_recompute_tokens()
 	if ready_allowed():
 		_ready_band.show_band()
-		_wire_ready_neighbors(true)
 	else:
 		_ready_band.hide_band()
-		_wire_ready_neighbors(false)
+	# C-050/C-051: the directional topology follows the RESOLVED geometry and
+	# the current Ready visibility (the bottom roster row exits into the band
+	# while it is shown, else into the nearest station).
+	_rebuild_focus_topology()
 	# §2: controller Start is an approved FOCUS shortcut only while READY is
 	# actually valid on this screen (the same validity the band shows).
 	FrontendInput.set_controller_start_approved(ready_allowed() and _ready_band.is_shown())
@@ -659,26 +735,6 @@ func _on_ready_band_focused() -> void:
 func _on_ready_band_unfocused() -> void:
 	if _ready_band != null:
 		_ready_band.set_focus_signal(false)
-
-func _wire_ready_neighbors(band_shown: bool) -> void:
-	# Doc 04 19/20A: the ready transition is keyboard/controller reachable.
-	if _tiles.is_empty():
-		return
-	var n := _tiles.size()
-	for i in n:
-		var tile = _tiles[i]
-		var col: int = i % COLS
-		if band_shown:
-			tile.focus_neighbor_bottom = tile.get_path_to(_ready_band)
-		else:
-			var below: int = i + COLS
-			if below < n:
-				tile.focus_neighbor_bottom = tile.get_path_to(_tiles[below])
-			else:
-				tile.focus_neighbor_bottom = tile.get_path_to(_bays[col % 4])
-	if band_shown:
-		_ready_band.focus_neighbor_top = _ready_band.get_path_to(_tiles[0])
-		_ready_band.focus_neighbor_bottom = _ready_band.get_path_to(_bays[0])
 
 func _on_bay_focused(index: int) -> void:
 	if index < 0 or index >= _bays.size():
@@ -1036,43 +1092,140 @@ func _process(delta: float) -> void:
 	_enforce_roster_envelope()
 
 # --- keyboard / controller: the semantic path (Doc 03 §7/§11/§13) ---------
-func _wire_focus_graph() -> void:
-	var n := _tiles.size()
-	if n == 0:
+# C-050/C-051: the directional topology is RE-DERIVED from the resolved
+# geometry (Control rect centers) after the adaptive layout settles.
+#
+#   within a row        left/right = the adjacent tile in the same row (no wrap)
+#   between rows        up/down    = the nearest x-center in the adjacent
+#                                    OCCUPIED row
+#   top roster row      up         = the nearest header destination by x
+#                                    (mode choice / Back only where spatially
+#                                    sensible)
+#   bottom roster row   down       = Ready while it is shown, else the nearest
+#                                    station by x
+#   station             up         = the nearest bottom-row tile by x
+#   Ready               up / down  = the nearest bottom-row tile / station
+#
+# No index arithmetic and no modulo mapping decide a neighbour.
+func _row_controls(row: Array) -> Array:
+	var out: Array = []
+	for i in row:
+		if is_instance_valid(_tiles[i]):
+			out.append(_tiles[i])
+	return out
+
+func _nearest_by_x(controls: Array, x: float) -> Control:
+	var best: Control = null
+	var best_d := INF
+	for control in controls:
+		if control == null or not is_instance_valid(control):
+			continue
+		var d: float = absf(control.get_global_rect().get_center().x - x)
+		if d < best_d:
+			best_d = d
+			best = control
+	return best
+
+func _roster_rows() -> Array:
+	# The OCCUPIED rows, read off the resolved tile rectangles: rows are groups
+	# of tiles whose vertical centers agree (two rows are a full pitch apart).
+	var ordered: Array = []
+	for i in _tiles.size():
+		if is_instance_valid(_tiles[i]):
+			ordered.append(i)
+	ordered.sort_custom(func(a, b):
+		var ca: Vector2 = _tiles[a].get_global_rect().get_center()
+		var cb: Vector2 = _tiles[b].get_global_rect().get_center()
+		if absf(ca.y - cb.y) > 1.0:
+			return ca.y < cb.y
+		return ca.x < cb.x)
+	var rows: Array = []
+	var current: Array = []
+	for i in ordered:
+		if current.is_empty():
+			current.append(i)
+			continue
+		var row_y: float = _tiles[current[0]].get_global_rect().get_center().y
+		var y: float = _tiles[i].get_global_rect().get_center().y
+		if absf(y - row_y) > TILE_H * 0.5:
+			rows.append(current)
+			current = []
+		current.append(i)
+	if not current.is_empty():
+		rows.append(current)
+	return rows
+
+func _wire_to(control: Control, neighbour: Control, direction: StringName) -> void:
+	if control == null or not is_instance_valid(control):
 		return
-	for i in n:
-		var tile = _tiles[i]
-		var col: int = i % COLS
-		var row: int = i / COLS
-		if col > 0:
-			tile.focus_neighbor_left = tile.get_path_to(_tiles[i - 1])
-		if col < COLS - 1 and i + 1 < n:
-			tile.focus_neighbor_right = tile.get_path_to(_tiles[i + 1])
-		if row > 0:
-			tile.focus_neighbor_top = tile.get_path_to(_tiles[i - COLS])
-		else:
-			tile.focus_neighbor_top = tile.get_path_to(_back)
-		var below: int = i + COLS
-		if below < n:
-			tile.focus_neighbor_bottom = tile.get_path_to(_tiles[below])
-		else:
-			tile.focus_neighbor_bottom = tile.get_path_to(_bays[col % 4])
+	if neighbour == null or not is_instance_valid(neighbour):
+		FocusGraph.clear(control, [direction])
+		return
+	FocusGraph.wire(control, neighbour, [direction])
+
+func _rebuild_focus_topology() -> void:
+	var n := _tiles.size()
+	if n == 0 or _bays.is_empty():
+		return
+	var rows := _roster_rows()
+	if rows.is_empty():
+		return
+	var top_row: Array = rows[0]
+	var bottom_row: Array = rows[rows.size() - 1]
+	var band_shown: bool = _ready_band.is_shown()
+	# The roster: in-row runs, then the adjacent occupied rows by x-center.
+	for r in rows.size():
+		var row: Array = rows[r]
+		for j in row.size():
+			var tile: Control = _tiles[row[j]]
+			if j > 0:
+				_wire_to(tile, _tiles[row[j - 1]], &"left")
+			else:
+				FocusGraph.clear(tile, [&"left"])
+			if j + 1 < row.size():
+				_wire_to(tile, _tiles[row[j + 1]], &"right")
+			else:
+				FocusGraph.clear(tile, [&"right"])
+			var cx: float = tile.get_global_rect().get_center().x
+			if r > 0:
+				_wire_to(tile, _nearest_by_x(_row_controls(rows[r - 1]), cx), &"top")
+			else:
+				_wire_to(tile, _nearest_by_x([_mode_free, _mode_teams, _back], cx), &"top")
+			if r + 1 < rows.size():
+				_wire_to(tile, _nearest_by_x(_row_controls(rows[r + 1]), cx), &"bottom")
+			elif band_shown:
+				_wire_to(tile, _ready_band, &"bottom")
+			else:
+				_wire_to(tile, _nearest_by_x(_bays, cx), &"bottom")
+	# The four stations: adjacent in x (the authored station row closes), up
+	# into the nearest tile of the ACTUAL bottom row.
 	for i in _bays.size():
 		var bay = _bays[i]
-		bay.focus_neighbor_left = bay.get_path_to(_bays[(i - 1 + 4) % 4])
-		bay.focus_neighbor_right = bay.get_path_to(_bays[(i + 1) % 4])
-		bay.focus_neighbor_top = bay.get_path_to(_tiles[mini(i, n - 1)])
-	_back.focus_neighbor_bottom = _back.get_path_to(_tiles[n - 1])
-	_back.focus_neighbor_left = _back.get_path_to(_mode_teams)
-	_back.focus_neighbor_right = NodePath()
-	_mode_free.focus_neighbor_right = _mode_free.get_path_to(_mode_teams)
-	_mode_free.focus_neighbor_left = NodePath()
-	_mode_free.focus_neighbor_top = NodePath()
-	_mode_teams.focus_neighbor_left = _mode_teams.get_path_to(_mode_free)
-	_mode_teams.focus_neighbor_right = _mode_teams.get_path_to(_back)
-	_mode_teams.focus_neighbor_top = NodePath()
-	_mode_free.focus_neighbor_bottom = _mode_free.get_path_to(_tiles[n - 1])
-	_mode_teams.focus_neighbor_bottom = _mode_teams.get_path_to(_tiles[n - 1])
+		var count := _bays.size()
+		bay.focus_neighbor_left = bay.get_path_to(_bays[(i - 1 + count) % count])
+		bay.focus_neighbor_right = bay.get_path_to(_bays[(i + 1) % count])
+		_wire_to(bay, _nearest_by_x(_row_controls(bottom_row), bay.get_global_rect().get_center().x), &"top")
+	# Ready: directly above the stations, directly below the occupied roster.
+	var band_x: float = _ready_band.get_global_rect().get_center().x
+	_wire_to(_ready_band, _nearest_by_x(_row_controls(bottom_row), band_x), &"top")
+	_wire_to(_ready_band, _nearest_by_x(_bays, band_x), &"bottom")
+	# The header destinations: authored chain by x, each owning the roster tile
+	# under it (never every tile routing up to Back — C-050).
+	var header: Array = [_mode_free, _mode_teams, _back]
+	header.sort_custom(func(a, b):
+		return (a as Control).get_global_rect().get_center().x < (b as Control).get_global_rect().get_center().x)
+	for i in header.size():
+		var control: Control = header[i]
+		if i > 0:
+			_wire_to(control, header[i - 1], &"left")
+		else:
+			FocusGraph.clear(control, [&"left"])
+		if i + 1 < header.size():
+			_wire_to(control, header[i + 1], &"right")
+		else:
+			FocusGraph.clear(control, [&"right"])
+		FocusGraph.clear(control, [&"top"])
+		_wire_to(control, _nearest_by_x(_row_controls(top_row), control.get_global_rect().get_center().x), &"bottom")
 	# §13: explicit Tab order too — the header destinations, then the roster,
 	# then the stations. Never the engine's tree order.
 	var chain: Array = [_mode_free, _mode_teams, _back]
@@ -1267,3 +1420,14 @@ func get_ready_band() -> Control:
 
 func get_input_guard() -> float:
 	return _guard
+
+# --- composition test surface (Doc 04 §10 / Doc 08 §1 GEOMETRY_FIXTURE) -----
+func roster_rows() -> int:
+	# The occupied roster rows the current composition was resolved from.
+	return occupied_rows()
+
+func roster_bounds_geometry() -> Rect2:
+	# The occupied roster envelope (the same bounds the carry boundary uses),
+	# exposed so a geometry fixture can assert containment without touching
+	# the interaction state.
+	return roster_bounds()

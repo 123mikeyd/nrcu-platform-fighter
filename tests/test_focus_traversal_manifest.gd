@@ -404,7 +404,10 @@ func run():
     check_edge("css", tiles[0], &"right", tiles[1], "the roster runs nearest-in-row to the right")
     check_edge("css", tiles[1], &"left", tiles[0], "and back to the left")
     check_edge("css", tiles[tiles.size() - 1], &"right", null, "the row ends at the last tile (no wrap)")
-    check_edge("css", tiles[0], &"top", css_back, "the roster's top row reaches the header Back")
+    # C-050: the top roster row's Up reaches the NEAREST header destination by
+    # x (mode choice / Back only where spatially sensible) — never every tile
+    # routing to Back irrespective of its position.
+    check_edge("css", tiles[0], &"top", mode_free, "the roster's top row reaches the nearest header destination by x")
     check_edge("css", bays[0], &"top", tiles[0], "a station returns to the nearest roster tile")
     check_edge("css", bays[0], &"right", bays[1], "stations are adjacent in x")
     check_edge("css", bays[3], &"right", bays[0], "the station row closes")

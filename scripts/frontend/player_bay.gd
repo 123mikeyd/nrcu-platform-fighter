@@ -26,10 +26,31 @@ const RenderView = preload("res://scripts/frontend/fighter_render_view.gd")
 const KINDS := ["human", "bot", "empty"]
 const KIND_LABELS := {"human": "HMN", "bot": "CPU", "empty": "EMPTY"}
 
-const HEADER_H := 46.0
+# --- adaptive vertical bands (Doc 01 §8 / Doc 04 §10) -----------------------
+# The station's HEIGHT is decided by the Character Select composition (1/2/3
+# occupied roster rows -> 420/330/245). The three typographic strips are
+# derived from that height inside legible floors, so the fighter PRESENTATION
+# region (model area + name plate, i.e. everything between the header strip and
+# the secondary state row) owns ~70-78% of the station at EVERY height instead
+# of leaving dead space in the taller 1/2-row stations:
+#   1 row  -> 52 / 30 / 28  -> 77.6%  (the shipped roster)
+#   2 rows -> 41 / 26 / 23  -> 76.4%
+#   3 rows -> 40 / 24 / 18  -> 70.6%
+const HEADER_RATIO := 0.125
+const NAME_RATIO := 0.08
+const SECONDARY_RATIO := 0.07
+const HEADER_MIN := 40.0
+const HEADER_MAX := 52.0
+const NAME_MIN := 24.0      # band floor for the locked T_ACTION name type
+const NAME_MAX := 30.0
+const SECONDARY_MIN := 18.0
+const SECONDARY_MAX := 28.0
+# Authored gaps: 4 px under the header, 6 px above the name band, 2 px above
+# the secondary row -> presentation = height - header - secondary - 14.
+const BAND_GAPS := 14.0
+const PRESENTATION_MIN_SHARE := 0.70
+const PRESENTATION_MAX_SHARE := 0.78
 const HEADER_BLOCK_W := 12.0
-const NAME_H := 32.0
-const SECONDARY_H := 28.0
 const INSET := 8.0
 const NOTCH_W := 22.0
 const NOTCH_H := 3.0
@@ -187,15 +208,19 @@ func set_slot_state(slot_kind: String, fighter_id := "", slot_name := "", slot_d
 	_layout()
 
 func preview_fighter(fighter_id: String, slot_name: String, palette_index: int) -> void:
-	# Doc 04 §12 / ledger C-047: the active bay large-previews the CANDIDATE
-	# before commit, without touching the committed state. Cleared by the next
-	# set_slot_state() (the committed presentation).
+	# Doc 04 §12 / Doc 01 §5 / ledger C-047: the active bay large-previews the
+	# CANDIDATE before commit, without touching the committed state. Cleared by
+	# the next set_slot_state() (the committed presentation). The presentation
+	# fills whatever the adaptive composition gave this station.
 	if _render_view == null or fighter_id == "":
 		return
 	_render_view.visible = true
-	_render_view.set_subjects([fighter_id])
+	var ids: Array[String] = _render_view.subjects()
+	if ids.size() != 1 or ids[0] != fighter_id:
+		_render_view.set_subjects([fighter_id])
 	_render_view.set_palette(int(palette_index))
 	fighter_name.text = slot_name.to_upper()
+	_layout()
 
 func presented_fighter() -> String:
 	# The fighter the bay currently PRESENTS (candidate while browsing, else the
@@ -273,57 +298,81 @@ func _refresh_state() -> void:
 	team_control.add_theme_color_override("font_color", Tokens.CREAM)
 	render_area.modulate = Color(1, 1, 1, 0.5) if kind == "empty" else Color(1, 1, 1, 1)
 
-# --- layout (bands fixed, render area flexes) ------------------------------
+# --- layout (bands derived from the bay height, render area flexes) --------
+
+func header_h() -> float:
+	return clampf(roundf(size.y * HEADER_RATIO), HEADER_MIN, HEADER_MAX)
+
+func name_h() -> float:
+	return clampf(roundf(size.y * NAME_RATIO), NAME_MIN, NAME_MAX)
+
+func secondary_h() -> float:
+	return clampf(roundf(size.y * SECONDARY_RATIO), SECONDARY_MIN, SECONDARY_MAX)
+
+func presentation_height() -> float:
+	# The fighter presentation region: from under the header strip down to the
+	# top of the secondary state row (model area + name plate).
+	return maxf(size.y - header_h() - secondary_h() - BAND_GAPS, 0.0)
+
+func presentation_share() -> float:
+	# Doc 01 §8: the fighter presentation owns ~70-78% of the station height.
+	return presentation_height() / maxf(size.y, 1.0)
+
+func render_area_rect() -> Rect2:
+	return Rect2(render_area.position, render_area.size)
 
 func _layout() -> void:
 	var s := size
+	var header_px := header_h()
+	var name_band_h := name_h()
+	var secondary_h_px := secondary_h()
 	bay_plate.position = Vector2.ZERO
 	bay_plate.size = s
 	header.position = Vector2.ZERO
-	header.size = Vector2(s.x, HEADER_H)
+	header.size = Vector2(s.x, header_px)
 	header_plate.position = Vector2.ZERO
-	header_plate.size = Vector2(s.x, HEADER_H)
+	header_plate.size = Vector2(s.x, header_px)
 	player_block.position = Vector2.ZERO
-	player_block.size = Vector2(HEADER_BLOCK_W, HEADER_H)
+	player_block.size = Vector2(HEADER_BLOCK_W, header_px)
 	player_label.position = Vector2(HEADER_BLOCK_W + 8.0, 0.0)
-	player_label.size = Vector2(90.0, HEADER_H)
-	kind_control.position = Vector2(s.x - INSET - 88.0, (HEADER_H - 28.0) * 0.5)
+	player_label.size = Vector2(90.0, header_px)
+	kind_control.position = Vector2(s.x - INSET - 88.0, (header_px - 28.0) * 0.5)
 	kind_control.size = Vector2(88.0, 28.0)
-	var render_top := HEADER_H + 4.0
-	var render_h := maxf(s.y - HEADER_H - NAME_H - SECONDARY_H - 14.0, 24.0)
+	var render_top := header_px + 4.0
+	var render_h := maxf(s.y - header_px - name_band_h - secondary_h_px - BAND_GAPS, 24.0)
 	render_area.position = Vector2(INSET, render_top)
 	render_area.size = Vector2(maxf(s.x - INSET * 2.0, 24.0), render_h)
 	if _render_view != null and is_instance_valid(_render_view):
 		_render_view.position = Vector2.ZERO
 		_render_view.size = render_area.size
-	name_plate.position = Vector2(INSET, s.y - SECONDARY_H - NAME_H - 6.0)
-	name_plate.size = Vector2(maxf(s.x - INSET * 2.0, 24.0), NAME_H)
+	name_plate.position = Vector2(INSET, s.y - secondary_h_px - name_band_h - 6.0)
+	name_plate.size = Vector2(maxf(s.x - INSET * 2.0, 24.0), name_band_h)
 	fighter_name.position = Vector2.ZERO
 	fighter_name.size = name_plate.size
-	secondary.position = Vector2(INSET, s.y - SECONDARY_H - 2.0)
-	secondary.size = Vector2(maxf(s.x - INSET * 2.0, 24.0), SECONDARY_H)
+	secondary.position = Vector2(INSET, s.y - secondary_h_px - 2.0)
+	secondary.size = Vector2(maxf(s.x - INSET * 2.0, 24.0), secondary_h_px)
 	var half := maxf((secondary.size.x - 6.0) * 0.5, 40.0)
 	input_row.position = Vector2.ZERO
-	input_row.size = Vector2(half, SECONDARY_H)
-	input_label.position = Vector2(0.0, (SECONDARY_H - 18.0) * 0.5)
+	input_row.size = Vector2(half, secondary_h_px)
+	input_label.position = Vector2(0.0, (secondary_h_px - 18.0) * 0.5)
 	input_label.size = Vector2(38.0, 18.0)
 	input_control.position = Vector2(40.0, 1.0)
-	input_control.size = Vector2(maxf(half - 40.0, 40.0), SECONDARY_H - 2.0)
+	input_control.size = Vector2(maxf(half - 40.0, 40.0), secondary_h_px - 2.0)
 	difficulty_row.position = Vector2.ZERO
-	difficulty_row.size = Vector2(half, SECONDARY_H)
-	difficulty_label.position = Vector2(0.0, (SECONDARY_H - 18.0) * 0.5)
+	difficulty_row.size = Vector2(half, secondary_h_px)
+	difficulty_label.position = Vector2(0.0, (secondary_h_px - 18.0) * 0.5)
 	difficulty_label.size = Vector2(38.0, 18.0)
 	difficulty_control.position = Vector2(40.0, 1.0)
-	difficulty_control.size = Vector2(maxf(half - 40.0, 40.0), SECONDARY_H - 2.0)
+	difficulty_control.size = Vector2(maxf(half - 40.0, 40.0), secondary_h_px - 2.0)
 	team_control.position = Vector2(secondary.size.x - half, 1.0)
-	team_control.size = Vector2(half, SECONDARY_H - 2.0)
+	team_control.size = Vector2(half, secondary_h_px - 2.0)
 	notch.position = Vector2((s.x - NOTCH_W) * 0.5, 0.0)
 	notch.size = Vector2(NOTCH_W, NOTCH_H)
-	_focus_rule.position = Vector2(0.0, HEADER_H - 2.0)
+	_focus_rule.position = Vector2(0.0, header_px - 2.0)
 	_focus_rule.size = Vector2(s.x, 2.0)
 	# Authored focus anchor: beside the header's lower-left, so the focus hand
 	# never covers the model or the name (Doc 04 §10).
-	_anchor.place_at(Vector2(INSET, HEADER_H + 8.0))
+	_anchor.place_at(Vector2(INSET, header_px + 8.0))
 	# The nested state controls get their own authored hand targets, placed at
 	# the control's lower-left (measured from the control, so the placement
 	# survives any bay size).
@@ -361,21 +410,30 @@ func state_anchor(role: String) -> Control:
 	return null
 
 func state_controls() -> Array:
-	# Surviving (visible) state controls in authored visual order: the bay's
-	# internal focus chain is built from exactly this list, so a hidden control
-	# can never be a neighbour.
+	# Surviving state controls in authored visual order: the bay's internal
+	# focus chain is built from exactly this list, so a control that is not
+	# actually on screen (a hidden row's readout, e.g. a CPU's input readout)
+	# can never become a neighbour (Doc 03 §6).
 	var out: Array = []
+	var mounted := is_inside_tree()
 	for role in ["kind", "device", "difficulty", "team"]:
 		var control := state_control(role)
-		if control != null and control.visible:
+		if control == null:
+			continue
+		var shown := control.is_visible_in_tree() if mounted else control.visible
+		if shown:
 			out.append(control)
 	return out
 
 func state_roles() -> Array:
 	var out: Array = []
+	var mounted := is_inside_tree()
 	for role in ["kind", "device", "difficulty", "team"]:
 		var control := state_control(role)
-		if control != null and control.visible:
+		if control == null:
+			continue
+		var shown := control.is_visible_in_tree() if mounted else control.visible
+		if shown:
 			out.append(role)
 	return out
 
@@ -387,3 +445,4 @@ func set_focus_signal(on: bool) -> void:
 
 func focus_signal_visible() -> bool:
 	return _focus_rule != null and _focus_rule.visible
+

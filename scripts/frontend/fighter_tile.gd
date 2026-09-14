@@ -117,8 +117,14 @@ func name_band_rect() -> Rect2:
 func portrait_area() -> Rect2:
 	return Rect2(portrait_frame.position, portrait_frame.size)
 
-func set_tile_size(new_size: Vector2) -> void:
-	size = Vector2(maxf(new_size.x, 24.0), maxf(new_size.y, 24.0))
+func set_tile_size(new_size: Vector2, minimum := Vector2.ZERO) -> void:
+	# The optional floor encodes the owning surface's rule: Character Select's
+	# roster tile is the fixed 108x82 reference and NEVER shrinks with roster
+	# growth (Doc 01 §8 / Doc 04 §10), while surfaces with their own tighter
+	# grid (How to Play's roster strip, Story Briefing) keep their authored
+	# size by passing no floor. The render/layout floor of 24 px remains.
+	var target := Vector2(maxf(new_size.x, minimum.x), maxf(new_size.y, minimum.y))
+	size = Vector2(maxf(target.x, 24.0), maxf(target.y, 24.0))
 	_layout()
 
 # --- layout (proportional, from the component's own size) ------------------

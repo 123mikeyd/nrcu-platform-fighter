@@ -112,6 +112,18 @@ func run():
 	check(not tile.is_candidate(), "tile clears its candidate state")
 	tile.set_tile_size(Vector2(140.0, 100.0))
 	check(is_equal_approx(tile.size.x, 140.0) and is_equal_approx(tile.size.y, 100.0), "tile lays out at the requested size")
+	# The optional floor is the owning surface's rule: Character Select passes
+	# its fixed 108x82 reference so roster growth can never shrink a tile, while
+	# a surface with its own tighter grid passes no floor (a 90x72 request is
+	# honoured as authored).
+	tile.set_tile_size(Vector2(60.0, 40.0), Vector2(108.0, 82.0))
+	check(is_equal_approx(tile.size.x, 108.0) and is_equal_approx(tile.size.y, 82.0),
+		"a tile never shrinks below the floor its surface declares")
+	tile.set_tile_size(Vector2(90.0, 72.0))
+	check(is_equal_approx(tile.size.x, 90.0) and is_equal_approx(tile.size.y, 72.0),
+		"a surface without a floor keeps its authored size (How to Play / Story Briefing)")
+	# Back to the widened probe tile the geometry section below measures on.
+	tile.set_tile_size(Vector2(140.0, 100.0))
 	check(tile.portrait_area().end.x <= tile.size.x + 0.01 and tile.portrait_area().end.y < tile.name_band_rect().position.y + 0.01, "tile keeps portrait above the name band at any size")
 	check(tile.name_band_rect().position.x == 0.0 and is_equal_approx(tile.name_band_rect().size.x, tile.size.x), "name band spans the tile width")
 

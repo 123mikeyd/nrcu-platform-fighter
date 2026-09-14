@@ -77,59 +77,59 @@ layout_mode = 0
 offset_left = 56.0
 offset_top = 96.0
 offset_right = 1224.0
-offset_bottom = 358.0
+offset_bottom = 186.0
 mouse_filter = 2
 
 [node name="FieldRule" type="Panel" parent="ReferenceFrame/RosterField"]
 layout_mode = 0
-offset_top = 263.0
+offset_top = 86.0
 offset_right = 1168.0
-offset_bottom = 264.0
+offset_bottom = 87.0
 mouse_filter = 2
 
 [node name="FighterGrid" type="Control" parent="ReferenceFrame/RosterField"]
 layout_mode = 0
 offset_right = 1168.0
-offset_bottom = 262.0
+offset_bottom = 82.0
 mouse_filter = 2
 
 [node name="PlayerStations" type="Control" parent="ReferenceFrame"]
 layout_mode = 0
 offset_left = 56.0
-offset_top = 438.0
+offset_top = 270.0
 offset_right = 1224.0
-offset_bottom = 704.0
+offset_bottom = 690.0
 mouse_filter = 2
 
 [node name="PlayerBay0" parent="ReferenceFrame/PlayerStations" instance=ExtResource("2_bay")]
 layout_mode = 0
 offset_right = 283.0
-offset_bottom = 266.0
+offset_bottom = 420.0
 
 [node name="PlayerBay1" parent="ReferenceFrame/PlayerStations" instance=ExtResource("2_bay")]
 layout_mode = 0
 offset_left = 295.0
 offset_right = 578.0
-offset_bottom = 266.0
+offset_bottom = 420.0
 
 [node name="PlayerBay2" parent="ReferenceFrame/PlayerStations" instance=ExtResource("2_bay")]
 layout_mode = 0
 offset_left = 590.0
 offset_right = 873.0
-offset_bottom = 266.0
+offset_bottom = 420.0
 
 [node name="PlayerBay3" parent="ReferenceFrame/PlayerStations" instance=ExtResource("2_bay")]
 layout_mode = 0
 offset_left = 885.0
 offset_right = 1168.0
-offset_bottom = 266.0
+offset_bottom = 420.0
 
 [node name="ReadyBand" parent="ReferenceFrame" instance=ExtResource("3_ready")]
 layout_mode = 0
 offset_left = 90.0
-offset_top = 366.0
+offset_top = 196.0
 offset_right = 1191.0
-offset_bottom = 430.0
+offset_bottom = 260.0
 
 [node name="CursorAnchor" type="Control" parent="ReferenceFrame/Header/BackAction"]
 layout_mode = 0
