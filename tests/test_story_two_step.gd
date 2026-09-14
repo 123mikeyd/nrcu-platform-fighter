@@ -39,7 +39,7 @@ func run() -> void:
 			await frames(3)
 			Support.click_center(self, select.continue_button())
 			var reached := await Support.wait_until(self, func() -> bool:
-				return host.active_surface() == "story_briefing"
+				return host.active_surface() == "story_briefing" and briefing.visible
 			, 180)
 			check(reached, "Story Select Continue reaches Encounter Briefing")
 			check(host.route_stack_names() == ["story_select", "story_briefing"],
@@ -49,5 +49,12 @@ func run() -> void:
 			check(briefing.visible and briefing.selected_fighter_id() == host.story_selection_id(),
 				"Briefing presents the selected fighter")
 	await story.free_hosts(self)
-	print("STORY_TWO_STEP failures=", failures)
+	# Runner contract (tools/run_all_tests.py classify()): a test without a
+	# dedicated legacy marker must print a line beginning with "PASS" and exit 0.
+	# The report is never green on a partial pass: the PASS line is emitted only
+	# when every check passed, and a failing run keeps the `failures=N` shape.
+	if failures == 0:
+		print("PASS: story two-step (Select -> Briefing via public pointer input; real PUSH edge, selection preserved)")
+	else:
+		print("STORY_TWO_STEP failures=%d" % failures)
 	quit(1 if failures else 0)
