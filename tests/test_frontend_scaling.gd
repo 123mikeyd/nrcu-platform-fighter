@@ -11,15 +11,14 @@ func check(ok: bool, message: String):
         failures += 1
         printerr("FAIL: " + message)
 func run():
-    var arena = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena)
-    for i in 5: await process_frame
-    arena.open_vs()
-    for i in 3: await process_frame
-    var css = arena.char_panel.find_child("CharSelect", true, false)
+    # WP-0 steps 7-8: the CSS/SSS are hosted by the MatchFlow owner (the
+    # in-arena panels are gone); the scaling contract is unchanged.
+    var vs = load("res://tests/fixtures/vs_route.gd").new()
+    var host = await vs.enter(self)
+    var css = host.char_select()
     check(css != null, "css exists")
     if css == null:
-        arena.queue_free(); await process_frame; quit(1); return
+        host.queue_free(); await process_frame; quit(1); return
     var field: Control = css.find_child("RosterField", true, false)
     var bay_y := -1.0
     for count in [7, 12, 20, 30]:
@@ -50,16 +49,11 @@ func run():
     css.build([])
     await process_frame
     # --- SSS: synthetic stage lists keep the tile/preview regions ---------
-    var css2 = arena.char_panel.find_child("CharSelect", true, false)
+    var css2 = host.char_select()
     css2.ready_requested.emit()
-    var opened := false
-    for i in 120:
-        await process_frame
-        if arena.stage_panel.visible:
-            opened = true
-            break
+    var opened: bool = await vs.wait_for(self, func() -> bool: return host.is_surface_presented("sss"), 240)
     check(opened, "stage page opens through the production route")
-    var sss = arena.stage_panel.find_child("StageSelect", true, false)
+    var sss = host.stage_select()
     check(sss != null, "sss exists")
     for count in [3, 6, 12, 20]:
         var slots: Array = []
@@ -80,7 +74,7 @@ func run():
         check(min_w >= 60.0, "tiles stay readable at %d stages" % count)
         var preview = sss.find_child("StagePreview", true, false)
         check(preview != null and preview.position.x >= 700.0, "preview region separate at %d stages" % count)
-    arena.queue_free()
+    host.queue_free()
     await process_frame
     if failures == 0: print("PASS: frontend scalability (CSS 7/12/20/30 fixed family, SSS 3/6/12/20, stations stable)")
     quit(1 if failures else 0)

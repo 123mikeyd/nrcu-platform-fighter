@@ -10,15 +10,14 @@ func check(ok: bool, message: String):
         failures += 1
         printerr("FAIL: " + message)
 func run():
-    var arena = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena)
-    for i in 4: await process_frame
-    arena.open_vs()
-    for i in 3: await process_frame
-    var css = arena.char_panel.find_child("CharSelect", true, false)
+    # WP-0 steps 7-8: the CSS is hosted by the MatchFlow owner (the in-arena
+    # char panel is gone); the composition contract is unchanged.
+    var vs = load("res://tests/fixtures/vs_route.gd").new()
+    var host = await vs.enter(self)
+    var css = host.char_select()
     check(css != null, "css exists")
     if css == null:
-        arena.queue_free(); await process_frame; quit(1); return
+        host.queue_free(); await process_frame; quit(1); return
     for i in 20: await process_frame
     # --- no global hero region (rejected architecture) --------------------
     check(css.find_child("HeroRig", true, false) == null, "no global right-side HeroRig region")
@@ -41,7 +40,7 @@ func run():
     check(station_top >= 430.0, "the stations occupy the lower field")
     for i in bays.size():
         var b: Control = bays[i]
-        if str(arena.selection_state.slots[i].kind) != "empty":
+        if str(host.selection_state.slots[i].kind) != "empty":
             check(b.render_view() != null, "bay %d has a fighter presentation area" % i)
     # --- roster occupies the reserved upper field -------------------------
     var tiles: Array = css.get_tiles()
@@ -98,7 +97,7 @@ func run():
     css.build([])
     await process_frame
     check(css.get_tiles().size() == 7, "the real roster restores")
-    arena.queue_free()
+    host.queue_free()
     await process_frame
     if failures == 0: print("PASS: css composition (no global hero, four stations, reserved roster field, fixed geometry, scalability)")
     quit(1 if failures else 0)

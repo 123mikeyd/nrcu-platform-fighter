@@ -12,18 +12,17 @@ func check(ok: bool, message: String):
         printerr("FAIL: " + message)
 
 func run():
-    var arena = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena)
-    for i in 5: await process_frame
-    arena.open_vs()
-    for i in 3: await process_frame
-    var css = arena.char_panel.find_child("CharSelect", true, false)
+    # WP-0 steps 7-8: the frontend route runs in the MatchFlow host (the in-arena
+    # char/stage panels are gone); the interaction contract below is unchanged.
+    var vs = load("res://tests/fixtures/vs_route.gd").new()
+    var host = await vs.enter(self)
+    var css = host.char_select()
     check(css != null, "character select exists")
     if css == null:
-        arena.queue_free(); await process_frame; quit(1); return
-    var hand = arena.get_node_or_null("/root/Cursor").hand
+        host.queue_free(); await process_frame; quit(1); return
+    var hand = root.get_node_or_null("/root/Cursor").hand
     check(hand != null, "cursor service reachable")
-    var state = arena.selection_state
+    var state = host.selection_state
     check(state != null and state.slots.size() == 4, "persistent selection state exists with four slots")
     await create_timer(0.6).timeout
     # --- tokens: one per player, screen-local FSM -------------------------
@@ -130,19 +129,25 @@ func run():
     css._on_ready_pressed()
     await process_frame
     check(exits[0] == 1, "READY fires exactly once when valid (fired %d)" % exits[0])
-    # --- production route: CSS -> SSS -> match ----------------------------
-    var opened := false
-    for i in 120:
-        await process_frame
-        if arena.stage_panel.visible:
-            opened = true
-            break
+    # --- production route: CSS -> SSS -> match (via the MatchFlow host) ----
+    var opened: bool = await vs.wait_for(self, func() -> bool: return host.is_surface_presented("sss"), 240)
     check(opened, "ready exits the CSS and opens the stage page")
-    var stage = arena.stage_panel.find_child("StageSelect", true, false)
+    var stage = host.stage_select()
     await create_timer(0.8).timeout
     stage.confirm()
-    await create_timer(1.2).timeout
-    check(not arena.stage_panel.visible and not arena.char_panel.visible, "VS screens closed after the stage confirm")
+    # The router constructs the destination synchronously from the confirm, so
+    # the arena is captured right after it (before the released host frees).
+    var arena: Node = host.gameplay_node()
+    var launched := false
+    for i in 300:
+        await process_frame
+        if arena != null and is_instance_valid(arena) and not arena.fighters.is_empty() and not is_instance_valid(host):
+            launched = true
+            break
+    check(launched, "the stage confirm LAUNCHes gameplay and releases the frontend")
+    if not (arena != null and is_instance_valid(arena)):
+        quit(1)
+        return
     check(arena.fighters.size() == 2, "the match starts with the selected fighters")
     check(str(arena.fighters[0].character_id) == "ggb" and str(arena.fighters[1].character_id) == "ggb", "committed fighters reach the match")
     # --- state preservation: Results -> Change Fighters -> CSS (WP-0 step 5:
@@ -152,7 +157,6 @@ func run():
         f.set_physics_process(false)
     arena.fighters[1].stocks = 0
     arena._on_fighter_eliminated(arena.fighters[1])
-    var vs = load("res://tests/fixtures/vs_route.gd").new()
     var post = await vs.wait_for_post_match(self)
     check(post != null and post.post_match_result() != null,
         "the resolved match hands its payload to the MatchFlow PostMatch surface")
@@ -164,19 +168,18 @@ func run():
         var restored: bool = await vs.wait_for(self, func() -> bool: return post.active_surface() == "css", 180)
         check(restored, "Change Fighters returns to the CSS")
         check(str(post.selection_state.slots[0]["character"]) == "ggb", "fighters preserved through the results round trip")
-        check(not hand.is_carrying(), "no token state survives the results round trip (carried_by %d, token %s)" % [css.get_carried_by(), str(hand.carried_token())])
+        check(not hand.is_carrying(), "no token state survives the results round trip (carried_by %d, token %s)" % [post.char_select().get_carried_by(), str(hand.carried_token())])
         post.queue_free()
         await process_frame
-    arena.queue_free()
+    if is_instance_valid(arena):
+        # The router-owned arena is torn down by the RETURN scene change; a
+        # leftover handle is only freed if it survived (test hygiene).
+        arena.queue_free()
     await process_frame
-    # --- Back cancels a carried token (fresh arena: the route itself is a
-    # scene change handled by main.gd, so only the local contract is asserted)
-    var arena3 = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena3)
-    for i in 5: await process_frame
-    arena3.open_vs()
-    for i in 3: await process_frame
-    var css3 = arena3.char_panel.find_child("CharSelect", true, false)
+    # --- Back cancels a carried token (fresh host: the route itself is a scene
+    # change owned by the flow, so only the local contract is asserted)
+    var host3 = await vs.enter(self)
+    var css3 = host3.char_select()
     await create_timer(0.6).timeout
     var motion3 := InputEventMouseMotion.new()
     motion3.position = Vector2(640.0, 200.0)
@@ -190,7 +193,8 @@ func run():
     check(hand.is_carrying(), "token carried before back (carried_by %d)" % css3.get_carried_by())
     css3._on_back_pressed()
     check(not hand.is_carrying(), "back cancels the carried token before the route")
-    arena3.queue_free()
+    if is_instance_valid(host3):
+        host3.queue_free()
     await process_frame
     if failures == 0: print("PASS: character select interaction (tokens, candidate/committed, ready gating, route, preservation)")
     quit(1 if failures else 0)

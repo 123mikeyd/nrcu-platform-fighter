@@ -7,7 +7,8 @@ extends SceneTree
 #   - fighter ids/names/portraits vs roster.gd + portrait_data.gd;
 #   - Story eligibility vs the encounter catalog (WP-0 step 4 moved the Story
 #     route into MatchFlow, so the encounter's allowed fighters are authority);
-#   - stage ids vs match_setup.LEVEL_IDS, thumbnails on disk, SSS label rule;
+#   - stage ids vs the StageCatalog consumers (setup + hosted SSS), thumbnails
+#     on disk, SSS label rule;
 #   - encounter 01 copy vs story_briefing.gd (exact literals) + bobo_fighter MAX_HEALTH;
 #   - input profiles vs how_to_play.gd PROFILES/BINDINGS and the legacy
 #     demo_style CONTROLS text.
@@ -150,19 +151,29 @@ func _stage_catalog() -> void:
 	var catalog = load(STAGE_CATALOG)
 	_purity(catalog, "StageCatalog")
 	var setup_map: Dictionary = _constants("res://scripts/match_setup.gd")
-	check(catalog.ids() == setup_map.get("LEVEL_IDS", []), "stage ids equal match_setup.LEVEL_IDS exactly, same order")
+	# WP-0 step 8: the debug setup consumes the shared catalog directly — there
+	# is no private stage array left to pin against.
+	check(not setup_map.has("LEVEL_IDS"), "match_setup.gd carries no private stage array")
 	check(catalog.selectable_ids() == catalog.ids(), "all current stages are selectable")
 	check(catalog.display_name("nonexistent") == "Unknown", "unknown stage id fallback")
 	var setup_source := _source("res://scripts/match_setup.gd")
 	var main_source := _source("res://scripts/main.gd")
-	check(main_source.contains('"res://assets/menu/stage_" + SetupScript.LEVEL_IDS[i] + ".png"'), "production SSS thumbnail path rule unchanged")
+	check(setup_source.contains("StageCatalog.entries()"), "the setup level list comes from StageCatalog")
+	check(setup_source.contains("StageCatalog.ids()"), "the setup resolves selected stages through StageCatalog")
+	# WP-0 steps 7-8: the production SSS is hosted by MatchFlow and reads the
+	# catalog thumbnail; gameplay no longer builds an in-arena stage page.
+	var flow_source := _source("res://scripts/match_flow.gd")
+	check(flow_source.contains('entry.get("thumbnail"'), "the hosted SSS thumbnail comes from the StageCatalog")
+	check(not main_source.contains("SetupScript.LEVEL_IDS"), "main.gd no longer reads a private setup stage array")
+	check(not main_source.contains("_build_stage_panel") and not main_source.contains("StageSelectScript"),
+		"main.gd no longer builds an in-arena stage page")
 	for entry in catalog.all():
 		var id := str(entry["id"])
 		check(str(entry["display_name"]) == str(entry["dropdown_text"]).split(" (")[0].to_upper(), "SSS display name derives from the setup option text: " + id)
 		check(FileAccess.file_exists(str(entry["thumbnail"])), "thumbnail exists on disk: " + id)
 		check(str(entry["thumbnail"]) == "res://assets/menu/stage_" + id + ".png", "thumbnail path policy: " + id)
-		check(setup_source.contains('"%s"' % str(entry["dropdown_text"])), "setup dropdown text still present: " + id)
-		check(setup_source.contains('"%s"' % str(entry["caption"])), "setup caption still present: " + id)
+		check(not setup_source.contains('"%s"' % str(entry["dropdown_text"])), "setup no longer hard-codes the stage text: " + id)
+		check(not setup_source.contains('"%s"' % str(entry["caption"])), "setup no longer hard-codes the stage caption: " + id)
 		var gameplay: Dictionary = entry["gameplay"]
 		check(str(gameplay["stage_id"]) == id, "gameplay stage id resolves to the entry id: " + id)
 		check(FileAccess.file_exists(str(gameplay["theme_script"])), "gameplay theme script exists: " + id)

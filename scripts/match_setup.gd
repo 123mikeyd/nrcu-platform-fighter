@@ -1,16 +1,32 @@
 extends Control
+# Debug Match Setup (Doc 02 §9) — the arena's developer launcher screen.
+#
+# Wired by main.gd on the explicit Debug/F10 route ONLY (WP-0 step 8): a
+# production arena constructed from a MatchLaunchConfig never builds it, never
+# shows it and never reads a field on it, so it is not production state storage.
+# The VS route validates through MatchFlowState in the router before a launch
+# config exists (Doc 02 §2), so this screen never surfaces player-facing errors
+# during VS.
+#
+# It consumes the shared catalogs (Doc 02 §8): the level list, card captions and
+# thumbnails come from StageCatalog — there is no private stage array any more.
+# The in-arena stage page it used to open was removed with WP-0 steps 7-8; the
+# cards select their stage directly and LEVEL is a regular value row.
 
 const Config = preload("res://scripts/match_config.gd")
+const StageCatalog = preload("res://scripts/catalogs/stage_catalog.gd")
 signal start_requested(slots: Array, teams: bool)
-signal stage_select_requested(focus_id: String)
 signal back_requested
 const Style = preload("res://scripts/demo_style.gd")
 const MenuOptions = preload("res://scripts/menu_options.gd")
 var help_page: Control
 var rows: Array = []
 var mode: OptionButton
+# The stage model. Item texts come from StageCatalog (dropdown_text), so this
+# OptionButton is only the debug screen's own selection index over the shared
+# catalog list (the hidden-model cleanup is WP-7's "remove hidden production
+# OptionButton models" step).
 var level: OptionButton
-const LEVEL_IDS = ["debug", "toy_room", "sky"]
 var error_label: Label
 var main_menu: Control
 var player_menu: Control
@@ -61,28 +77,31 @@ func _ready() -> void:
     var level_label := Label.new()
     level_label.text = "    LEVEL    "
     mode_row.add_child(level_label)
-    level = _choice(mode_row, ["Debug Arena (original)", "Toy Shelf / Bedroom", "Sky Sanctuary"], 300)
+    level = _choice(mode_row, _level_texts(), 300)
     level.name = "LevelSelect"
     var stages := HBoxContainer.new()
     stages.add_theme_constant_override("separation", 18)
     column.add_child(stages)
-    for i in LEVEL_IDS.size():
+    # Cards + hidden dropdown both read the shared catalog (Doc 02 §8).
+    var entries: Array = StageCatalog.entries()
+    for i in entries.size():
+        var entry: Dictionary = entries[i]
         var card := Button.new()
         card.name = "StageCard" + str(i)
         card.custom_minimum_size = Vector2(260,126)
-        card.tooltip_text = level.get_item_text(i)
+        card.tooltip_text = str(entry.get("dropdown_text", ""))
         stages.add_child(card)
         var picture := TextureRect.new()
         picture.name = "StageThumbnail" + str(i)
         picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        picture.texture = load("res://assets/menu/stage_" + LEVEL_IDS[i] + ".png")
+        picture.texture = load(str(entry.get("thumbnail", "")))
         picture.position = Vector2(5,5)
         picture.size = Vector2(250,96)
         picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
         picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card.add_child(picture)
         var caption := Label.new()
-        caption.text = ["Debug Arena", "Toy Shelf", "Sky Sanctuary"][i]
+        caption.text = str(entry.get("caption", ""))
         caption.position = Vector2(5,100)
         caption.size.x = 250
         caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -181,12 +200,22 @@ func _select_level(index: int) -> void:
     _sync_menus()
     main_menu.set_focus(f)
 
+func _level_texts() -> Array:
+    # The level list is the shared StageCatalog (Doc 02 §8), never a private
+    # setup array.
+    var values: Array = []
+    for entry in StageCatalog.entries():
+        values.append(str(entry.get("dropdown_text", entry.get("display_name", ""))))
+    return values
+
 func _on_stage_card_pressed(index: int) -> void:
-    stage_select_requested.emit(LEVEL_IDS[index])
+    # The cards are the debug stage picker: they select their stage directly
+    # (the in-arena stage page was removed with WP-0 steps 7-8; the production
+    # SSS lives in the MatchFlow host).
+    _select_level(index)
 
 func select_level_by_id(id: String) -> void:
-    # The stage page reports its choice here; the dropdown stays the model.
-    var index: int = LEVEL_IDS.find(id)
+    var index: int = StageCatalog.ids().find(id)
     if index < 0:
         return
     _select_level(index)
@@ -198,12 +227,12 @@ func _texts_of(choice: OptionButton) -> Array:
     return values
 
 func _sync_menus() -> void:
-    # LEVEL opens the stage page (like the player rows open their subpages);
-    # the current stage rides in the label.
-    var stage_name: String = level.get_item_text(level.selected).split(" (")[0]
+    # LEVEL is a regular value row over the catalog's stage list (the stage page
+    # it used to open was removed with WP-0 steps 7-8; the cards below offer the
+    # same list directly).
     var defs: Array = [
         {"label": "MATCH MODE", "kind": "value", "values": _texts_of(mode), "value": mode.selected, "enabled": true},
-        {"label": "LEVEL   %s" % stage_name, "kind": "action", "enabled": true},
+        {"label": "LEVEL", "kind": "value", "values": _texts_of(level), "value": level.selected, "enabled": true},
     ]
     for i in range(4):
         var model: Dictionary = rows[i]
@@ -232,9 +261,7 @@ func _on_main_changed(row: int, value: int) -> void:
     _refresh()
 
 func _on_main_confirmed(row: int) -> void:
-    if row == 1:
-        stage_select_requested.emit("")
-    elif row >= 2:
+    if row >= 2:
         _open_player(row - 2)
 
 func _open_player(index: int) -> void:
@@ -328,4 +355,8 @@ func _start() -> void:
         start_requested.emit(slots, mode.selected == 1)
 
 func selected_level() -> String:
-    return LEVEL_IDS[level.selected]
+    # The debug launcher's selected stage, resolved through the shared catalog.
+    var ids: Array = StageCatalog.ids()
+    if level == null or level.item_count == 0 or level.selected < 0 or level.selected >= ids.size():
+        return "debug"
+    return str(ids[level.selected])

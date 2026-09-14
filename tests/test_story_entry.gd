@@ -60,7 +60,7 @@ func run():
     var hud_controls = arena.find_child("MatchControls", true, false)
     check(hud_controls != null and "Bobo: 400 HP" in hud_controls.text,
         "story HUD teaches human controls and identifies the NPC, not a second keyboard player")
-    check(not arena.setup.visible, "the debug setup vocabulary stays off-screen in the story flow")
+    check(arena.setup == null, "no debug setup screen is constructed for a story launch (Doc 02 §9)")
     var hero = arena.fighters[0]
     var mage = arena.fighters[1]
     check(hero.character_id == "turbofit" and hero.control_type == "human" and hero.player_index == 1 and hero.input_device == -1,

@@ -1,9 +1,12 @@
 extends SceneTree
 # Stage Select — PRODUCTION route contract (Doc 05 §6/§11).
 #
-# Drives the real player route: open_vs -> MatchSelectionState -> CSS -> SSS,
-# never the legacy debug Match Setup. Debug-adapter coverage lives in
-# tests/test_debug_match_setup.gd.
+# WP-0 steps 7-8: the CSS/SSS production route lives in the MatchFlow host (the
+# in-arena char/stage panels were removed with the rest of the gameplay-side
+# production frontend), so this suite drives exactly the player route: the host
+# owns CSS -> READY -> SSS, its confirm LAUNCHes gameplay from the immutable
+# MatchLaunchConfig, and its Back POPs the SSS back to the CSS. Debug-adapter
+# coverage lives in tests/test_debug_match_setup.gd.
 var failures := 0
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
@@ -11,35 +14,27 @@ func check(ok: bool, message: String):
         failures += 1
         printerr("FAIL: " + message)
 func run():
-    var arena = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena)
-    for i in 5: await process_frame
-    check(arena.has_method("open_vs"), "arena exposes the VS entry")
+    var vs = load("res://tests/fixtures/vs_route.gd").new()
+    var host = await vs.enter(self)
+    check(host.has_method("push_surface") and host.char_select() != null, "MatchFlow exposes the VS route")
     # --- production entry: Main -> CSS -> READY -> SSS ---------------------
-    arena.open_vs()
-    for i in 3: await process_frame
-    var css = arena.char_panel.find_child("CharSelect", true, false)
+    var css = host.char_select()
     check(css != null, "character select exists")
     css.ready_requested.emit()
     # Poll for the SSS to open, then inspect the ENTRY window immediately:
     # the scene-start guard is active and the tiles are still parked/flying.
-    var opened := false
-    for i in 90:
-        await process_frame
-        if arena.stage_panel.visible:
-            opened = true
-            break
+    var opened: bool = await vs.wait_for(self, func() -> bool: return host.is_surface_presented("sss"), 240)
     check(opened, "READY from the CSS opens the stage page")
-    var stage = arena.stage_panel.find_child("StageSelect", true, false)
+    var stage = host.stage_select()
     check(stage != null, "stage page exists")
     if stage == null:
-        arena.queue_free(); await process_frame; quit(1); return
-    check(arena.stage_panel.visible and not arena.char_panel.visible, "READY from the CSS opens the stage page")
+        host.queue_free(); await process_frame; quit(1); return
+    check(host.is_surface_presented("sss") and not host.is_surface_presented("css"), "READY from the CSS opens the stage page")
     check(stage.get_input_lock() > 0.0, "scene-start lock is active during the entrance")
     var early_tiles: Array = stage.get_tiles()
     check(early_tiles.size() == 3 and early_tiles[2].position.x > 1280.0, "tiles start parked off-screen right")
     await create_timer(0.9).timeout
-    var hand = arena.get_node_or_null("/root/Cursor").hand
+    var hand = root.get_node_or_null("/root/Cursor").hand
     check(hand != null, "cursor service reachable")
     # --- cursor contract on entry -----------------------------------------
     check(not hand.is_carrying(), "the CSS token can never leak into the stage page")
@@ -51,7 +46,7 @@ func run():
     await create_timer(0.7).timeout
     for i in tiles.size():
         check(tiles[i].position.x + 170.0 < vw, "tile %d flew into view" % i)
-    check(stage.get_hovered_id() == str(arena.selection_state.stage), "entry hovers the stored stage")
+    check(stage.get_hovered_id() == str(host.selection_state.stage), "entry hovers the stored stage")
     check(stage.get_box_visible(), "highlight box sits on the hovered tile")
     var preview = stage.find_child("StagePreview", true, false)
     check(preview != null and preview is TextureRect, "the preview region is its own TextureRect")
@@ -124,39 +119,50 @@ func run():
     check(hand.hotspot.distance_to(anchor_pos) < 6.0, "the focus hand settles at the authored anchor")
     # --- hover vs confirm semantics (unchanged) ---------------------------
     var first: int = 0 if stage.get_hovered_id() != "debug" else 1
+    var confirmed_id := str(stage._slots[first]["id"])
     tiles[first].pressed.emit()
-    check(stage.get_hovered_id() == str(stage._slots[first]["id"]), "first press previews the stage")
+    check(stage.get_hovered_id() == confirmed_id, "first press previews the stage")
     check(stage.get_confirmed_id() == "", "hovering never commits the stage")
-    check(str(arena.selection_state.stage) == "debug", "hover does not mutate the persistent stage")
+    check(str(host.selection_state.stage) == "debug", "hover does not mutate the persistent stage")
     tiles[first].pressed.emit()
-    check(stage.get_confirmed_id() == str(stage._slots[first]["id"]), "second press confirms")
+    check(stage.get_confirmed_id() == confirmed_id, "second press confirms")
     check(stage.is_confirming(), "confirm lock engaged")
     tiles[0].pressed.emit()
-    check(stage.get_confirmed_id() == str(stage._slots[first]["id"]), "presses swallowed while confirming")
-    await create_timer(1.0).timeout
-    check(not arena.stage_panel.visible and not arena.char_panel.visible, "VS screens closed after the confirm")
-    check(arena.active_level == str(stage._slots[first]["id"]), "confirmed stage launches the match through the selection state")
-    check(str(arena.selection_state.stage) == str(stage._slots[first]["id"]), "the persistent stage holds the confirmed value")
+    check(stage.get_confirmed_id() == confirmed_id, "presses swallowed while confirming")
+    # The confirm LAUNCHes through the router's §6 handshake: the destination is
+    # captured before the released host frees itself.
+    var arena: Node = host.gameplay_node()
+    for i in 300:
+        await process_frame
+        if is_instance_valid(host) and host.launch_state() == "launched":
+            check(not host.is_surface_presented("sss") and not host.is_surface_presented("css"), "VS screens closed after the confirm")
+            check(str(host.selection_state.stage) == confirmed_id, "the persistent stage holds the confirmed value")
+            break
+    var launched := false
+    for i in 300:
+        await process_frame
+        if arena != null and is_instance_valid(arena) and not arena.fighters.is_empty() and not is_instance_valid(host):
+            launched = true
+            break
+    check(launched, "the confirmed stage LAUNCHes gameplay through the flow")
+    check(arena != null and is_instance_valid(arena), "gameplay exists after the launch")
+    if arena != null and is_instance_valid(arena):
+        check(arena.active_level == confirmed_id, "confirmed stage launches the match through the selection state")
     # --- backtracking: CSS -> SSS -> CSS preserves the selection ----------
-    var arena2 = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena2)
-    for i in 5: await process_frame
-    arena2.open_vs()
-    for i in 3: await process_frame
-    arena2.selection_state.slots[0]["character"] = "ggb"
-    var css2 = arena2.char_panel.find_child("CharSelect", true, false)
+    var host2 = await vs.enter(self)
+    var css2 = host2.char_select()
+    host2.selection_state.slots[0]["character"] = "ggb"
     css2.ready_requested.emit()
-    for i in 3: await process_frame
+    var opened2: bool = await vs.wait_for(self, func() -> bool: return host2.is_surface_presented("sss"), 240)
+    check(opened2, "stage page opens again")
     await create_timer(0.9).timeout
-    var stage2 = arena2.stage_panel.find_child("StageSelect", true, false)
-    check(arena2.stage_panel.visible, "stage page opens again")
+    var stage2 = host2.stage_select()
     stage2.request_back()
-    await create_timer(0.9).timeout
-    check(arena2.char_panel.visible and not arena2.stage_panel.visible, "SSS Back returns to the CSS")
-    check(str(arena2.selection_state.slots[0]["character"]) == "ggb", "Back preserves the fighter configuration")
+    var restored: bool = await vs.wait_for(self, func() -> bool: return host2.is_surface_presented("css"), 240)
+    check(restored and not host2.is_surface_presented("sss"), "SSS Back returns to the CSS")
+    check(str(host2.selection_state.slots[0]["character"]) == "ggb", "Back preserves the fighter configuration")
     check(not hand.is_carrying(), "returning from SSS carries no token")
-    arena.queue_free()
-    arena2.queue_free()
+    host2.queue_free()
     await process_frame
     if failures == 0: print("PASS: production stage select (route, cursor anchors, hover/confirm, backtracking preservation)")
     quit(1 if failures else 0)

@@ -194,7 +194,10 @@ func part_c_story_launch_from_config() -> void:
         "the HUD title template comes from the payload")
     var hud = arena.find_child("MatchControls", true, false)
     check(hud != null and "Bobo: 400 HP" in str(hud.text), "the story HUD keeps the encounter vocabulary")
-    check(not arena.setup.visible, "the debug setup vocabulary stays off-screen in the story flow")
+    # WP-0 step 8 (Doc 02 §9): a production arena — the story launch included —
+    # constructs NO debug setup screen, so the debug vocabulary can never appear
+    # in the story flow.
+    check(arena.setup == null, "a story launch constructs no debug setup screen")
     arena.queue_free()
     await story.free_hosts(self)
 

@@ -350,7 +350,7 @@ func _story_route() -> void:
         "the launch uses a valid playable fighter id")
     check(arena.find_child("StoryBriefing", true, false) == null,
         "gameplay hosts no story panel of its own (frontend-owned since step 4)")
-    check(arena.setup.visible == false, "the debug setup vocabulary is off-screen in the story flow")
+    check(arena.setup == null, "no debug setup screen is constructed for a story launch (Doc 02 §9)")
     var hud = arena.find_child("MatchControls", true, false)
     check(hud != null and str(hud.text).to_upper().find("MATCH SETUP") == -1,
         "the story HUD keeps player-facing vocabulary")

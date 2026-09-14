@@ -7,12 +7,12 @@ extends Node3D
 #
 # Two ways in:
 #   * the MatchFlow router sets `launch_config` BEFORE tree entry; _ready then
-#     skips the legacy screen entry routes, prewarms gameplay and reports
-#     `presentation_ready` (Doc 02 §6). The match starts through
-#     start_match_from_config(), which consumes only the frozen snapshot — mode,
-#     resolved slots, the launch stage and, for Story, the encounter payload.
-#   * a direct load (tests, F10 debug launcher) keeps the shipped behaviour:
-#     AppState.enter_mode picks the entry route.
+#     prewarms gameplay and reports `presentation_ready` (Doc 02 §6). The match
+#     starts through start_match_from_config(), which consumes only the frozen
+#     snapshot — mode, resolved slots, the launch stage and, for Story, the
+#     encounter payload.
+#   * a direct load (tests, F10 debug launcher) is the explicit Debug/F10 route
+#     (Doc 02 §9): the arena builds its own Debug Match Setup launcher.
 #
 # WP-0 step 5: gameplay OWNS NO RESULTS SCREEN. At match resolution it produces
 # the immutable end-state data (MatchResult / StoryOutcome, Doc 02 §4) and hands
@@ -21,28 +21,32 @@ extends Node3D
 # down and lets the frontend present PostMatch. No frame of this scene survives
 # behind Results, and no Results surface ever reads a live fighter.
 #
-# The legacy Char/Stage panels below are still constructed here so the debug
-# launcher and the existing tests keep working, but they are NOT part of the
-# production routes any more (removing them outright is WP-0 steps 7).
-# The Story panel is already gone: the Story route is frontend-owned and what
-# remains here is the Story state machine over the launch config's payload.
+# WP-0 steps 7-8: gameplay constructs NO production frontend any more. The
+# in-arena Char/Stage panels and their VS entry route (open_vs, CSS -> SSS ->
+# launch inside main.tscn) are DELETED — the player route lives in MatchFlow,
+# which owns CSS/SSS/Story/PostMatch, and this scene is only the destination it
+# launches with a validated MatchLaunchConfig. The Debug Match Setup screen is
+# constructed on the explicit Debug/F10 route ONLY: a production arena never
+# instantiates, shows or reads it.
 
 signal presentation_ready
 
 const FighterScript = preload("res://scripts/fighter.gd")
 const Config = preload("res://scripts/match_config.gd")
-const SetupScript = preload("res://scripts/match_setup.gd")
 const DemoStyle = preload("res://scripts/demo_style.gd")
-const StageSelectScript = preload("res://scripts/stage_select.gd")
-const CharSelectScript = preload("res://scripts/char_select.gd")
 const MatchResultScript = preload("res://scripts/match_result.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
-const SelectionStateScript = preload("res://scripts/match_selection_state.gd")
+# Debug Match Setup (Doc 02 §9): built by the explicit Debug/F10 route only.
+const SetupScript = preload("res://scripts/match_setup.gd")
+# Gameplay stage ids: the launch stage is validated against the shared catalog
+# (the debug setup reads the same catalog for its own level list).
+const StageCatalog = preload("res://scripts/catalogs/stage_catalog.gd")
 # Adapters only: the launch snapshot's typed kinds/input sources are mapped back
 # to the legacy slot vocabulary start_match() already speaks.
 const StateScript = preload("res://scripts/match_flow_state.gd")
 
 const MATCH_FLOW_SCENE := "res://scenes/match_flow.tscn"
+const HOME_SCENE := "res://scenes/home.tscn"
 
 # Shipped Story HUD sentence (main.gd start_story), now built from the launch
 # config's Story payload: enemy identity + HP come from the snapshot.
@@ -61,7 +65,10 @@ var active_level := "debug"
 var stage_theme: Node3D
 var debug_visuals: Array[Node3D] = []
 var hud_labels: Array[Label] = []
-var setup: Control
+# Debug Match Setup (Doc 02 §9). Null in a production arena: the launcher is
+# constructed only by the explicit Debug/F10 route and is never production
+# state storage (no production code path reads a field on it).
+var setup: Control = null
 var teams_enabled := false
 var active_slots: Array = []
 # Story state machine (Doc 07 §11-16). One encounter only, driven entirely by
@@ -71,14 +78,6 @@ var active_slots: Array = []
 var story_state := ""
 var _story_encounter := false
 var _story_won := false
-var stage_panel: Control
-var stage_select: Control
-var char_panel: Control
-var char_select: Control
-var selection_state
-var _entry_mode := "debug"
-var _sss_from := "debug"
-var _pending_match := false
 var hud_title: Label
 var hud_controls: Label
 var freeplay_controls: String
@@ -112,33 +111,43 @@ func _ready() -> void:
         if child is StaticBody3D:
             debug_visuals.append(child.get_child(0))
     _build_hud()
+    # The legacy entry flag selected an in-arena screen route; that route is
+    # gone (WP-0 steps 7-8). The flag is consumed so a stale value can never
+    # re-enter it.
+    AppStateScript.enter_mode = "debug"
+    if launch_config != null:
+        # MatchFlow destination (Doc 02 §1/§6): the router already validated the
+        # setup and constructed this arena with an immutable MatchLaunchConfig,
+        # so NO frontend screen is constructed here. Gameplay is prewarmed and
+        # reports readiness; the match starts when the router releases the
+        # frontend.
+        _launched_from_flow = true
+        call_deferred("_announce_presentation_ready")
+    else:
+        # Explicit Debug/F10 route (Doc 02 §9): the developer launcher is the
+        # arena's own setup surface, and this is the ONLY construction site.
+        _build_debug_setup()
+    # Arriving through the persistent transition layer: the previous screen
+    # may have held its frame for the crossfade (Main Menu PLAY). Reveal this
+    # scene underneath it — never leave a stale hold covering the arena.
+    Frontend.release(0.28)
+
+func _build_debug_setup() -> void:
+    # Debug Match Setup (Doc 02 §9): instantiate the launcher ONLY on the
+    # explicit Debug/F10 route. It consumes the shared catalogs (match_setup.gd
+    # builds its level list from StageCatalog, never a private array), it is NOT
+    # production state storage — a production arena never constructs it and no
+    # production code path reads a field on it — and it never receives
+    # player-facing validation errors during VS: the VS route validates through
+    # MatchFlowState in the router before a MatchLaunchConfig exists.
     var menu_layer := CanvasLayer.new()
+    menu_layer.name = "DebugMenuLayer"
     menu_layer.layer = 10
     add_child(menu_layer)
     setup = SetupScript.new()
     menu_layer.add_child(setup)
     setup.start_requested.connect(start_match)
-    setup.stage_select_requested.connect(open_stage_select)
     setup.back_requested.connect(back_to_menu)
-    _build_stage_panel(menu_layer)
-    _build_char_panel(menu_layer)
-    var entry: String = AppStateScript.enter_mode
-    AppStateScript.enter_mode = "debug"
-    _entry_mode = entry
-    if launch_config != null:
-        # MatchFlow destination (Doc 02 §1/§6): the router already validated the
-        # setup and constructed this arena, so the legacy screen entry routes do
-        # not run. Gameplay is prewarmed and reports readiness; the match starts
-        # when the router releases the frontend.
-        _launched_from_flow = true
-        setup.hide()
-        call_deferred("_announce_presentation_ready")
-    elif entry == "vs":
-        open_vs()
-    # Arriving through the persistent transition layer: the previous screen
-    # may have held its frame for the crossfade (Main Menu PLAY). Reveal this
-    # scene underneath it — never leave a stale hold covering the arena.
-    Frontend.release(0.28)
 
 func _process(_delta: float) -> void:
     for i in range(fighters.size()):
@@ -152,47 +161,61 @@ func _process(_delta: float) -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-        if setup.visible and setup.close_help(): return
+        if setup != null and setup.visible and setup.close_help(): return
         # Consume the event BEFORE the route action: the arena is the current
         # scene on a flow launch, so a route change frees this node and any
         # later statement here would run on a freed instance.
         get_viewport().set_input_as_handled()
-        if char_panel != null and char_panel.visible:
+        if setup != null and not setup.visible:
+            # Debug route with a match running: the setup screen reopens in
+            # place (shipped debug launcher behaviour).
+            show_setup()
+        else:
+            # Debug launcher at rest (its screen is already up) and production
+            # both leave the arena for Main. Production has NO arena-side setup
+            # screen any more (Doc 02 §9 / WP-0 steps 7-8): the in-arena CSS/SSS
+            # it used to reopen are deleted and the frontend owns the route.
             back_to_menu()
-        elif stage_panel != null and stage_panel.visible:
-            stage_select.request_back()
-        elif setup.visible: back_to_menu()
-        else: _leave_story()
     # WP-0 step 5: the raw R rematch bypass is REMOVED. A resolved match hands
     # its end-state payload to the frontend, which owns the visible Results
     # actions (Doc 06 §9: no hidden raw rematch; Doc 09 WP-5 "remove host raw R
     # bypass"). Results input is owned by the PostMatch surface.
 
 func back_to_menu() -> void:
-    show_setup()
-    get_tree().change_scene_to_file("res://scenes/home.tscn")
+    # Leaving the arena for the frontend: the shipped stand-down (cancel READY,
+    # drop the encounter-only HUD, stop the fighters, clear live projectiles)
+    # runs on BOTH routes — production has no setup screen to present, but the
+    # route still leaves a stopped, story-free arena behind (Doc 02 §9).
+    _stand_down_match()
+    if setup != null:
+        setup.show()
+        setup.find_child("StartMatchButton",true,false).grab_focus()
+    get_tree().change_scene_to_file(HOME_SCENE)
 
 func show_setup() -> void:
+    _stand_down_match()
+    if setup == null:
+        # Production arena (MatchLaunchConfig): no arena-side setup screen
+        # exists to show (Doc 02 §9).
+        return
+    setup.show()
+    setup.find_child("StartMatchButton",true,false).grab_focus()
+
+func _stand_down_match() -> void:
+    # Shipped stand-down shared by the debug launcher re-open and the Main
+    # route: cancel READY, leave the story state, hide the encounter-only HUD,
+    # stop every fighter and clear live projectiles.
     _cancel_ready()
     story_state = ""
     _story_encounter = false
-    if stage_panel != null:
-        stage_panel.hide()
-    if stage_select != null:
-        stage_select.reset()
-    if char_panel != null:
-        char_panel.hide()
-    if char_select != null:
-        char_select.reset()
-    bobo_health_bar.hide()
+    if bobo_health_bar != null:
+        bobo_health_bar.hide()
     for fighter in fighters:
         fighter.controls_enabled = false
         fighter._clear_move_state()
     for projectile in get_tree().get_nodes_in_group("projectiles") + get_tree().get_nodes_in_group("goo_puddles"):
         projectile.queue_free()
     match_over = false
-    setup.show()
-    setup.find_child("StartMatchButton",true,false).grab_focus()
 
 func start_match(slots: Array, teams: bool, bobo_encounter := false, level := "") -> bool:
     var validation_slots := slots.duplicate(true)
@@ -200,9 +223,18 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
         validation_slots[1].character = "ice_mage"
     var error := Config.validate(validation_slots, teams)
     if not error.is_empty():
-        setup.error_label.text = error
+        if setup != null:
+            # Debug route only. The VS route validates through MatchFlowState
+            # (Doc 02 §2) before a MatchLaunchConfig exists, so production never
+            # reaches a player-facing error through this screen (Doc 02 §9).
+            setup.error_label.text = error
         return false
-    apply_level(level if level != "" else setup.selected_level())
+    # The launch stage rides the immutable snapshot; the debug launcher's own
+    # model is read ONLY when the caller passed no stage (the debug route).
+    var launch_level := level
+    if launch_level == "" and setup != null:
+        launch_level = setup.selected_level()
+    apply_level(launch_level)
     for fighter in fighters:
         remove_child(fighter)
         fighter.queue_free()
@@ -214,10 +246,6 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
     story_state = ""
     _story_encounter = false
     _story_won = false
-    if stage_panel != null:
-        stage_panel.hide()
-    if char_panel != null:
-        char_panel.hide()
     hud_title.text = "NRCU"
     hud_controls.text = freeplay_controls
     active_slots = slots.duplicate(true)
@@ -248,7 +276,10 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, level := ""
         fighters.append(fighter)
     player_one = fighters[0]
     player_two = fighters[1]
-    setup.hide()
+    if setup != null:
+        # Debug launcher: the setup screen steps aside once the match starts. A
+        # production arena has no setup screen (Doc 02 §9).
+        setup.hide()
     bobo_health_bar.visible = bobo_encounter
     _begin_ready()
     return true
@@ -314,130 +345,11 @@ func _return_to_post_match(payload: Dictionary) -> void:
     AppStateScript.return_to_post_match(payload)
     get_tree().change_scene_to_file(MATCH_FLOW_SCENE)
 
-func _build_stage_panel(layer: CanvasLayer) -> void:
-    # Stage page (SSS grammar), used by the debug launcher; the production route
-    # hosts its own SSS inside MatchFlow.
-    stage_panel = Control.new()
-    stage_panel.name = "StagePanel"
-    stage_panel.theme = DemoStyle.make()
-    stage_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    layer.add_child(stage_panel)
-    var shade := ColorRect.new()
-    shade.color = Color("273a37")
-    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    stage_panel.add_child(shade)
-    stage_select = StageSelectScript.new()
-    stage_select.name = "StageSelect"
-    stage_panel.add_child(stage_select)
-    var slots: Array = []
-    for i in SetupScript.LEVEL_IDS.size():
-        var item_text: String = setup.level.get_item_text(i)
-        slots.append({
-            "id": SetupScript.LEVEL_IDS[i],
-            "name": item_text.split(" (")[0].to_upper(),
-            "tex": "res://assets/menu/stage_" + SetupScript.LEVEL_IDS[i] + ".png",
-        })
-    stage_select.build(slots)
-    stage_select.confirmed.connect(_on_stage_confirmed)
-    stage_select.exit_finished.connect(_on_stage_exit)
-    stage_panel.hide()
-
-func _on_stage_confirmed(id: String) -> void:
-    if _sss_from == "css":
-        # VS flow: the stage finishes the configuration; the match launches
-        # once the page has closed (see _on_stage_exit).
-        selection_state.set_stage(id)
-        _pending_match = true
-    else:
-        # Debug launcher: keep the old write-back into the hidden model.
-        setup.select_level_by_id(id)
-
-func _on_stage_exit() -> void:
-    if _pending_match:
-        _pending_match = false
-        _launch_match()
-        return
-    if _sss_from == "css":
-        stage_panel.hide()
-        char_panel.show()
-        char_select.reopen()
-    else:
-        show_setup()
-
-func _launch_match() -> void:
-    var slots: Array = selection_state.to_slots()
-    stage_panel.hide()
-    if start_match(slots, selection_state.mode == 1, false, selection_state.stage):
-        char_panel.hide()
-        return
-    # Validation failed: back to the character page so the player can fix it.
-    char_panel.show()
-    char_select.reopen()
-
-func open_stage_select(focus_id: String) -> void:
-    var current: String = setup.selected_level()
-    show_setup()
-    setup.hide()
-    _sss_from = "debug"
-    _pending_match = false
-    var focus: String = focus_id if focus_id in SetupScript.LEVEL_IDS else current
-    stage_panel.show()
-    stage_select.open_with(current, focus)
-
-func _build_char_panel(layer: CanvasLayer) -> void:
-    # Character Select (CSS): the player-facing VS screen. It edits the
-    # persistent selection state; READY hands over to the stage page and the
-    # stage confirmation adapts the state into start_match().
-    char_panel = Control.new()
-    char_panel.name = "CharPanel"
-    char_panel.theme = DemoStyle.make()
-    char_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    layer.add_child(char_panel)
-    var shade := ColorRect.new()
-    shade.color = Color("273a37")
-    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    char_panel.add_child(shade)
-    char_select = (load("res://scenes/character_select.tscn") as PackedScene).instantiate()
-    char_select.name = "CharSelect"
-    char_panel.add_child(char_select)
-    var roster = load("res://scripts/roster.gd")
-    var cards: Array = []
-    for id in roster.ids():
-        cards.append({
-            "id": id,
-            "name": roster.display_name(id).to_upper(),
-            "palette": roster.palette(id, 0),
-        })
-    char_select.build(cards)
-    char_select.ready_requested.connect(_on_css_ready)
-    char_select.back_requested.connect(back_to_menu)
-    char_select.exit_finished.connect(_on_css_exit)
-    char_panel.hide()
-
-func open_vs() -> void:
-    # Player-facing VS entry: Character Select -> Stage Select -> match.
-    show_setup()
-    setup.hide()
-    _sss_from = "css"
-    _pending_match = false
-    selection_state = SelectionStateScript.new()
-    char_panel.show()
-    char_select.open_with(selection_state)
-
-func _on_css_ready() -> void:
-    if not char_select.ready_allowed():
-        return
-    char_select.play_exit()
-
-func _on_css_exit() -> void:
-    char_panel.hide()
-    _sss_from = "css"
-    _pending_match = false
-    stage_panel.show()
-    stage_select.open_with(selection_state.stage, selection_state.stage)
-
 func apply_level(id: String) -> void:
-    if id not in SetupScript.LEVEL_IDS: id = "debug"
+    # Gameplay stage application. The id arrives from the immutable launch
+    # snapshot (or the debug launcher's own model); unknown ids fall back to the
+    # debug arena exactly like before, validated against the shared catalog.
+    if not StageCatalog.has(id): id = "debug"
     if id == active_level: return
     if is_instance_valid(stage_theme):
         remove_child(stage_theme)
@@ -613,7 +525,11 @@ func _build_hud() -> void:
     layer.add_child(bobo_health_bar)
 
     var controls := Label.new()
-    controls.text = "P1: WASD / Space jump / F basic / G special / E shield    |    P2: Arrows / Enter jump / K basic / L special / O shield\nPad: stick aim / A jump / X basic / B special / shoulder shield    ·    Down: drop through    ·    Esc: match setup"
+    # The Esc destination is route-dependent: the debug launcher opens its own
+    # setup screen; a production arena (launch_config) has none and returns to
+    # Main (WP-0 steps 7-8 removed the in-arena setup screens).
+    var escape_hint := "match setup" if launch_config == null else "main menu"
+    controls.text = "P1: WASD / Space jump / F basic / G special / E shield    |    P2: Arrows / Enter jump / K basic / L special / O shield\nPad: stick aim / A jump / X basic / B special / shoulder shield    ·    Down: drop through    ·    Esc: %s" % escape_hint
     controls.name = "MatchControls"
     hud_controls = controls
     freeplay_controls = controls.text
@@ -732,18 +648,4 @@ func _physics_process(delta: float) -> void:
     elif go_remaining > 0:
         go_remaining = maxf(0,go_remaining-delta)
         if go_remaining == 0: ready_label.hide()
-
-func _leave_story() -> void:
-    # Esc during a Story encounter follows the player route Story -> Main (Doc
-    # 07 §15: no "MATCH SETUP" in the story flow). The other routes keep the
-    # shipped behaviour: VS -> character select (selections kept), debug
-    # launcher -> its setup screen.
-    if _story_encounter or _entry_mode == "story":
-        back_to_menu()
-        return
-    if _entry_mode == "vs":
-        char_panel.show()
-        char_select.reopen()
-        return
-    show_setup()
 

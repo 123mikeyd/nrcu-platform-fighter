@@ -38,10 +38,10 @@ static func entries() -> Array:
 			"enemy_display_name": "BOBO",
 			"enemy_hp": 400,
 			"enemy_hp_source": ENEMY_SOURCE,
-			# The encounter does not pin a stage today: start_story() launches with
-			# level "" so apply_level(setup.selected_level()) wins, and the fresh-boot
-			# setup default is the first LEVEL_IDS entry ("debug"). Recorded here as
-			# the effective default, not as an authored encounter stage.
+			# The encounter does not pin a stage today: the shipped story launch
+			# left the level to the host default, and the effective default is the
+			# first StageCatalog entry ("debug"). Recorded here as the effective
+			# default, not as an authored encounter stage.
 			"stage_mode": "host_selected",
 			"stage_id": "debug",
 			"objective": "Defeat Bobo.",

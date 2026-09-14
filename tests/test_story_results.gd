@@ -112,8 +112,8 @@ func run():
                 bolt2.freeze_bolt = true
                 retry.add_child(bolt2)
                 retry._unhandled_key_input(escape())
-                check(retry.setup.visible and retry.story_state == "" and not retry.match_over,
-                    "Esc exits the encounter to the gameplay hub without an active story state")
+                check(retry.setup == null and retry.story_state == "" and not retry.match_over,
+                    "Esc exits the encounter to Main (a production arena has no debug hub screen) without an active story state")
                 check(hero2.freeze_remaining == 0 and hero2.freeze_immunity == 0 and not hero2.controls_enabled,
                     "exit clears freeze and stops the human")
                 check(bolt2.is_queued_for_deletion(), "exit clears projectiles")

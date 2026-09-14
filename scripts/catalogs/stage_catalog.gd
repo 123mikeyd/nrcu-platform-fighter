@@ -7,7 +7,9 @@ extends RefCounted
 # Debug Match Setup both migrate onto it in later work packages.
 #
 # Provenance of every field (current source of truth):
-#   id              res://scripts/match_setup.gd LEVEL_IDS  ["debug","toy_room","sky"]
+#   id              the stage id list itself (superseded match_setup.LEVEL_IDS
+#                   in WP-0 step 8: this catalog is now the only source and the
+#                   debug setup consumes it directly)
 #   display_name    res://scripts/main.gd _build_stage_panel(): the production SSS
 #                   label is the setup option text up to " (" uppercased
 #   caption         res://scripts/match_setup.gd stage-card captions
@@ -24,11 +26,11 @@ extends RefCounted
 const THEME_SCRIPT := "res://scripts/stage_theme.gd"
 const DETAILS_SCRIPT := "res://scripts/stage_details.gd"
 const THUMBNAIL_DIR := "res://assets/menu/"
-const SETUP_SOURCE := "res://scripts/match_setup.gd#LEVEL_IDS"
-const SSS_SOURCE := "res://scripts/main.gd#_build_stage_panel"
+const SETUP_SOURCE := "res://scripts/match_setup.gd#_level_texts"
+const SSS_SOURCE := "res://scripts/match_flow.gd#_stage_slots"
 
 static func entries() -> Array:
-	# Fresh dictionaries on every call; order is match_setup.LEVEL_IDS order.
+	# Fresh dictionaries on every call; order is the shipped stage order.
 	return [
 		{
 			"id": "debug",
