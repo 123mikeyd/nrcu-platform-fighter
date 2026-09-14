@@ -554,11 +554,16 @@ func browse_survival_suite(vs, hand) -> void:
 #
 # WHY THIS SUITE EXISTS: the browse-survival cases assert the PERSISTENT commit
 # survives browsing, but never that the CHIP is still on its tile — so a lift on
-# hover passed them. Every case below drives the REAL MOUSE-HOVER path: a genuine
+# hover passed them.
+#
+# Every case below drives the REAL MOUSE-HOVER path: a genuine
 # InputEventMouseMotion into the engine's own dispatch (the viewport push, which
 # reaches the cursor service's `_input` callback) plus the tile's own
 # `mouse_entered` entry, the GUI entry a windowed run emits when the pointer
-# crosses the tile. The FOCUS path is exercised as well, but never as the proof.
+# crosses the tile — never the focus path. The focus/adopt path is covered at
+# chip level by the browse-survival journey above (the committed chip is
+# asserted PLACED across the whole focus traversal), because both paths ask the
+# SAME gate for the lift.
 
 func pointer_motion(hand, at: Vector2) -> void:
     # The engine's pointer-motion delivery: the viewport dispatch plus the
