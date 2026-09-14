@@ -21,6 +21,11 @@ extends RefCounted
 #           main.tscn loads, which keeps every existing test unchanged)
 static var enter_mode := "debug"
 
+# The MEANINGFUL entry device the Main Menu recorded when the player left for
+# the flow (Doc 01 §2 "input seeded from entry device"): "mouse_keyboard" or
+# "controller:<pad id>". MatchFlowState.fresh_vs() consumes it to seed P1.
+static var enter_device := "mouse_keyboard"
+
 # Story roster choice that survives a frontend scene change (Doc 02 §1/§4).
 static var story_fighter_id := "turbofit"
 

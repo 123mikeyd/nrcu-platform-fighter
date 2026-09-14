@@ -30,6 +30,19 @@ text = "HMN"
 
 [node name="SecondaryControls" type="Control" parent="."]
 
+[node name="InputRow" type="Control" parent="SecondaryControls"]
+
+[node name="InputLabel" type="Label" parent="SecondaryControls/InputRow"]
+text = "INPUT"
+
+[node name="InputControl" type="Button" parent="SecondaryControls/InputRow"]
+text = "KEYBOARD 1"
+
+[node name="CursorAnchor" type="Control" parent="SecondaryControls/InputRow/InputControl"]
+layout_mode = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+
 [node name="DifficultyRow" type="Control" parent="SecondaryControls"]
 
 [node name="DifficultyLabel" type="Label" parent="SecondaryControls/DifficultyRow"]

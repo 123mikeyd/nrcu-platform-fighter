@@ -167,6 +167,13 @@ func part_b_no_gameplay_while_configuring() -> void:
             violations.append("CSS state, frame %d" % i)
     check(violations.is_empty(), "no gameplay exists while configuring the CSS (%s)" % " | ".join(violations))
     check(host.gameplay_node() == null, "the host owns no destination yet")
+    # Locked fresh defaults (Doc 01 §2): no fighter is preselected and the ONE
+    # ready authority needs each active slot to own one — configure the
+    # minimal valid VS state through the screen's commit path before READY.
+    if not await vs.wait_css_ready(host, self):
+        check(false, "the CSS settled for configuration")
+    if not vs.configure(host, ["ggb", "ggb", "", ""]):
+        check(false, "the CSS accepted the configuration")
     var ready: bool = await vs.ready(host, self)
     check(ready, "READY pushes Stage Select (configuration continues)")
     violations.clear()

@@ -535,6 +535,10 @@ func _leave_to_match(mode: String) -> void:
         return
     _exiting = true
     AppStateScript.enter_mode = mode
+    # Doc 01 §2: the player-facing route seeds the fresh VS state from the
+    # MEANINGFUL device it was entered with (Keyboard 1 on mouse/keyboard, or
+    # the controller in the player's hands).
+    AppStateScript.enter_device = FrontendInput.entry_device()
     get_tree().auto_accept_quit = true
     # Doc 03 §21: the selected warm rail leads the destination transition.
     if _rows.size() > 0:

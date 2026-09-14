@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/frontend/segmented_choice.gd" id="1_seg"]
+
+[node name="SegmentedChoice" type="Control"]
+offset_right = 400.0
+offset_bottom = 42.0
+mouse_filter = 2
+script = ExtResource("1_seg")
+
+[node name="ActiveRule" type="Panel" parent="."]
+layout_mode = 0
+offset_top = 38.0
+offset_right = 212.0
+offset_bottom = 40.0
+mouse_filter = 2

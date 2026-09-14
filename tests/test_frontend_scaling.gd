@@ -50,6 +50,11 @@ func run():
     await process_frame
     # --- SSS: synthetic stage lists keep the tile/preview regions ---------
     var css2 = host.char_select()
+    # Locked fresh defaults (Doc 01 §2): no preselection, and the ONE ready
+    # authority requires every active slot to own a fighter — the minimal
+    # valid VS state (P1 Human + P2 CPU) opens the stage page.
+    host.selection_state.slots[0]["character"] = "ggb"
+    host.selection_state.slots[1]["character"] = "doge_man"
     css2.ready_requested.emit()
     var opened: bool = await vs.wait_for(self, func() -> bool: return host.is_surface_presented("sss"), 240)
     check(opened, "stage page opens through the production route")

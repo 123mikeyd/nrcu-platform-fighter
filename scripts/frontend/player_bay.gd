@@ -11,7 +11,8 @@ extends Control
 #                       color block (Doc 04 §9.1/§9.2)
 #   FighterRenderArea   hosts one FighterRenderView (render-on-change)
 #   FighterNamePlate    the only place the fighter name appears in the bay
-#   SecondaryControls   CPU difficulty row (CPU only) + team control (teams)
+#   SecondaryControls   Human input readout (Doc 04 §7) XOR CPU difficulty row,
+#                       + team control (teams)
 #   ActivePlayerMarker  slight material lift + ONE small warm notch — never a
 #                       full amber perimeter (Doc 04 §10)
 #   CursorAnchor        near the player header, not over the model/name
@@ -37,6 +38,7 @@ signal bay_activated(index: int)
 signal kind_clicked(index: int)
 signal difficulty_clicked(index: int)
 signal team_clicked(index: int)
+signal input_clicked(index: int)
 
 @onready var bay_plate: Panel = $BayPlate
 @onready var header: Control = $PlayerHeader
@@ -48,6 +50,9 @@ signal team_clicked(index: int)
 @onready var name_plate: Control = $FighterNamePlate
 @onready var fighter_name: Label = $FighterNamePlate/FighterName
 @onready var secondary: Control = $SecondaryControls
+@onready var input_row: Control = $SecondaryControls/InputRow
+@onready var input_label: Label = $SecondaryControls/InputRow/InputLabel
+@onready var input_control: Button = $SecondaryControls/InputRow/InputControl
 @onready var difficulty_row: Control = $SecondaryControls/DifficultyRow
 @onready var difficulty_label: Label = $SecondaryControls/DifficultyRow/DifficultyLabel
 @onready var difficulty_control: Button = $SecondaryControls/DifficultyRow/DifficultyControl
@@ -55,9 +60,10 @@ signal team_clicked(index: int)
 @onready var notch: Panel = $ActiveNotch
 @onready var _anchor: Control = $CursorAnchor
 # Nested state controls carry their OWN authored anchors (Doc 03 §6): the
-# kind/difficulty/team readouts are focusable Buttons, so each one must have a
-# hand target of its own instead of falling back to the bay's anchor.
+# kind/input/difficulty/team readouts are focusable Buttons, so each one must
+# have a hand target of its own instead of falling back to the bay's anchor.
 @onready var _kind_anchor: Control = $PlayerHeader/KindControl/CursorAnchor
+@onready var _input_anchor: Control = $SecondaryControls/InputRow/InputControl/CursorAnchor
 @onready var _difficulty_anchor: Control = $SecondaryControls/DifficultyRow/DifficultyControl/CursorAnchor
 @onready var _team_anchor: Control = $SecondaryControls/TeamControl/CursorAnchor
 
@@ -66,6 +72,8 @@ var kind := "human"
 var difficulty := "normal"
 var team := 0
 var mode := 0
+var input_text := ""              # quiet device readout (Doc 04 §7)
+var input_valid := true           # false = the Human slot cannot ready
 var _active := false
 var _render_view = null
 var _focus_rule: Panel = null
@@ -94,8 +102,11 @@ func _ready() -> void:
 	fighter_name.add_theme_font_size_override("font_size", Tokens.T_ACTION)
 	fighter_name.add_theme_color_override("font_color", Tokens.CREAM)
 	_style_state_button(kind_control, Tokens.T_META)
+	_style_state_button(input_control, Tokens.T_META)
 	_style_state_button(difficulty_control, Tokens.T_META)
 	_style_state_button(team_control, Tokens.T_META)
+	input_label.add_theme_font_size_override("font_size", Tokens.T_META)
+	input_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
 	difficulty_label.add_theme_font_size_override("font_size", Tokens.T_META)
 	difficulty_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
 	notch.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
@@ -108,6 +119,7 @@ func _ready() -> void:
 	_focus_rule.visible = false
 	header.add_child(_focus_rule)
 	kind_control.pressed.connect(func() -> void: kind_clicked.emit(index))
+	input_control.pressed.connect(func() -> void: input_clicked.emit(index))
 	difficulty_control.pressed.connect(func() -> void: difficulty_clicked.emit(index))
 	team_control.pressed.connect(func() -> void: team_clicked.emit(index))
 	resized.connect(_layout)
@@ -153,11 +165,13 @@ func setup(bay_index: int) -> void:
 		_render_view.set_profile(RenderView.PROFILE_PLAYER_BAY)
 	_layout()
 
-func set_slot_state(slot_kind: String, fighter_id := "", slot_name := "", slot_difficulty := "normal", slot_team := 0, slot_mode = 0) -> void:
+func set_slot_state(slot_kind: String, fighter_id := "", slot_name := "", slot_difficulty := "normal", slot_team := 0, slot_mode = 0, slot_input := "", slot_input_ok := true) -> void:
 	kind = slot_kind if KINDS.has(slot_kind) else "human"
 	difficulty = slot_difficulty
 	team = int(slot_team)
 	mode = 1 if _is_teams(slot_mode) else 0
+	input_text = str(slot_input)
+	input_valid = bool(slot_input_ok)
 	kind_control.text = KIND_LABELS.get(kind, "HMN")
 	fighter_name.text = slot_name.to_upper() if fighter_id != "" else ""
 	if _render_view != null:
@@ -171,6 +185,40 @@ func set_slot_state(slot_kind: String, fighter_id := "", slot_name := "", slot_d
 			_render_view.visible = false
 	_refresh_state()
 	_layout()
+
+func preview_fighter(fighter_id: String, slot_name: String, palette_index: int) -> void:
+	# Doc 04 §12 / ledger C-047: the active bay large-previews the CANDIDATE
+	# before commit, without touching the committed state. Cleared by the next
+	# set_slot_state() (the committed presentation).
+	if _render_view == null or fighter_id == "":
+		return
+	_render_view.visible = true
+	_render_view.set_subjects([fighter_id])
+	_render_view.set_palette(int(palette_index))
+	fighter_name.text = slot_name.to_upper()
+
+func presented_fighter() -> String:
+	# The fighter the bay currently PRESENTS (candidate while browsing, else the
+	# committed fighter) — the read the preview contract is asserted through.
+	if _render_view == null or not _render_view.visible:
+		return ""
+	var ids: Array[String] = _render_view.subjects()
+	return str(ids[0]) if ids.size() > 0 else ""
+
+func presented_palette() -> int:
+	return int(_render_view.palette_index()) if _render_view != null else 0
+
+func set_palette_variant(index: int) -> void:
+	# The RESOLVED duplicate-fighter variant (Doc 04 §14), applied to the
+	# bay's presentation so the preview matches gameplay and the snapshot.
+	if _render_view != null:
+		_render_view.set_palette(int(index))
+
+func input_readout() -> String:
+	return input_text
+
+func input_readout_valid() -> bool:
+	return input_valid
 
 func _is_teams(slot_mode) -> bool:
 	if typeof(slot_mode) == TYPE_STRING:
@@ -200,11 +248,22 @@ func team_control_visible() -> bool:
 	return team_control.visible
 
 func _refresh_state() -> void:
-	# CPU difficulty row: only for CPU. Team control: only in Team mode.
-	# An empty bay shows neither (Doc 04 §9.5/§9.6/§23).
-	# A hidden state control is NOT focusable (Doc 03 §6: nothing keeps focus on
-	# a control the player can no longer see); the screen's focus recovery then
-	# moves the logical focus to the surviving neighbour.
+	# Doc 04 §6: kind transitions own their controls, and never a hidden
+	# processor keeps focus (Doc 03 §6).
+	#   HMN   -> quiet input readout (Doc 04 §7 device assignment);
+	#   CPU   -> difficulty row visible, input assignment hidden;
+	#   EMPTY -> neither (the bay recedes).
+	# A Human slot whose device assignment is invalid (P3/P4 with no connected
+	# pad, or a disconnected pad) explicitly reads CONNECT CONTROLLER and stays
+	# out of the Ready gate (the ONE validation authority decides that).
+	input_row.visible = kind == "human"
+	input_control.focus_mode = Control.FOCUS_ALL if input_row.visible else Control.FOCUS_NONE
+	input_control.text = input_text
+	var input_color: Color = Tokens.CREAM if input_valid else Tokens.ACCENT
+	input_control.add_theme_color_override("font_color", input_color)
+	input_control.add_theme_color_override("font_hover_color", input_color)
+	input_control.add_theme_color_override("font_pressed_color", input_color)
+	input_control.add_theme_color_override("font_focus_color", input_color)
 	difficulty_row.visible = kind == "bot"
 	difficulty_control.focus_mode = Control.FOCUS_ALL if difficulty_row.visible else Control.FOCUS_NONE
 	difficulty_control.text = difficulty.to_upper()
@@ -244,6 +303,12 @@ func _layout() -> void:
 	secondary.position = Vector2(INSET, s.y - SECONDARY_H - 2.0)
 	secondary.size = Vector2(maxf(s.x - INSET * 2.0, 24.0), SECONDARY_H)
 	var half := maxf((secondary.size.x - 6.0) * 0.5, 40.0)
+	input_row.position = Vector2.ZERO
+	input_row.size = Vector2(half, SECONDARY_H)
+	input_label.position = Vector2(0.0, (SECONDARY_H - 18.0) * 0.5)
+	input_label.size = Vector2(38.0, 18.0)
+	input_control.position = Vector2(40.0, 1.0)
+	input_control.size = Vector2(maxf(half - 40.0, 40.0), SECONDARY_H - 2.0)
 	difficulty_row.position = Vector2.ZERO
 	difficulty_row.size = Vector2(half, SECONDARY_H)
 	difficulty_label.position = Vector2(0.0, (SECONDARY_H - 18.0) * 0.5)
@@ -263,16 +328,20 @@ func _layout() -> void:
 	# the control's lower-left (measured from the control, so the placement
 	# survives any bay size).
 	_kind_anchor.place_at(Vector2(-8.0, kind_control.size.y - 4.0))
+	_input_anchor.place_at(Vector2(-8.0, input_control.size.y - 4.0))
 	_difficulty_anchor.place_at(Vector2(-8.0, difficulty_control.size.y - 4.0))
 	_team_anchor.place_at(Vector2(team_control.size.x + 8.0, team_control.size.y - 4.0))
 
 # --- nested state controls (Doc 03 §6/§13) ----------------------------------
 
 func state_control(role: String) -> Button:
-	# The bay's own semantic controls, addressed by role.
+	# The bay's own semantic controls, addressed by role. "device" is the quiet
+	# Human input-assignment readout (Doc 04 §7).
 	match role:
 		"kind":
 			return kind_control
+		"device":
+			return input_control
 		"difficulty":
 			return difficulty_control
 		"team":
@@ -283,6 +352,8 @@ func state_anchor(role: String) -> Control:
 	match role:
 		"kind":
 			return _kind_anchor
+		"device":
+			return _input_anchor
 		"difficulty":
 			return _difficulty_anchor
 		"team":
@@ -294,7 +365,7 @@ func state_controls() -> Array:
 	# internal focus chain is built from exactly this list, so a hidden control
 	# can never be a neighbour.
 	var out: Array = []
-	for role in ["kind", "difficulty", "team"]:
+	for role in ["kind", "device", "difficulty", "team"]:
 		var control := state_control(role)
 		if control != null and control.visible:
 			out.append(control)
@@ -302,7 +373,7 @@ func state_controls() -> Array:
 
 func state_roles() -> Array:
 	var out: Array = []
-	for role in ["kind", "difficulty", "team"]:
+	for role in ["kind", "device", "difficulty", "team"]:
 		var control := state_control(role)
 		if control != null and control.visible:
 			out.append(role)

@@ -39,9 +39,14 @@ extends RefCounted
 #                         model adds NO_TEAM (-1) for "unset".
 #   slots[i].input_source legacy slot["device"] (-1 = "no pad": Keyboard 1/2 on
 #                         P1/P2 and "Gamepad required" on P3/P4; >= 0 = pad id).
-#   slots[i].palette_index  resolved presentation variant; the current runtime
-#                         resolves it from the slot index (roster.palette(id,
-#                         slot_index)), so a fresh slot records its own index.
+#   slots[i].palette_index  resolved presentation variant. Resolved by
+#                         MatchFlowState.resolve_palettes() before anything
+#                         downstream reads it (Doc 04 §14: the same resolved
+#                         variant appears in the PlayerBay preview, gameplay and
+#                         the Results snapshot); a fresh slot records its own
+#                         index until resolution runs, and the legacy mirror
+#                         may carry a resolved value in its own "palette_index"
+#                         key.
 #   stage_id              legacy stage (Stage Select writes it on confirm).
 #   story_encounter_id / origin / return_stack: no legacy counterpart — the VS
 #                         selection state carries none of them (see the adapter
@@ -246,19 +251,26 @@ static func fresh_vs(entry_device: String = ENTRY_MOUSE_KEYBOARD) -> RefCounted:
 	# Doc 01 §2 fresh VS defaults: P1 HUMAN / no fighter / input seeded from the
 	# entry device, P2 CPU / no fighter / NORMAL, P3 EMPTY, P4 EMPTY. Nothing is
 	# preselected; returning from SSS/Results restores a state instead.
+	#
+	# Team ids follow the shipped station distribution (MatchConfig
+	# .default_slots(): slot index parity A/B/A/B). FFA does not use them
+	# (Doc 01 §3) while Team mode needs both sides represented — and gameplay's
+	# launch-side validator (match_config.validate) requires an active slot to
+	# carry Team A or B in every mode, so a fresh state that left them unset
+	# could never launch.
 	var flow = _blank()
 	flow.mode = Mode.FFA
+	for i in SLOT_COUNT:
+		flow.slots[i].team_id = i % 2
 	var p1 = flow.slots[0]
 	p1.kind = Kind.HUMAN
 	p1.fighter_id = ""
 	p1.difficulty = DEFAULT_DIFFICULTY
-	p1.team_id = NO_TEAM
 	p1.input_source = input_source_for_entry_device(entry_device, flow.connected_pads)
 	var p2 = flow.slots[1]
 	p2.kind = Kind.CPU
 	p2.fighter_id = ""
 	p2.difficulty = DEFAULT_DIFFICULTY
-	p2.team_id = NO_TEAM
 	p2.input_source = no_input_source()
 	return flow
 
@@ -322,6 +334,36 @@ static func input_source_for_entry_device(entry_device: String, connected_pads: 
 				return pad_source(pad_index)
 		return keyboard_source(1)
 	return no_input_source()
+
+# --- palette resolution (Doc 04 §14) ---------------------------------------
+
+static func resolve_palette_variant(fighter_ids: Array, for_index: int) -> int:
+	# The resolved presentation variant of slot `for_index`: the occurrence count
+	# of its fighter among the slots BEFORE it (in slot order). This is exactly
+	# the rule gameplay applies at match start (main.gd palette_counts: skip
+	# empty slots, first occurrence keeps variant 0, each duplicate gets the
+	# next one), so the PlayerBay preview, the launch snapshot and gameplay can
+	# never disagree about a fighter's appearance.
+	if for_index < 0 or for_index >= fighter_ids.size():
+		return 0
+	var id := str(fighter_ids[for_index])
+	if id == "":
+		return 0
+	var variant := 0
+	for i in for_index:
+		if str(fighter_ids[i]) == id:
+			variant += 1
+	return variant
+
+func resolve_palettes() -> void:
+	# Resolve every participating slot's palette_index in MatchFlowState, BEFORE
+	# anything downstream (launch snapshot / preview) reads it (Doc 04 §14).
+	var ids: Array = []
+	for entry in slots:
+		var station: Slot = entry
+		ids.append(str(station.fighter_id) if station.participates() else "")
+	for i in slots.size():
+		slots[i].palette_index = resolve_palette_variant(ids, i)
 
 # --- device availability --------------------------------------------------
 
@@ -526,6 +568,10 @@ static func from_selection_state(state) -> RefCounted:
 		station.difficulty = str(raw.get("difficulty", DEFAULT_DIFFICULTY))
 		station.team_id = int(raw.get("team", NO_TEAM))
 		station.input_source = input_source_from_legacy_device(i, int(raw.get("device", LEGACY_NO_DEVICE)))
+		# A mirror that carries a RESOLVED palette_index (Doc 04 §14 resolution,
+		# written by the flow) keeps it; a legacy slot without the field still
+		# resolves from its own index, exactly as before.
+		station.palette_index = int(raw.get("palette_index", i))
 	flow._apply_connected_pads()
 	return flow
 

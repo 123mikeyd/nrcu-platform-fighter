@@ -42,6 +42,12 @@ const SOURCE_MOUSE := "mouse"
 const SOURCE_KEYBOARD := "keyboard"
 const SOURCE_PAD := "pad"
 
+# Doc 01 §2 entry-device vocabulary (the same strings MatchFlowState consumes):
+# the MEANINGFUL device a route is entered with — "mouse_keyboard" or
+# "controller:<pad id>".
+const ENTRY_MOUSE_KEYBOARD := "mouse_keyboard"
+const ENTRY_CONTROLLER_PREFIX := "controller:"
+
 const AnalogNavGate := preload("res://scripts/frontend/analog_nav_gate.gd")
 
 const NAV_ACTIONS := [&"ui_up", &"ui_down", &"ui_left", &"ui_right"]
@@ -54,6 +60,7 @@ var _gate = AnalogNavGate.new()
 var _stick := Vector2.ZERO
 var _confirm_source := SOURCE_KEYBOARD
 var _consume_confirm := Callable()
+var _entry_device := ENTRY_MOUSE_KEYBOARD
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS   # Pause keeps Esc/Start reachable
@@ -103,6 +110,7 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
+		_record_entry_device(event)
 		if mouse.button_index == MOUSE_BUTTON_LEFT:
 			_emit_confirm(mouse.pressed, SOURCE_MOUSE)
 		return
@@ -110,6 +118,8 @@ func _input(event: InputEvent) -> void:
 		var key := event as InputEventKey
 		if key.echo:
 			return
+		if key.pressed and is_meaningful_frontend_input(event):
+			_record_entry_device(event)
 		if InputMap.event_is_action(event, "ui_accept"):
 			_emit_confirm(key.pressed, SOURCE_KEYBOARD)
 		elif key.pressed and InputMap.event_is_action(event, "ui_cancel"):
@@ -119,6 +129,10 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventJoypadButton:
 		var button := event as InputEventJoypadButton
+		if button.pressed:
+			# Doc 01 §2: the LAST MEANINGFUL device is what a route is entered
+			# with; a pad press records the pad the player is actually holding.
+			_entry_device = ENTRY_CONTROLLER_PREFIX + str(button.device)
 		if button.button_index == JOY_BUTTON_A:
 			_emit_confirm(button.pressed, SOURCE_PAD)
 		elif button.pressed and button.button_index == JOY_BUTTON_B:
@@ -133,6 +147,17 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadMotion:
 		_handle_stick(event as InputEventJoypadMotion)
 		return
+
+func _record_entry_device(event: InputEvent) -> void:
+	# Mouse or keyboard input means the mouse/keyboard is the entry device.
+	if event is InputEventMouseButton or (event is InputEventKey and (event as InputEventKey).pressed):
+		_entry_device = ENTRY_MOUSE_KEYBOARD
+
+func entry_device() -> String:
+	# Doc 01 §2: "mouse/keyboard -> seed P1 as Keyboard 1; a controller -> seed
+	# P1 to that controller". A frontend entry that has not recorded a device
+	# reads as the mouse/keyboard default.
+	return _entry_device
 
 func _route_gameplay_escape(event: InputEvent) -> void:
 	# The one frontend event that survives gameplay scope: opening Pause.

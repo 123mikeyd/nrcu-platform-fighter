@@ -7,6 +7,7 @@ extends SceneTree
 # owns CSS -> READY -> SSS, its confirm LAUNCHes gameplay from the immutable
 # MatchLaunchConfig, and its Back POPs the SSS back to the CSS. Debug-adapter
 # coverage lives in tests/test_debug_match_setup.gd.
+const StageCatalog = preload("res://scripts/catalogs/stage_catalog.gd")
 var failures := 0
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
@@ -20,6 +21,11 @@ func run():
     # --- production entry: Main -> CSS -> READY -> SSS ---------------------
     var css = host.char_select()
     check(css != null, "character select exists")
+    # Locked fresh defaults (Doc 01 §2): NO fighter is preselected and the ONE
+    # ready authority (ledger C-002) requires every active slot to own one —
+    # build the minimal valid VS state (P1 Human + P2 CPU) before READY.
+    host.selection_state.slots[0]["character"] = "ggb"
+    host.selection_state.slots[1]["character"] = "doge_man"
     css.ready_requested.emit()
     # Poll for the SSS to open, then inspect the ENTRY window immediately:
     # the scene-start guard is active and the tiles are still parked/flying.
@@ -46,7 +52,16 @@ func run():
     await create_timer(0.7).timeout
     for i in tiles.size():
         check(tiles[i].position.x + 170.0 < vw, "tile %d flew into view" % i)
-    check(stage.get_hovered_id() == str(host.selection_state.stage), "entry hovers the stored stage")
+    # Locked fresh defaults (Doc 01 §2): a fresh VS records NO stage — the
+    # persistent stage is written by a stage confirm/launch — so the SSS opens
+    # deterministically on the FIRST SELECTABLE stage (never a right-seeded
+    # hidden value), and entering never mutates the stored one.
+    var stored_stage := str(host.selection_state.stage)
+    var expected_hover := stored_stage
+    if expected_hover == "":
+        expected_hover = str(StageCatalog.selectable_ids()[0])
+    check(stage.get_hovered_id() == expected_hover,
+        "entry hovers the stored stage (the first selectable when the state records none)")
     check(stage.get_box_visible(), "highlight box sits on the hovered tile")
     var preview = stage.find_child("StagePreview", true, false)
     check(preview != null and preview is TextureRect, "the preview region is its own TextureRect")
@@ -126,7 +141,7 @@ func run():
     tiles[first].pressed.emit()
     check(stage.get_hovered_id() == confirmed_id, "first press previews the stage")
     check(stage.get_confirmed_id() == "", "hovering never commits the stage")
-    check(str(host.selection_state.stage) == "debug", "hover does not mutate the persistent stage")
+    check(str(host.selection_state.stage) == stored_stage, "hover does not mutate the persistent stage")
     tiles[first].pressed.emit()
     check(stage.get_confirmed_id() == confirmed_id, "second press confirms")
     check(stage.is_confirming(), "confirm lock engaged")
@@ -155,6 +170,7 @@ func run():
     var host2 = await vs.enter(self)
     var css2 = host2.char_select()
     host2.selection_state.slots[0]["character"] = "ggb"
+    host2.selection_state.slots[1]["character"] = "doge_man"
     css2.ready_requested.emit()
     var opened2: bool = await vs.wait_for(self, func() -> bool: return host2.is_surface_presented("sss"), 240)
     check(opened2, "stage page opens again")

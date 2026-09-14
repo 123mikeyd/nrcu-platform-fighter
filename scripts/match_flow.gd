@@ -354,12 +354,14 @@ func open_vs(origin: String = "") -> void:
     _open_vs(origin)
 
 func _open_vs(origin: String) -> void:
-    # Fresh VS configuration: the typed state is built through the adapters from
-    # the shipped selection state, so the shipped defaults (P1 Human + CPU
-    # stations) and the produced MatchLaunchConfig stay identical to the old
-    # path while the typed object becomes the authority.
+    # Fresh VS configuration (Doc 01 §2): P1 HUMAN / no fighter / input seeded
+    # from the entry device, P2 CPU / no fighter / NORMAL, P3/P4 EMPTY — and NO
+    # fighter preselected anywhere. Returning from SSS/Results restores the
+    # preserved MatchFlowState instead of re-applying these defaults (the POP
+    # path re-enters the same state; the post-match path rebuilds from the
+    # immutable snapshot).
     _mode = MODE_VS
-    flow = StateScript.from_selection_state(SelectionStateScript.new())
+    flow = StateScript.fresh_vs(_entry_device())
     flow.origin = origin if origin != "" else ORIGIN_MAIN
     flow.push_return(flow.origin)
     selection_state = flow.to_selection_state()
@@ -370,6 +372,20 @@ func _open_vs(origin: String) -> void:
     set_input_scope(INPUT_SCOPE_FRONTEND)
     prepare_fresh_entry(SURFACE_CSS)
     play_entry(SURFACE_CSS)
+
+func _entry_device() -> String:
+    # Doc 01 §2: Play entered with mouse/keyboard -> Keyboard 1; entered with a
+    # controller -> that controller. The Main Menu records the meaningful entry
+    # device in AppState (the cross-scene channel); the semantic input service
+    # holds the same fact, so an entry that did not pass through Main still
+    # seeds from the device the player is actually holding.
+    var recorded := str(AppStateScript.enter_device)
+    if recorded != "" and recorded != StateScript.ENTRY_MOUSE_KEYBOARD:
+        return recorded
+    var service_device := str(FrontendInput.entry_device())
+    if service_device != "":
+        return service_device
+    return StateScript.ENTRY_MOUSE_KEYBOARD
 
 func open_story(result: String = "") -> void:
     _open_story(result)
@@ -666,8 +682,16 @@ func play_entry(surface_name: String, _context: Dictionary = {}) -> void:
                 return
             _show_surface(SURFACE_SSS)
             # Stage Select opens against the state's stage (the shipped
-            # current/focus pair) — never a hidden setup control.
-            _sss.open_with(str(flow.stage_id), str(flow.stage_id))
+            # current/focus pair) — never a hidden setup control. A state that
+            # records no stage yet (fresh VS: the stage is NOT part of the locked
+            # fresh defaults) opens deterministically on the first selectable
+            # stage, so the field is focused, the preview live and confirm
+            # reachable. The SSS still owns the selection it launches with.
+            var seed_id := str(flow.stage_id)
+            if seed_id == "":
+                var selectable: Array = StageCatalog.selectable_ids()
+                seed_id = str(selectable[0]) if not selectable.is_empty() else ""
+            _sss.open_with(seed_id, seed_id)
         SURFACE_STORY:
             if _briefing == null:
                 return
@@ -891,6 +915,10 @@ func _sync_flow_from_screen() -> void:
     flow.origin = origin
     flow.return_stack = stack
     flow.story_encounter_id = story_id
+    # Doc 04 §14: the duplicate-fighter palette variants are resolved in
+    # MatchFlowState, so the launch snapshot can never disagree with the
+    # PlayerBay preview about a fighter's appearance.
+    flow.resolve_palettes()
 
 func _leave_to_home() -> void:
     set_input_scope(INPUT_SCOPE_FRONTEND)

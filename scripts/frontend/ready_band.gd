@@ -23,7 +23,11 @@ const BAND_HEIGHT := 64.0           # shallow transition band between roster and
 const END_CLIP := 8.0              # shallow 6-10 px angled ends
 const RAIL_H := 3.0                # one warm underside rail
 const READY_TEXT_SIZE := 34        # type role SCREEN (28-34), Doc 08
-const ENTRANCE_FRAMES := 14        # 1-shot entrance, then stable (60 Hz)
+# Doc 04 §9 / Doc 08 §7: the entrance duration is TIME-based, never a render
+# frame count — the same authored duration at 30/60/120+ Hz. ENTRANCE_FRAMES is
+# the authored 60 Hz equivalent the reference capture was tuned at.
+const ENTRANCE_FRAMES := 14
+const ENTRANCE_SECONDS := 14.0 / 60.0
 const ENTRANCE_RISE := 8.0
 
 signal ready_pressed()
@@ -32,7 +36,7 @@ signal ready_pressed()
 @onready var _anchor: Control = $CursorAnchor
 
 var _shown := false
-var _entrance := 0
+var _entrance := 0.0
 var _text_rest := Vector2.ZERO
 var _focus_rule: Panel = null
 
@@ -89,12 +93,12 @@ func show_band() -> void:
 	visible = true
 	modulate.a = 0.0
 	ready_text.position = _text_rest + Vector2(0.0, ENTRANCE_RISE)
-	_entrance = ENTRANCE_FRAMES
+	_entrance = ENTRANCE_SECONDS
 	set_process(true)
 
 func hide_band() -> void:
 	_shown = false
-	_entrance = 0
+	_entrance = 0.0
 	set_process(false)
 	modulate.a = 1.0
 	visible = false
@@ -104,7 +108,12 @@ func is_shown() -> bool:
 	return _shown
 
 func entrance_frames() -> int:
+	# The authored 60 Hz equivalent of the time-based entrance (Doc 04 §9: the
+	# REAL duration is entrance_seconds(), never a frame count).
 	return ENTRANCE_FRAMES
+
+func entrance_seconds() -> float:
+	return ENTRANCE_SECONDS
 
 func apply_reference_width(reference_width: float) -> void:
 	size = Vector2(reference_width * BAND_WIDTH_RATIO, BAND_HEIGHT)
@@ -119,14 +128,14 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 func _process(delta: float) -> void:
-	if _entrance <= 0:
+	if _entrance <= 0.0:
 		set_process(false)
 		return
-	_entrance -= 1
-	var t := 1.0 - float(_entrance) / float(ENTRANCE_FRAMES)
+	_entrance = maxf(_entrance - delta, 0.0)
+	var t := 1.0 - _entrance / ENTRANCE_SECONDS
 	modulate.a = clampf(t * 1.25, 0.0, 1.0)
 	ready_text.position = _text_rest + Vector2(0.0, ENTRANCE_RISE * (1.0 - t))
-	if _entrance <= 0:
+	if _entrance <= 0.0:
 		# Stable from here on: no continuous pulsing (Doc 04 §19).
 		modulate.a = 1.0
 		ready_text.position = _text_rest

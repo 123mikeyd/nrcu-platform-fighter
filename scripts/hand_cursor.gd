@@ -24,9 +24,10 @@ extends Control
 # asked for pointer control) with a short pose settle, never a slow fly.
 #
 # Pose semantics: point = ordinary navigation; press = click/confirm; carry =
-# grab pose + a separate PlayerTokenView owned by the screen and attached into
-# this layer (`set_carry`). The baked hand_carry sprite is retired from
-# production use.
+# the clean grab/pinch pose (hand_grab) + a separate PlayerTokenView owned by
+# the screen and attached into this layer (`set_carry`). The baked hand_carry
+# sprite is RETIRED from the carry path (Doc 01 §5, ledger C-008, G-031): the
+# carry pose and the per-player token are separate objects.
 #
 # Hover arming (§3): a stationary pointer does not drive semantic hover on a
 # newly entered screen or under a newly appearing control until genuine mouse
@@ -65,17 +66,24 @@ const AnalogNavGate = preload("res://scripts/frontend/analog_nav_gate.gd")
 
 const HAND_SCALE := 0.33
 const TIP_POINT := Vector2(15.5, 1.0)
-const TIP_CARRY := Vector2(67.5, 32.0)   # approved baked carry pose's anchor
 const TIP_GRAB := Vector2(50.0, 1.0)
 const TIP_PRESS := Vector2(49.0, 22.0)
-# Where a carried token sits relative to the fingertip (texture space), so it
-# reads as held between the fingers of the grab pose.
-# Carried token CENTER relative to the hotspot. Derived from the retired baked
-# carry pose ((CHIP_TEX_POS 35.5,34.0 - TIP_CARRY 67.5,32.0) * 0.33) and then
-# The token slot renders BELOW the hand, so the fingers overlap the token
-# exactly like the artist's reference composition (fingers in front of the
-# coin).
-const CARRY_CENTER := Vector2(-10.6, 0.7)
+# Where the carried token sits relative to the hotspot (local space, i.e. the
+# same space `_hand.position`/`_token_slot.position` live in). The carry pose
+# is the CLEAN grab/pinch hand (hand_grab) and the token is a SEPARATE
+# per-player PlayerTokenView the screen owns (Doc 01 §5 "the hand art and the
+# token are separate"; Doc 04 §4 token ownership: TokenHomeLayer /
+# CursorCarryLayer / FighterTile token layer). No player identity is baked into
+# hand art (forensic ledger C-008).
+#
+# Derivation: in the approved carry reference composition the coin's centre
+# sits in the pinch pocket of the grab pose, at texture (50.5, 32.5) of
+# hand_grab.png, i.e. (0.5, 31.5) texture px from the pose anchor TIP_GRAB
+# (50.0, 1.0); x 0.33 (HAND_SCALE) is the on-screen offset of the token's
+# CENTRE from the hotspot. The token slot is a sibling BELOW the hand node, so
+# the gripping fingers draw over the token exactly like the reference
+# (fingers in front of the coin), never the token over the fingers.
+const CARRY_CENTER := Vector2(0.17, 10.4)
 
 var targets: Array[Control] = []
 var hovered: Control = null
@@ -105,7 +113,6 @@ var _carry_offset := Vector2.ZERO
 var _tex_point: Texture2D
 var _tex_grab: Texture2D
 var _tex_press: Texture2D
-var _tex_carry: Texture2D
 var _hand: Control
 var _token_slot: Control
 
@@ -117,19 +124,16 @@ func _ready() -> void:
     _hand.name = "HandVisual"
     _hand.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _hand.draw.connect(_draw_hand)
+    # CursorCarryLayer (Doc 04 §4): the ONE temporary parent of a carried token,
+    # a sibling BELOW the hand so the gripping fingers overlap the token.
     _token_slot = Control.new()
-    _token_slot.name = "CarriedToken"
+    _token_slot.name = "CursorCarryLayer"
     _token_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(_token_slot)   # below the hand: fingers overlap the carried token
+    add_child(_token_slot)
     add_child(_hand)
     _tex_point = load("res://assets/ui/hand_point.png")
     _tex_grab = load("res://assets/ui/hand_grab.png")
     _tex_press = load("res://assets/ui/hand_press.png")
-    # The carry pose is the APPROVED BAKED sprite (hand + coin as one image,
-    # pixel-identical to the artist's Krita reference). Layering the coin under
-    # the hand was tried and abandoned together with William — the bake is the
-    # robust result and must not be replaced by a runtime composite.
-    _tex_carry = load("res://assets/ui/hand_carry.png")
     var vp := get_viewport()
     if vp != null:
         _mouse = vp.get_mouse_position()
@@ -142,6 +146,11 @@ func begin_screen(_screen_id: String) -> void:
     # never forces modality, never snaps the rendered hand.
     clear_hover()
     _hover_armed = false
+    # A token that died with its screen can never stay carried: token ownership
+    # belongs to the screen (Doc 04 §4), so a dead reference is dropped here —
+    # there are no hidden cursor-owned tokens.
+    if _carrying_token != null and not is_instance_valid(_carrying_token):
+        clear_carry()
     if mode == Mode.FOCUS and _focus_anchor == null:
         # Focus continues across the transition only if the new screen sets a
         # focus target (authored default selection).
@@ -234,19 +243,24 @@ func set_scope(next_scope: String) -> void:
 func set_carry(token: Control = null) -> void:
     # `token` is the screen-owned PlayerTokenView. A legacy caller may pass
     # nothing (carry pose only); the production CSS always passes its token.
+    # One token object exists visually, in the CursorCarryLayer while carried
+    # (Doc 01 §5, ledger C-008: no baked identity, no contradictory visibility).
     _carrying_token = token
     if token != null:
         if token.get_parent() != _token_slot:
             token.reparent(_token_slot)
-        var ts := token.size
-        if ts.x <= 0.0:
-            ts = Vector2(26.0, 26.0)
-        token.position = CARRY_CENTER - ts * 0.5
-        # The baked carry sprite carries the coin in its art; the particle
-        # token object keeps its state but does not draw on top of the hand.
-        token.visible = _tex_carry == null
+        token.position = CARRY_CENTER - token_size(token) * 0.5
         token.visible = true
     set_visual_mode(Visual.CARRY)
+
+func token_size(token: Control) -> Vector2:
+    # PlayerTokenView carries its reference size in the scene (22-28 px family,
+    # Doc 04 §13); a caller that hands over an unsized Control still gets a
+    # centred carry placement instead of a half-offset one.
+    var s := token.size
+    if s.x <= 0.0 or s.y <= 0.0:
+        return Vector2(26.0, 26.0)
+    return s
 
 func clear_carry() -> void:
     _carrying_token = null
@@ -386,18 +400,17 @@ func is_pressing() -> bool:
 func active_texture() -> Texture2D:
     if is_pressing() and _tex_press != null:
         return _tex_press
-    if visual == Visual.CARRY:
-        if _tex_carry != null:
-            return _tex_carry
-        if _tex_grab != null:
-            return _tex_grab
+    if visual == Visual.CARRY and _tex_grab != null:
+        # The carry pose is the clean grab/pinch hand; the per-player token is
+        # the separate object in the CursorCarryLayer (Doc 01 §5).
+        return _tex_grab
     return _tex_point
 
 func active_tip() -> Vector2:
     if is_pressing():
         return TIP_PRESS
     if visual == Visual.CARRY:
-        return TIP_CARRY if _tex_carry != null else TIP_GRAB
+        return TIP_GRAB
     return TIP_POINT
 
 func _draw_hand() -> void:

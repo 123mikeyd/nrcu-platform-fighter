@@ -76,6 +76,68 @@ func claim_focus_mode() -> void:
     Input.parse_input_event(key_event(KEY_DOWN, false))
     await frames(2)
 
+# --- public-input configuration helpers (CSS) --------------------------------
+# The locked fresh defaults preselect NO fighter and start below the two-active
+# minimum, so a route needs a configuration built the way a player builds it:
+# semantic accept on a station (activates it) and on a roster tile (commits).
+
+func semantic_activate(control: Control) -> void:
+    control.grab_focus()
+    await frames(2)
+    Input.parse_input_event(key_event(KEY_ENTER, true))
+    await frames(3)
+    Input.parse_input_event(key_event(KEY_ENTER, false))
+    await frames(2)
+
+func css_set_kind(css: Control, player_index: int, kind: String) -> bool:
+    # The station kind cycles through the bay's own kind control (its public
+    # button path), never a private screen helper.
+    var bay: Control = css.get_bays()[player_index - 1]
+    for _press in 3:
+        if str(bay.kind) == kind:
+            return true
+        (bay.state_control("kind") as Button).pressed.emit()
+        await frames(2)
+    return str(bay.kind) == kind
+
+func css_commit(css: Control, player_index: int, fighter_id: String) -> bool:
+    await semantic_activate(css.get_bays()[player_index - 1])
+    if css.get_active() != player_index - 1:
+        return false
+    var tile: Control = null
+    for t in css.get_tiles():
+        if str(t.fighter_id) == fighter_id:
+            tile = t
+            break
+    if tile == null:
+        return false
+    await semantic_activate(tile)
+    await frames(6)
+    return str(css._state.slots[player_index - 1].get("character", "")) == fighter_id
+
+func css_configure_route(css: Control) -> bool:
+    # P1 Human (doge_man) + P2 CPU (ggb): the fresh-default station kinds with
+    # fighters committed — >= 2 active and >= 1 Human.
+    if not await css_commit(css, 1, "doge_man"):
+        return false
+    if not await css_commit(css, 2, "ggb"):
+        return false
+    return css.ready_allowed()
+
+func css_ensure_valid(css: Control) -> bool:
+    # Rebuilds the valid configuration after the invalidating recovery rows —
+    # station kinds first, then the missing fighters, all through public input.
+    var kinds := ["human", "bot", "empty", "empty"]
+    for i in 4:
+        if not await css_set_kind(css, i + 1, kinds[i]):
+            return false
+    for i in 2:
+        if str(css._state.slots[i].get("character", "")) == "":
+            var id := "doge_man" if i == 0 else "ggb"
+            if not await css_commit(css, i + 1, id):
+                return false
+    return css.ready_allowed()
+
 func enter_focus(control: Control) -> void:
     # Focus-enter as the engine's focus navigation performs it. The screens'
     # own focus_entered handlers must then establish logical focus, control
@@ -352,11 +414,21 @@ func run():
     check_edge("css", bay_kind, &"top", bays[0], "the first control's up exits into the bay")
     check_edge("css", bay_kind, &"left", bays[0], "horizontal stays inside the bay (exit into the bay)")
     check_edge("css", bay_kind, &"right", bays[0], "horizontal stays inside the bay (exit into the bay)")
-    check_edge("css", tiles[0], &"bottom", css.get_ready_band(),
-        "the bottom roster row reaches the Ready band while it is shown")
     await check_nav("css", tiles[0], KEY_RIGHT, tiles[1], "ui_right walks the roster")
     await check_nav("css", bays[0], KEY_DOWN, bay_kind, "ui_down enters the station's state controls")
     await check_nav("css", bay_kind, KEY_LEFT, bays[0], "the horizontal exit leaves the state controls for the bay")
+
+    # --- public-input configuration (locked fresh defaults are NOT ready) ---
+    # Doc 01 §2: nothing is preselected, so the fresh screen cannot ready yet.
+    # The route below needs a valid configuration, and it is built exactly the
+    # way the player builds it: semantic accept on the stations and the tiles.
+    check(not css.ready_allowed(), "the fresh CSS is not ready (no fighter is preselected)")
+    var p1_committed: bool = await css_commit(css, 1, "doge_man")
+    var p2_committed: bool = await css_commit(css, 2, "ggb")
+    check(p1_committed and p2_committed, "fighters commit through the public semantic path")
+    check(css.ready_allowed(), "P1 Human + P2 CPU with fighters passes the ONE authority")
+    check_edge("css", tiles[0], &"bottom", css.get_ready_band(),
+        "the bottom roster row reaches the Ready band while it is shown")
 
     # --- §6 rear contract on CSS: a focused control that disappears ---------
     # The CPU difficulty row belongs to CPU stations only. Focusing it and
@@ -387,16 +459,12 @@ func run():
                     (bay.state_control("kind") as Button).pressed.emit()
         await record_recovery("css", band, invalidate,
             "the configuration becomes invalid: the Ready band disappears")
-    # Restore a valid configuration for the stage route below (the same public
-    # button path the player uses).
-    for bay in css.get_bays():
-        for _press in 3:
-            if css.ready_allowed():
-                break
-            (bay.state_control("kind") as Button).pressed.emit()
-    check(css.ready_allowed(), "the CSS configuration is restored for the stage route")
-    check_edge("css", tiles[0], &"bottom", css.get_ready_band() if css.get_ready_band().is_shown() else bays[0],
+    check(not css.ready_allowed(), "the configuration is invalid after the recovery row")
+    check_edge("css", tiles[0], &"bottom", bays[0],
         "the bottom roster row reaches the nearest station when the band is not shown")
+    # Restore a valid configuration for the stage route below, through the same
+    # public input path the recovery rows used.
+    check(await css_ensure_valid(css), "the CSS configuration is restored for the stage route")
 
     # --- Character Select (teams mode exposes the team controls) ------------
     var teams_label: Label = css.get_node("ReferenceFrame/Header/ModeControl/ModeTeams")

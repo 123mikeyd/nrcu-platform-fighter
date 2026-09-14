@@ -185,6 +185,27 @@ func part_b_production_route() -> void:
     check(str(host.selection_state.slots[0]["character"]) == "ggb",
         "the committed fighter reaches the selection state")
 
+    # --- the second active fighter ------------------------------------------
+    # Locked fresh defaults (Doc 01 §2): P2 is a CPU with NO fighter, and the
+    # ONE shipped gate (ledger C-002: each active slot owns a fighter) stays
+    # closed until P2 does too. Commit it through the real player path: click
+    # P2's bay (the bay takes the click and becomes active), then confirm.
+    var opponent_tile: Control = null
+    for tile in css.get_tiles():
+        if str(tile.fighter_id) == "doge_man":
+            opponent_tile = tile
+    check(opponent_tile != null, "the doge_man tile is in the hosted roster")
+    click_at((css.get_bays()[1] as Control).get_global_rect().get_center())
+    await frames(4)
+    check(css.get_active() == 1, "clicking P2's bay makes P2 the active player")
+    if opponent_tile != null:
+        opponent_tile.grab_focus()
+        await frames(3)
+        root.push_input(key_event(KEY_ENTER))
+        await frames(4)
+    check(str(host.selection_state.slots[1]["character"]) == "doge_man",
+        "the second active slot owns its committed fighter")
+
     # --- READY through the band's own click path ---------------------------
     var band = css.get_ready_band()
     check(css.ready_allowed(), "the shipped CSS gate allows READY for the configuration")
@@ -245,8 +266,10 @@ func part_b_production_route() -> void:
     # --- gameplay accepts the snapshot and the match starts ----------------
     await frames(20)
     if arena != null and is_instance_valid(arena):
-        check(arena.fighters.size() == 4, "the match starts from the config (fighters appear)")
+        # Locked fresh defaults: P3/P4 are EMPTY, so exactly two fighters spawn.
+        check(arena.fighters.size() == 2, "the match starts from the config (the two active fighters appear)")
         check(str(arena.fighters[0].character_id) == "ggb", "the selected fighter reaches the match")
+        check(str(arena.fighters[1].character_id) == "doge_man", "the second committed fighter reaches the match")
         check(arena.active_level == "sky", "the confirmed stage reaches the match")
         check(bool(arena._launched_from_flow), "gameplay knows it was launched from the flow")
 
@@ -254,9 +277,8 @@ func part_b_production_route() -> void:
     if arena != null and is_instance_valid(arena):
         for fighter in arena.fighters:
             fighter.set_physics_process(false)
-        for index in [1, 2, 3]:
-            arena.fighters[index].stocks = 0
-            arena._on_fighter_eliminated(arena.fighters[index])
+        arena.fighters[1].stocks = 0
+        arena._on_fighter_eliminated(arena.fighters[1])
         check(arena.match_over, "the match resolves")
 
     var reentry = null
@@ -274,7 +296,7 @@ func part_b_production_route() -> void:
             "the host presents the immutable MatchResult gameplay handed over")
         check(reentry.route_origin() == "results", "the re-entry records the RESULTS origin")
         var winner = reentry.post_match_result().winner_entry()
-        # The survivor is P1 (the committed ggb fighter): fighters[1..3] were
+        # The survivor is P1 (the committed ggb fighter): fighters[1] (P2) was
         # eliminated above, and player_index is slot index + 1.
         check(int(winner.get("player_index", 0)) == 1, "the payload declares the last survivor (P1) the winner")
         check(str(winner.get("fighter_id", "")) == "ggb", "the winning entry is the committed fighter")
