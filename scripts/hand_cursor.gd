@@ -119,6 +119,7 @@ var visual: Visual = Visual.REGULAR
 var scope := SCOPE_FRONTEND
 var hotspot := Vector2.ZERO          # authoritative interaction point
 var _mouse := Vector2.ZERO
+var _visual_mouse := Vector2.ZERO     # last sampled pointer position for art only
 var _hover_armed := false
 
 var _focus_anchor: Control = null
@@ -169,6 +170,7 @@ func _ready() -> void:
     if vp != null:
         _mouse = vp.get_mouse_position()
         _focus_pos = _mouse
+    _visual_mouse = _mouse
     hotspot = _mouse
 
 # --- semantic screen lifecycle ------------------------------------------
@@ -186,6 +188,11 @@ func begin_screen(_screen_id: String) -> void:
     # from the ordinary pose and syncs it to its own state on entry (never the
     # previous screen's carry/hover pinch left behind).
     set_visual_mode(Visual.REGULAR)
+    # Pointer sampling is presentation-only. Rebase it at the screen boundary
+    # so motion delivered before the new surface mounted cannot create a stale
+    # lean on the first frame.
+    _visual_mouse = _mouse
+    _vel_visual = Vector2.ZERO
     if mode == Mode.FOCUS and _focus_anchor == null:
         # Focus continues across the transition only if the new screen sets a
         # focus target (authored default selection).
@@ -395,7 +402,16 @@ func _process(delta: float) -> void:
         if new_hover != hovered:
             hovered = new_hover
             hover_changed.emit(hovered)
-        _vel_visual = _vel_visual.lerp(Vector2.ZERO, minf(8.0 * delta, 1.0))
+        # The old cursor eased its logical position. Keep that historical feel
+        # only in the rendered hand: the authoritative hotspot above remains
+        # exactly at the pointer, while this filtered velocity drives lean.
+        var mouse_delta := _mouse - _visual_mouse
+        _visual_mouse = _mouse
+        if delta > 0.0 and mouse_delta.length_squared() > 0.0:
+            var input_velocity := mouse_delta / delta
+            _vel_visual = _vel_visual.lerp(input_velocity, minf(18.0 * delta, 1.0))
+        else:
+            _vel_visual = _vel_visual.lerp(Vector2.ZERO, minf(8.0 * delta, 1.0))
     else:
         step_focus_spring(delta)
     var lean_goal := clampf(_vel_visual.x * LEAN_SCALE, -LEAN_MAX, LEAN_MAX)
