@@ -482,4 +482,3 @@ func set_focus_signal(on: bool) -> void:
 
 func focus_signal_visible() -> bool:
 	return _focus_rule != null and _focus_rule.visible
-

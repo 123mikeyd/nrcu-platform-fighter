@@ -435,4 +435,3 @@ func run():
     if failures == 0:
         print("PASS: results payload (explicit placement/fighter_id), winner-first rebuild, reveal timeline, team/draw, cursor and story vocabulary — presented by the MatchFlow PostMatch owner")
     quit(1 if failures else 0)
-

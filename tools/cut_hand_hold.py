@@ -15,15 +15,19 @@ Method
    the pose height is 157 px inside a 147x160 canvas at (1,1) -- the same
    baseline, height and canvas size hand_grab.png uses.
 
-Run:  python tools/cut_hand_hold.py
+Run: NRCU_HAND_SHEET=<path-to-hand_sheet_v3.png> python tools/cut_hand_hold.py
 """
+import os
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
-SHEET = Path("C:/Users/will/Downloads/hand-entwuerfe/hand_sheet_v3.png")
+SHEET = Path(os.environ.get(
+    "NRCU_HAND_SHEET",
+    str(Path.home() / "Downloads" / "hand-entwuerfe" / "hand_sheet_v3.png"),
+))
 OUT = Path(__file__).resolve().parent.parent / "assets" / "ui" / "hand_hold.png"
 PREVIEW = Path(__file__).resolve().parent.parent / ".verification" / "carryfix-out"
 

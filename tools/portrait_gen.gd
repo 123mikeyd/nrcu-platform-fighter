@@ -5,9 +5,8 @@ extends Control
 # final character art can replace the PNGs at the same paths.
 #
 # Usage (real windowed run — rendering is required, this is NOT headless):
-#   cd C:/Users/will/nrcu-platform-fighter
-#   "C:/Users/will/Documents/obligate/Godot_v4.7.2-stable_win64/Godot_v4.7.2-stable_win64_console.exe" \
-#     --path C:/Users/will/nrcu-platform-fighter --resolution 1280x720 \
+#   cd <repo>
+#   "<godot-console>" --path <repo> --resolution 1280x720 \
 #     res://tools/portrait_gen.tscn -- --out=res://assets/portraits
 #
 # Optional args:

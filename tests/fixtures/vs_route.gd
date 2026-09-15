@@ -243,9 +243,3 @@ func free_hosts(tree: SceneTree) -> void:
 func settle(tree: SceneTree, frames: int) -> void:
     for i in frames:
         await tree.process_frame
-
-
-
-
-
-

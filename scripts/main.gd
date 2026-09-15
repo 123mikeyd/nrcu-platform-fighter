@@ -818,4 +818,3 @@ func _physics_process(delta: float) -> void:
     elif go_remaining > 0:
         go_remaining = maxf(0,go_remaining-delta)
         if go_remaining == 0: ready_label.hide()
-

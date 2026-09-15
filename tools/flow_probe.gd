@@ -43,6 +43,9 @@ func run() -> void:
     await RenderingServer.frame_post_draw
     var img := vp.get_texture().get_image()
     if img != null:
-        img.save_png("C:/Users/will/AppData/Local/Temp/flow_probe.png")
+        var shot_dir: String = ProjectSettings.globalize_path("res://.verification")
+        DirAccess.make_dir_recursive_absolute(shot_dir)
+        var shot_path: String = shot_dir.path_join("flow_probe.png")
+        img.save_png(shot_path)
         print("[probe] shot saved")
     get_tree().quit(0)

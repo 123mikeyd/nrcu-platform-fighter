@@ -347,6 +347,3 @@ func part_e_rematch_preserved_config() -> void:
     if is_instance_valid(post):
         post.queue_free()
     await frames(3)
-
-
-
