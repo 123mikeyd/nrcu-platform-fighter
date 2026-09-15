@@ -1,8 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/home.gd" id="1_home"]
 [ext_resource type="PackedScene" path="res://scenes/components/MenuRow.tscn" id="2_row"]
-[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="3_anchor"]
 
 [node name="Home" type="Control"]
 layout_mode = 3
@@ -141,82 +140,3 @@ layout_mode = 0
 offset_right = 1280.0
 offset_bottom = 720.0
 mouse_filter = 2
-
-[node name="QuitOverlay" type="Control" parent="ReferenceFrame"]
-visible = false
-layout_mode = 0
-offset_right = 1280.0
-offset_bottom = 720.0
-mouse_filter = 2
-
-[node name="Dim" type="ColorRect" parent="ReferenceFrame/QuitOverlay"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0, 0, 0, 0.55)
-mouse_filter = 0
-
-[node name="Plate" type="Panel" parent="ReferenceFrame/QuitOverlay"]
-layout_mode = 0
-offset_left = 410.0
-offset_top = 260.0
-offset_right = 870.0
-offset_bottom = 460.0
-
-[node name="QuitTitle" type="Label" parent="ReferenceFrame/QuitOverlay/Plate"]
-layout_mode = 0
-offset_left = 40.0
-offset_top = 28.0
-offset_right = 420.0
-offset_bottom = 68.0
-theme_override_font_sizes/font_size = 30
-text = "QUIT NRCU?"
-
-[node name="ActionStay" type="Button" parent="ReferenceFrame/QuitOverlay/Plate"]
-layout_mode = 0
-offset_left = 40.0
-offset_top = 104.0
-offset_right = 220.0
-offset_bottom = 148.0
-theme_override_font_sizes/font_size = 24
-text = "STAY"
-
-[node name="StayRail" type="Panel" parent="ReferenceFrame/QuitOverlay/Plate"]
-layout_mode = 0
-offset_left = 40.0
-offset_top = 152.0
-offset_right = 220.0
-offset_bottom = 155.0
-mouse_filter = 2
-
-[node name="ActionQuit" type="Button" parent="ReferenceFrame/QuitOverlay/Plate"]
-layout_mode = 0
-offset_left = 240.0
-offset_top = 104.0
-offset_right = 420.0
-offset_bottom = 148.0
-theme_override_font_sizes/font_size = 24
-text = "QUIT"
-
-[node name="QuitRail" type="Panel" parent="ReferenceFrame/QuitOverlay/Plate"]
-layout_mode = 0
-offset_left = 240.0
-offset_top = 152.0
-offset_right = 420.0
-offset_bottom = 155.0
-mouse_filter = 2
-
-[node name="AnchorStay" type="Control" parent="ReferenceFrame/QuitOverlay/Plate"]
-layout_mode = 0
-mouse_filter = 2
-script = ExtResource("3_anchor")
-host_path = NodePath("../ActionStay")
-
-[node name="AnchorQuit" type="Control" parent="ReferenceFrame/QuitOverlay/Plate"]
-layout_mode = 0
-mouse_filter = 2
-script = ExtResource("3_anchor")
-host_path = NodePath("../ActionQuit")

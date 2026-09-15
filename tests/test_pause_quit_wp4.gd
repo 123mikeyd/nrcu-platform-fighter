@@ -129,6 +129,29 @@ func pause_public_path() -> void:
     var focus: Control = root.get_viewport().gui_get_focus_owner()
     check(focus == pause.action_resume(), "Pause seeds focus on RESUME")
     check(pause.focus_anchor_for(focus) != null, "Pause focus has an authored CursorAnchor")
+    # Keyboard/controller parity: the visible Pause choices must be a real
+    # focus column, not merely two focusable buttons with a seeded first owner.
+    Input.parse_input_event(key_event(KEY_DOWN))
+    Input.flush_buffered_events()
+    await settle(2)
+    check(root.get_viewport().gui_get_focus_owner() == pause.action_leave(),
+        "keyboard ui_down moves Pause focus from RESUME to LEAVE")
+    check(pause.active_index() == 1, "keyboard ui_down moves Pause selection to LEAVE")
+    Input.parse_input_event(key_event(KEY_UP))
+    Input.flush_buffered_events()
+    await settle(2)
+    check(root.get_viewport().gui_get_focus_owner() == pause.action_resume(),
+        "keyboard ui_up moves Pause focus back to RESUME")
+    Input.parse_input_event(pad_button(JOY_BUTTON_DPAD_DOWN))
+    Input.flush_buffered_events()
+    await settle(2)
+    check(root.get_viewport().gui_get_focus_owner() == pause.action_leave(),
+        "controller D-pad down moves Pause focus to LEAVE")
+    Input.parse_input_event(pad_button(JOY_BUTTON_DPAD_UP))
+    Input.flush_buffered_events()
+    await settle(2)
+    check(root.get_viewport().gui_get_focus_owner() == pause.action_resume(),
+        "controller D-pad up moves Pause focus back to RESUME")
     Input.parse_input_event(key_event(KEY_ESCAPE))
     Input.flush_buffered_events()
     await settle(3)

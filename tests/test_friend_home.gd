@@ -303,7 +303,7 @@ func run() -> void:
     check(focus != null and str(focus.name) == "ActionStay", "default modal focus is STAY")
     var modal = home.quit_modal_rect()
     check(modal.size.x >= 420.0 and modal.size.x <= 500.0, "modal is the compact 420-500 plate")
-    check(modal.size.y >= 180.0 and modal.size.y <= 220.0, "modal is the compact 180-220 plate")
+    check(modal.size.y == Vector2(460.0, 272.0).y, "modal uses the shared 460x272 overlay shell")
     for row in rows:
         check(hit_of(row).focus_mode == Control.FOCUS_NONE,
             "modal focus cannot move behind the overlay")

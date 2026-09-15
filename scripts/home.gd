@@ -25,6 +25,7 @@ const Tokens = preload("res://scripts/ui_tokens.gd")
 const AppStateScript = preload("res://scripts/app_state.gd")
 # Doc 03 §6/§13: authored anchors + authored topology + recovery.
 const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
+const ChoiceOverlayScene = preload("res://scenes/components/ChoiceOverlay.tscn")
 
 const MATCH_SCENE := "res://scenes/main.tscn"
 # WP-0 step 3 route switch (Doc 02 §1/§10.3): the player-facing VS route enters
@@ -86,21 +87,21 @@ var _row_tweens: Dictionary = {}
 @onready var _header: Control = $ReferenceFrame/Header
 @onready var _nav: Control = $ReferenceFrame/Navigation
 @onready var _page_layer: Control = $ReferenceFrame/PageLayer
-@onready var _overlay: Control = $ReferenceFrame/QuitOverlay
-@onready var _plate: Panel = $ReferenceFrame/QuitOverlay/Plate
-@onready var _action_stay: Button = $ReferenceFrame/QuitOverlay/Plate/ActionStay
-@onready var _action_quit: Button = $ReferenceFrame/QuitOverlay/Plate/ActionQuit
-@onready var _stay_rail: Panel = $ReferenceFrame/QuitOverlay/Plate/StayRail
-@onready var _quit_rail: Panel = $ReferenceFrame/QuitOverlay/Plate/QuitRail
-@onready var _anchor_stay: Control = $ReferenceFrame/QuitOverlay/Plate/AnchorStay
-@onready var _anchor_quit: Control = $ReferenceFrame/QuitOverlay/Plate/AnchorQuit
+var _overlay: Control
+var _plate: Panel
+var _action_stay: Button
+var _action_quit: Button
+var _anchor_stay: Control
+var _anchor_quit: Control
 
 func _ready() -> void:
     get_window().title = "NRCU — Friend Demo"
     theme = Tokens.make_theme()
     get_tree().auto_accept_quit = false
-    get_window().close_requested.connect(_open_quit_modal)
+    if not get_window().close_requested.is_connected(_open_quit_modal):
+        get_window().close_requested.connect(_open_quit_modal)
     _collect_rows()
+    _build_quit_overlay()
     _style_nodes()
     _wire_modal()
     # §9: Main is a frontend surface — entering it (from Title or after a match)
@@ -126,6 +127,21 @@ func _ready() -> void:
     Frontend.release(0.28)
 
 # --- fixed composition (authored in home.tscn; colors resolved from tokens) --
+func _build_quit_overlay() -> void:
+    # Pause and Quit are different routes, not different visual systems. Keep
+    # the modal instance owned by Main for caller restoration, but let the
+    # shared component author its shell, rows and focus anchors.
+    _overlay = (ChoiceOverlayScene as PackedScene).instantiate()
+    _overlay.name = "QuitOverlay"
+    $ReferenceFrame.add_child(_overlay)
+    _overlay.configure("QUIT NRCU?", ["STAY", "QUIT"],
+        ["RowStay", "RowQuit"], ["ActionStay", "ActionQuit"])
+    _plate = _overlay.get_node("ReferenceFrame/Plate") as Panel
+    _action_stay = _overlay.choice(0)
+    _action_quit = _overlay.choice(1)
+    _anchor_stay = _overlay.focus_anchor_for(_action_stay)
+    _anchor_quit = _overlay.focus_anchor_for(_action_quit)
+
 func _collect_rows() -> void:
     _rows.clear()
     buttons.clear()
@@ -183,19 +199,6 @@ func _style_nodes() -> void:
         quiet.add_theme_stylebox_override("panel", Tokens.flat(Tokens.RULE_WARM))
         quiet.modulate.a = QUIET_ALPHA
         (entry["rail"] as Panel).add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
-    _overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    _plate.add_theme_stylebox_override("panel", Tokens.flat(Tokens.SURFACE_1, Tokens.RULE, Tokens.STROKE, Tokens.RADIUS_FLAT))
-    $ReferenceFrame/QuitOverlay/Plate/QuitTitle.add_theme_color_override("font_color", Tokens.CREAM)
-    for action in [_action_stay, _action_quit]:
-        Tokens.apply_styles(action, {
-            "normal": Tokens.flat(Color(0, 0, 0, 0)),
-            "hover": Tokens.flat(Color(0, 0, 0, 0)),
-            "pressed": Tokens.flat(Color(0, 0, 0, 0)),
-            "focus": Tokens.flat(Color(0, 0, 0, 0)),
-        })
-        action.add_theme_font_override("font", Tokens.font("medium"))
-    _stay_rail.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
-    _quit_rail.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
     _set_modal_focus(true)
 
 # --- pages (compatibility surface: "home" | "help" | "quit") ---------------
@@ -294,13 +297,12 @@ func _on_modal_action_focused(control: Control) -> void:
             hand.set_focus_target(anchor)
 
 func focus_anchor_for(control: Control) -> Control:
-    # The authored hand target of a focusable control on this screen (Doc 03 §6).
+    # The shared overlay resolves its own authored CursorAnchor; main rows keep
+    # their scene-authored anchors here.
     if control == null:
         return null
-    if control == _action_stay:
-        return _anchor_stay
-    if control == _action_quit:
-        return _anchor_quit
+    if control == _action_stay or control == _action_quit:
+        return _overlay.focus_anchor_for(control)
     for entry in _rows:
         if entry["hit"] == control:
             return entry["anchor"]
@@ -344,6 +346,7 @@ func _open_quit_modal() -> void:
     _modal_open = true
     state = "quit"
     _set_rows_focusable(false)
+    _suspend_main_selection()
     _set_modal_focus(true)
     if _modal_tween != null and _modal_tween.is_valid():
         _modal_tween.kill()
@@ -384,6 +387,10 @@ func _dismiss_modal(from_cancel := false) -> void:
     _restore_modal_caller("home", caller_focus)
 
 func _restore_modal_caller(origin: String, caller_focus: Control) -> void:
+    if origin == "home" and not _rows.is_empty():
+        # Restore the caller's logical selection only after the modal's fade has
+        # begun; the modal still owns visual attention during the transition.
+        select_row(_selected, true)
     var target: Control = caller_focus if caller_focus != null and is_instance_valid(caller_focus) else null
     if target == null or not target.is_inside_tree() or target.focus_mode == Control.FOCUS_NONE:
         target = null
@@ -414,11 +421,40 @@ func _close_modal() -> void:
     _modal_tween.tween_property(_overlay, "modulate:a", 0.0, _sec(OVERLAY_FRAMES)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
     _modal_tween.tween_callback(_overlay.hide)
 
+func _suspend_main_selection() -> void:
+    # The caller stays mounted for exact STAY restoration, but its active rail
+    # must not compete with the confirmation. Logical selection is untouched.
+    for index in _rows.size():
+        _kill_row_tweens(index)
+        var entry: Dictionary = _rows[index]
+        var plate: Panel = entry["plate"]
+        var rail: Panel = entry["rail"]
+        var quiet: Panel = entry["quiet"]
+        var label: Label = entry["label"]
+        plate.hide()
+        plate.modulate.a = 0.0
+        rail.hide()
+        quiet.show()
+        quiet.modulate.a = QUIET_ALPHA
+        label.add_theme_font_size_override("font_size", INACTIVE_SIZE)
+        label.add_theme_font_override("font", Tokens.font("regular"))
+        label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
+        label.position.x = entry["label_x"]
+        _layout_main_quiet_rail(entry)
+
+func _layout_main_quiet_rail(entry: Dictionary) -> void:
+    var label: Label = entry["label"]
+    var font := label.get_theme_font("font")
+    var size := label.get_theme_font_size("font_size")
+    var text_width: float = font.get_string_size(str(label.text), HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+    var quiet: Panel = entry["quiet"]
+    var start := label.position.x + text_width + 8.0
+    var end := 432.0
+    quiet.position.x = start
+    quiet.size.x = maxf(end - start, 0.0)
+
 func _set_modal_focus(stay_focused: bool) -> void:
-    _stay_rail.visible = stay_focused
-    _quit_rail.visible = not stay_focused
-    _action_stay.add_theme_color_override("font_color", Tokens.CREAM if stay_focused else Tokens.CREAM_DIM)
-    _action_quit.add_theme_color_override("font_color", Tokens.CREAM if not stay_focused else Tokens.CREAM_DIM)
+    _overlay.set_active(0 if stay_focused else 1)
 
 func _set_rows_focusable(enabled: bool) -> void:
     for entry in _rows:
