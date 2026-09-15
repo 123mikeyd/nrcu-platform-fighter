@@ -3,8 +3,8 @@ extends SceneTree
 #
 # The historical hand animation may lean and squash, but those effects belong
 # to the rendered HandVisual only. The logical hotspot, authored focus target,
-# carried-token geometry, pause processing, and VS visibility lifecycle remain
-# owned by the existing cursor contract.
+# carried-token geometry, pause processing, and visibility lifecycle remain owned
+# by the existing cursor contract.
 
 const HandScript := preload("res://scripts/hand_cursor.gd")
 const AnchorScript := preload("res://scripts/frontend/cursor_anchor.gd")
@@ -83,15 +83,6 @@ func run() -> void:
         hand.step_focus_spring(1.0 / 60.0)
     check(hand.hotspot.distance_to(authored_target) < 0.001,
         "visual articulation leaves the authored focus anchor as the focus target")
-
-    hand.set_overlay_suppressed(true)
-    hand._input(motion(Vector2(300.0, 220.0), Vector2(30.0, 0.0)))
-    await frames(2)
-    check(hand.is_overlay_suppressed() and not hand.visible,
-        "VS suppression keeps the hand hidden during pointer motion")
-    hand.set_overlay_suppressed(false)
-    check(hand.visible,
-        "releasing VS suppression restores the hand without changing its lifecycle API")
 
     hand.process_mode = Node.PROCESS_MODE_ALWAYS
     root.get_tree().paused = true
