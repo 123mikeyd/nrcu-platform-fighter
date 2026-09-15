@@ -44,6 +44,44 @@ func run():
     var background = title.find_child("ShelfBackground", true, false)
     if background == null or not (background is TextureRect) or background.texture == null:
         fail("title background must be the room texture"); return
+    if background.texture_filter != CanvasItem.TEXTURE_FILTER_LINEAR:
+        fail("title background must use linear filtering for stable presentation"); return
+    # The Title is deliberately static: a shelf raster must not turn ambient
+    # motion into an intermittent one-pixel layout error.
+    title._process(0.0)
+    if title.current_drift() != Vector2.ZERO:
+        fail("title background must remain completely static"); return
+    var reference_frame: Control = title.find_child("ReferenceFrame", true, false)
+    var left_column_left := 32.0
+    var left_column_right := 268.0
+    var left_column_center := 150.0
+    for container_name in ["TitleGroup", "StartRegion"]:
+        var container: Control = title.find_child(container_name, true, false)
+        var container_rect := container.get_global_rect()
+        var frame_rect := reference_frame.get_global_rect()
+        var container_left := container_rect.position.x - frame_rect.position.x
+        var container_center := container_left + container_rect.size.x * 0.5
+        if absf(container_center - left_column_center) > 0.5:
+            fail(container_name + " is not centered over the wood column"); return
+    for node_name in ["NRCUTitle", "AccentRule", "Subtitle", "LeftRule", "Prompt", "RightRule"]:
+        var node: Control = title.find_child(node_name, true, false)
+        var rect := node.get_global_rect()
+        var frame_rect := reference_frame.get_global_rect()
+        var left_edge := rect.position.x - frame_rect.position.x
+        var right_edge := left_edge + rect.size.x
+        if left_edge < left_column_left - 0.5 or right_edge > left_column_right + 0.5:
+            fail(node_name + " escapes the centered inner wood column"); return
+    var prompt: Label = title.find_child("Prompt", true, false)
+    if prompt.vertical_alignment != VERTICAL_ALIGNMENT_CENTER:
+        fail("title prompt must vertically center its text line"); return
+    var left_rule: Control = title.find_child("LeftRule", true, false)
+    var right_rule: Control = title.find_child("RightRule", true, false)
+    var prompt_center := prompt.position.y + prompt.size.y * 0.5
+    if absf(left_rule.position.y + left_rule.size.y * 0.5 - prompt_center) > 0.5 \
+            or absf(right_rule.position.y + right_rule.size.y * 0.5 - prompt_center) > 0.5:
+        fail("title prompt rules must share the prompt's vertical center"); return
+    if title.find_child("StartRegion", true, false).position.y > 430.0:
+        fail("title prompt is too far below the NRCU title block"); return
     var wordmark = label_containing(title, "NRCU")
     if wordmark == null or wordmark.get_theme_font_size("font_size") < Tokens.T_HERO:
         fail("hero NRCU wordmark missing or below hero scale"); return
@@ -56,6 +94,10 @@ func run():
     for i in 20: await process_frame
     if title.prompt_alpha() <= 0.4:
         fail("the prompt did not enter its restrained idle range after the entry tween"); return
+    var stable_prompt_alpha: float = title.prompt_alpha()
+    for i in 60: await process_frame
+    if absf(title.prompt_alpha() - stable_prompt_alpha) > 0.001:
+        fail("title prompt must remain static after its entry reveal"); return
     # A key held before Title activation blocks arming until its real release;
     # the route must not rely on an arbitrary post-entry timer.
     var held := InputEventKey.new()

@@ -24,6 +24,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="ShelfBackground" type="TextureRect" parent="BackgroundFrame"]
+texture_filter = 2
 layout_mode = 0
 offset_right = 1360.0
 offset_bottom = 800.0
@@ -49,63 +50,67 @@ mouse_filter = 2
 
 [node name="TitleGroup" type="Control" parent="ReferenceFrame"]
 layout_mode = 0
-offset_left = 64.0
+offset_left = 32.0
 offset_top = 196.0
-offset_right = 400.0
+offset_right = 268.0
 offset_bottom = 330.0
 mouse_filter = 2
 
 [node name="NRCUTitle" type="Label" parent="ReferenceFrame/TitleGroup"]
 layout_mode = 0
-offset_right = 340.0
-offset_bottom = 96.0
-theme_override_font_sizes/font_size = 88
+offset_right = 236.0
+offset_bottom = 92.0
+theme_override_font_sizes/font_size = 84
 text = "NRCU"
+horizontal_alignment = 1
 
 [node name="AccentRule" type="Panel" parent="ReferenceFrame/TitleGroup"]
 layout_mode = 0
-offset_top = 104.0
-offset_right = 268.0
-offset_bottom = 108.0
+offset_top = 100.0
+offset_right = 236.0
+offset_bottom = 104.0
 mouse_filter = 2
 
 [node name="Subtitle" type="Label" parent="ReferenceFrame/TitleGroup"]
 layout_mode = 0
-offset_left = 2.0
-offset_top = 124.0
-offset_right = 340.0
-offset_bottom = 146.0
-theme_override_font_sizes/font_size = 14
+offset_top = 120.0
+offset_right = 236.0
+offset_bottom = 142.0
+theme_override_font_sizes/font_size = 13
 text = "PLATFORM FIGHTER — FRIEND DEMO"
+horizontal_alignment = 1
 
 [node name="StartRegion" type="Control" parent="ReferenceFrame"]
 layout_mode = 0
-offset_left = 64.0
-offset_top = 470.0
-offset_right = 420.0
-offset_bottom = 510.0
+offset_left = 32.0
+offset_top = 422.0
+offset_right = 268.0
+offset_bottom = 462.0
 mouse_filter = 2
 
 [node name="LeftRule" type="Panel" parent="ReferenceFrame/StartRegion"]
 layout_mode = 0
-offset_top = 19.0
-offset_right = 44.0
-offset_bottom = 22.0
+offset_right = 34.0
+offset_top = 18.5
+offset_bottom = 21.5
 mouse_filter = 2
 
 [node name="Prompt" type="Label" parent="ReferenceFrame/StartRegion"]
 layout_mode = 0
-offset_left = 56.0
-offset_right = 356.0
+offset_left = 42.0
+offset_right = 194.0
 offset_bottom = 40.0
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 13
 text = "CLICK OR PRESS ANY KEY"
+horizontal_alignment = 0
+vertical_alignment = 1
 
 [node name="RightRule" type="Panel" parent="ReferenceFrame/StartRegion"]
 layout_mode = 0
-offset_top = 19.0
-offset_right = 44.0
-offset_bottom = 22.0
+offset_left = 202.0
+offset_right = 236.0
+offset_top = 18.5
+offset_bottom = 21.5
 mouse_filter = 2
 
 [node name="CursorAnchor" type="Control" parent="ReferenceFrame/StartRegion"]

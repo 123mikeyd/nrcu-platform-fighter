@@ -1,18 +1,16 @@
 extends Control
 # NRCU Title / Start screen — Step 1 (Doc 02), authored in scenes/title.tscn.
 #
-# The script owns: entry/exit state, release-arming, ambient time, background
-# offset, prompt opacity and the semantic Start event. The fixed composition
+# The script owns: entry/exit state, release-arming, the fixed background
+# position, prompt reveal and the semantic Start event. The fixed composition
 # (background frame, title group, start region, build marker) lives in the
 # scene; the ReferenceFrame keeps the core composition centered on expanded
 # aspects.
 #
-# Background motion (Doc 02 §6/§7): NO animated scale. One constant
-# cover/overscan scale plus a tiny derivative-continuous positional drift:
-#   x(t) = 3.00*sin(TAU*t/31) + 0.75*sin(TAU*t/53 + 1.1)
-#   y(t) = 1.35*sin(TAU*t/37 + 0.7) + 0.35*sin(TAU*t/61 + 2.0)
-# The drift can never expose an edge because the background control is grown
-# by OVERSCAN on every side.
+# The Title is intentionally static. The shelf raster has enough hard edges that
+# even a mathematically smooth fractional drift reads as a rendering error.
+# There is no ambient motion: the prompt gets one restrained entry reveal and
+# then remains still until the user starts the game.
 #
 # Start input (Doc 02 §10): release-arming, not an arbitrary timer. A fresh
 # non-echo press is required (input held from before activation only produces
@@ -24,12 +22,15 @@ const Tokens = preload("res://scripts/ui_tokens.gd")
 const MENU_SCENE := "res://scenes/home.tscn"
 const PROMPT_TEXT := "CLICK OR PRESS ANY KEY"
 const OVERSCAN := 48.0
+const LEFT_COLUMN_LEFT := 32.0
+const LEFT_COLUMN_RIGHT := 268.0
+const START_RULE_WIDTH := 34.0
+const START_GAP := 8.0
+const START_REGION_HEIGHT := 40.0
 const ENTRY_GUARD_SECONDS := 0.35
 const ENTRY_SETTLE_PX := 10.0
 const EXIT_SECONDS := 14.0 / 60.0
-const PROMPT_PERIOD := 2.9
 const PROMPT_MIN := 0.60
-const PROMPT_MAX := 0.95
 const PROMPT_ENTRY_DELAY := 10.0 / 60.0
 const PROMPT_ENTRY_FADE := 10.0 / 60.0
 const PROMPT_PRESS_SECONDS := 0.12
@@ -47,9 +48,7 @@ signal start_accepted()
 @onready var _anchor: Control = $ReferenceFrame/StartRegion/CursorAnchor
 @onready var _build: Label = $ReferenceFrame/BuildMarker
 
-var _t := 0.0
 var _drift := Vector2.ZERO
-var _frozen := false
 var _entry_guard_remaining := ENTRY_GUARD_SECONDS
 var _arming_checked := false
 var _blocked_by_held_input := false
@@ -97,15 +96,21 @@ func _layout_start_region() -> void:
     var text_w := 260.0
     if font != null:
         text_w = font.get_string_size(PROMPT_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-    var gap := Tokens.S12
-    var rule_w := 44.0
-    _left_rule.position = Vector2(0.0, 19.0)
+    var gap := START_GAP
+    var rule_w := START_RULE_WIDTH
+    var column_width := LEFT_COLUMN_RIGHT - LEFT_COLUMN_LEFT
+    var max_text_w := maxf(0.0, column_width - rule_w * 2.0 - gap * 2.0)
+    text_w = minf(text_w, max_text_w)
+    var content_w := rule_w * 2.0 + gap * 2.0 + text_w
+    _start_region.position.x = LEFT_COLUMN_LEFT + (column_width - content_w) * 0.5
+    _left_rule.position = Vector2(0.0, (START_REGION_HEIGHT - 3.0) * 0.5)
     _left_rule.size = Vector2(rule_w, 3.0)
     _prompt.position = Vector2(rule_w + gap, 0.0)
-    _prompt.size = Vector2(text_w, 40.0)
-    _right_rule.position = Vector2(rule_w + gap + text_w + gap, 19.0)
+    _prompt.size = Vector2(text_w, START_REGION_HEIGHT)
+    _prompt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    _right_rule.position = Vector2(rule_w + gap + text_w + gap, (START_REGION_HEIGHT - 3.0) * 0.5)
     _right_rule.size = Vector2(rule_w, 3.0)
-    _start_region.size = Vector2(rule_w * 2 + gap * 2 + text_w, 40.0)
+    _start_region.size = Vector2(content_w, START_REGION_HEIGHT)
     _anchor.place_at(Vector2(-30.0, 34.0))
 
 func _entry_animation() -> void:
@@ -128,14 +133,10 @@ func _process(delta: float) -> void:
         _entry_guard_remaining = maxf(_entry_guard_remaining - delta, 0.0)
     if not _armed:
         _update_start_arming()
-    if not _frozen:
-        _t += delta
-        _drift = Vector2(
-            3.00 * sin(TAU * _t / 31.0) + 0.75 * sin(TAU * _t / 53.0 + 1.1),
-            1.35 * sin(TAU * _t / 37.0 + 0.7) + 0.35 * sin(TAU * _t / 61.0 + 2.0))
+    _drift = Vector2.ZERO
     # Constant overscan: the background control is grown past the viewport on
-    # every side, so the bounded drift can never expose an edge. Its scale is
-    # constant — no per-frame rescaling, no shimmer.
+    # every side and held at one position, so the shelf cannot shimmer or
+    # expose an edge. Its scale is constant — no per-frame rescaling.
     _bg.position = Vector2(-OVERSCAN, -OVERSCAN) + _drift
     _bg.size = vp + Vector2(OVERSCAN, OVERSCAN) * 2.0
     if _leaving:
@@ -165,8 +166,8 @@ func _relevant_input_held() -> bool:
     return Input.is_anything_pressed() or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 
 func _update_prompt_alpha() -> void:
-    # This is the sole writer of the prompt's opacity. Entry reveal owns the
-    # base alpha first; only after it completes does the idle pulse participate.
+    # One reveal on entry, then a stable idle value. There is no ambient pulse:
+    # the Title should remain visually still until the user starts it.
     if _leaving:
         _prompt.modulate.a = clampf(_prompt_press_remaining / PROMPT_PRESS_SECONDS, 0.0, 1.0)
         return
@@ -174,11 +175,7 @@ func _update_prompt_alpha() -> void:
         _prompt.modulate.a = 0.0
         return
     var reveal := clampf((_prompt_entry_elapsed - PROMPT_ENTRY_DELAY) / PROMPT_ENTRY_FADE, 0.0, 1.0)
-    if reveal < 1.0:
-        _prompt.modulate.a = PROMPT_MIN * reveal
-        return
-    var wave := 0.5 + 0.5 * sin(TAU * _t / PROMPT_PERIOD)
-    _prompt.modulate.a = PROMPT_MIN + (PROMPT_MAX - PROMPT_MIN) * wave
+    _prompt.modulate.a = PROMPT_MIN * reveal
 
 # --- input ---------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:
@@ -209,7 +206,6 @@ func begin() -> void:
         return
     _leaving = true
     _starts += 1
-    _frozen = true                       # hold the current background offset
     FrontendEvents.emit_confirm("title_start")
     start_accepted.emit()
     # Prompt: tiny immediate press response, then fade.
