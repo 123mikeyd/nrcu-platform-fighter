@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/frontend/story_result.gd" id="1_result"]
 [ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="2_anchor"]
+[ext_resource type="PackedScene" path="res://scenes/components/BackAction.tscn" id="3_back"]
 
 [node name="StoryResult" type="Control"]
 layout_mode = 3
@@ -70,36 +71,12 @@ offset_right = 296.0
 offset_bottom = 82.0
 mouse_filter = 2
 
-[node name="BackAction" type="Button" parent="ReferenceFrame/Header"]
+[node name="BackAction" parent="ReferenceFrame/Header" instance=ExtResource("3_back")]
 layout_mode = 0
-offset_left = 1004.0
+offset_left = 1060.0
 offset_top = 30.0
-offset_right = 1168.0
+offset_right = 1224.0
 offset_bottom = 70.0
-theme_override_font_sizes/font_size = 20
-text = "BACK TO MAIN"
-alignment = 2
-
-[node name="CursorAnchor" type="Control" parent="ReferenceFrame/Header/BackAction"]
-layout_mode = 1
-anchors_preset = 0
-mouse_filter = 2
-script = ExtResource("2_anchor")
-
-[node name="BackRail" type="Panel" parent="ReferenceFrame/Header"]
-visible = false
-layout_mode = 0
-offset_left = 1004.0
-offset_top = 74.0
-offset_right = 1168.0
-offset_bottom = 77.0
-mouse_filter = 2
-
-[node name="AnchorBack" type="Control" parent="ReferenceFrame/Header"]
-layout_mode = 0
-mouse_filter = 2
-script = ExtResource("2_anchor")
-host_path = NodePath("../BackAction")
 
 [node name="ResultBody" type="Control" parent="ReferenceFrame"]
 layout_mode = 0

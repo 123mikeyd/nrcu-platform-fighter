@@ -185,8 +185,6 @@ func _ready() -> void:
 	_field_panel.add_theme_stylebox_override("panel", Tokens.flat(Tokens.BASE))
 	_title.add_theme_color_override("font_color", Tokens.CREAM)
 	_field_rule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.RULE))
-	Tokens.apply_styles(_back, Tokens.row_styles())
-	_back.add_theme_color_override("font_color", Tokens.CREAM)
 	_back.pressed.connect(_on_back_pressed)
 	if cursor != null and not cursor.modality_changed.is_connected(_on_modality_changed):
 		cursor.modality_changed.connect(_on_modality_changed)

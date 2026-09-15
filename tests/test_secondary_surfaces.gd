@@ -118,7 +118,7 @@ func _how_to_play_surface() -> void:
     var back_rect := back.get_global_rect()
     check(back_rect.position.x >= 1000.0 and back_rect.position.x <= 1100.0 and back_rect.position.y <= 96.0,
         "Back sits in the top-right of the reference frame")
-    check(htp.find_child("AnchorBack", true, false) != null and htp.find_child("AnchorBack", true, false).has_method("anchor_position"),
+    check(back.get_node_or_null("CursorAnchor") != null and back.get_node("CursorAnchor").has_method("anchor_position"),
         "Back exposes an authored CursorAnchor")
     check(basics_tab.get_node_or_null("Anchor") != null and fighters_tab.get_node_or_null("Anchor") != null,
         "both section tabs expose authored CursorAnchors")
@@ -295,12 +295,12 @@ func _story_briefing_surface() -> void:
     check(not offending and story.back_button().text == "BACK", "no MATCH SETUP vocabulary on the briefing; Back is the player route")
     story.show_result(true)
     await settle(4)
-    check(story.action_button().text == "REPLAY" and story.back_button().text == "MAIN MENU",
-        "the win result offers replay + main menu")
+    check(story.action_button().text == "REPLAY" and story.back_button().text == "BACK",
+        "the win result offers replay while the header action stays BACK")
     story.show_result(false)
     await settle(2)
-    check(story.action_button().text == "RETRY" and story.back_button().text == "MAIN MENU",
-        "the loss result offers retry + main menu")
+    check(story.action_button().text == "RETRY" and story.back_button().text == "BACK",
+        "the loss result offers retry while the header action stays BACK")
     var exited := [false]
     story.exit_finished.connect(func() -> void: exited[0] = true)
     story.play_exit()

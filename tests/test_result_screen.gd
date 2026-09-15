@@ -413,7 +413,7 @@ func run():
     var briefing = load("res://scenes/story_briefing.tscn").instantiate()
     root.add_child(briefing)
     await process_frame
-    check(str(briefing.back_button().text) == "BACK TO MAIN", "story back uses the player route vocabulary")
+    check(str(briefing.back_button().text) == "BACK", "story back uses the canonical header action vocabulary")
     briefing.queue_free()
     await process_frame
     var direct = load("res://scenes/main.tscn").instantiate()

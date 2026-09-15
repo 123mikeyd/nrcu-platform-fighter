@@ -45,6 +45,7 @@ signal exit_finished
 
 const Tokens = preload("res://scripts/ui_tokens.gd")
 const CursorAnchorScript = preload("res://scripts/frontend/cursor_anchor.gd")
+const BackActionScene = preload("res://scenes/components/BackAction.tscn")
 const FocusGraph = preload("res://scripts/frontend/focus_graph.gd")
 
 const FPS := 60.0
@@ -171,23 +172,16 @@ func _build_header() -> void:
     _content.add_child(subtitle)
     # BACK is always visible: the page is never a trap. It owns an authored
     # CursorAnchor like every other focusable control here (Doc 03 §6).
-    _back = Button.new()
+    _back = BackActionScene.instantiate()
     _back.name = "StageBack"
     _back.text = "BACK"
     _back.size = Vector2(170.0, 46.0)
     _back.position = Vector2(Tokens.DESIGN.x - Tokens.MARGIN_RIGHT - 170.0, HEADER_TITLE_Y + 2.0)
-    _back.add_theme_font_size_override("font_size", Tokens.T_ACTION)
-    Tokens.apply_styles(_back, Tokens.row_styles())
     _back.pressed.connect(request_back)
     _back.focus_entered.connect(_on_back_focused)
     _content.add_child(_back)
-    # Its CursorAnchor runs the shared default rule (the anchor's parent IS the
-    # button), so the fingertip lands on the button's lower-right — on the
-    # action, clear of its left-aligned text.
-    var back_anchor := CursorAnchorScript.new()
-    back_anchor.name = "CursorAnchor"
-    back_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    _back.add_child(back_anchor)
+    # The shared BackAction owns the authored CursorAnchor and its visual state;
+    # this screen only supplies geometry and the existing route signal.
 
 func _build_divider() -> void:
     # One quiet vertical rule: the field and the preview read as two regions.

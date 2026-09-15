@@ -27,7 +27,6 @@ var _render_view: Control = null
 @onready var _title: Label = $ReferenceFrame/Header/Title
 @onready var _step: Label = $ReferenceFrame/Header/StepLabel
 @onready var _back: Button = $ReferenceFrame/Header/BackAction
-@onready var _back_rail: Panel = $ReferenceFrame/Header/BackRail
 @onready var _verdict_rule: Panel = $ReferenceFrame/ResultBody/VerdictRule
 @onready var _verdict: Label = $ReferenceFrame/ResultBody/Verdict
 @onready var _detail: Label = $ReferenceFrame/ResultBody/Detail
@@ -73,19 +72,6 @@ func _style() -> void:
 		button.add_theme_color_override("font_focus_color", Tokens.CREAM)
 	for rule in [_replay_rule, _change_rule, _menu_rule]:
 		rule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
-	Tokens.apply_styles(_back, {
-		"normal": Tokens.flat(Color(0, 0, 0, 0)),
-		"hover": Tokens.flat(Color(1, 1, 1, 0.05)),
-		"pressed": Tokens.flat(Color(1, 1, 1, 0.09)),
-		"focus": Tokens.flat(Color(0, 0, 0, 0)),
-	})
-	_back.add_theme_font_override("font", Tokens.font("semibold"))
-	_back.add_theme_color_override("font_color", Tokens.CREAM_DIM)
-	_back.add_theme_color_override("font_hover_color", Tokens.CREAM)
-	_back.add_theme_color_override("font_focus_color", Tokens.CREAM)
-	_back_rail.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
-	_back_rail.hide()
-
 func _wire() -> void:
 	_replay.pressed.connect(_on_replay_pressed)
 	_change_fighter.pressed.connect(_on_change_fighter_pressed)
@@ -131,8 +117,6 @@ func _on_focus_entered(button: Button) -> void:
 		_change_rule.show()
 	elif button == _menu:
 		_menu_rule.show()
-	elif button == _back:
-		_back_rail.show()
 	var hand = _hand()
 	if hand != null and hand.mode == 1:
 		var anchor := focus_anchor_for(button)
@@ -140,15 +124,12 @@ func _on_focus_entered(button: Button) -> void:
 			hand.set_focus_target(anchor)
 
 func _on_focus_exited(button: Button) -> void:
-	if button == _back:
-		_back_rail.hide()
-	else:
-		if button == _replay:
-			_replay_rule.hide()
-		elif button == _change_fighter:
-			_change_rule.hide()
-		elif button == _menu:
-			_menu_rule.hide()
+	if button == _replay:
+		_replay_rule.hide()
+	elif button == _change_fighter:
+		_change_rule.hide()
+	elif button == _menu:
+		_menu_rule.hide()
 
 func present(won: bool, fighter_id: String) -> void:
 	_won = won
@@ -159,7 +140,7 @@ func present(won: bool, fighter_id: String) -> void:
 	_detail.text = "BOBO DEFEATED" if won else "Out of stocks. Bobo is still standing."
 	_fighter_label.text = Roster.display_name(fighter_id).to_upper() if fighter_id != "" else "YOUR FIGHTER"
 	_replay.text = "REPLAY" if won else "RETRY"
-	_back.text = "BACK TO MAIN"
+	_back.text = "BACK"
 	_refresh_render()
 	_refresh_focus_graph()
 	_replay.grab_focus()
@@ -225,7 +206,7 @@ func focus_anchor_for(control: Control) -> Control:
 	if control == _menu:
 		return _anchor_menu
 	if control == _back:
-		return $ReferenceFrame/Header/AnchorBack
+		return FocusGraph.anchor_of(_back)
 	return FocusGraph.anchor_of(control)
 
 func _refresh_focus_graph() -> void:

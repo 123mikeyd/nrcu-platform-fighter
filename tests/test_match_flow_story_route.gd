@@ -280,8 +280,8 @@ func part_e_story_result_and_replay() -> void:
     check(str(result.title_label().text) == "YOU'RE PRETTY COOL", "the package win wording is presented")
     check(str(result.action_button().text) == "REPLAY",
         "the win offers REPLAY (not the multiplayer Results screen)")
-    check(str(result.menu_button().text) == "MAIN MENU" and str(result.back_button().text) == "BACK TO MAIN",
-        "the Story Result routes to MAIN MENU / Back to Main")
+    check(str(result.menu_button().text) == "MAIN MENU" and str(result.back_button().text) == "BACK",
+        "the Story Result routes to MAIN MENU while the header action stays BACK")
     check(result.change_fighter_button().visible, "the Story Result offers CHANGE FIGHTER")
     check(result_host.story_selection_id() == "turbofit", "the Story Result keeps the played fighter")
 

@@ -138,7 +138,6 @@ var _render_view: Control = null
 @onready var _title: Label = $ReferenceFrame/Header/Title
 @onready var _title_rule: Panel = $ReferenceFrame/Header/TitleRule
 @onready var _back: Button = $ReferenceFrame/Header/HelpBack
-@onready var _back_rail: Panel = $ReferenceFrame/Header/BackRail
 @onready var _tab_band: Control = $ReferenceFrame/TabBand
 @onready var _profile_control: Control = $ReferenceFrame/TabBand/ProfileControl
 @onready var _profile_label: Label = $ReferenceFrame/TabBand/ProfileControl/ProfileLabel
@@ -180,19 +179,6 @@ func _style() -> void:
     _title.add_theme_font_override("font", Tokens.font("semibold"))
     _title.add_theme_color_override("font_color", Tokens.CREAM)
     _title_rule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.RULE_WARM))
-    Tokens.apply_styles(_back, {
-        "normal": Tokens.flat(Color(0, 0, 0, 0)),
-        "hover": Tokens.flat(Color(1, 1, 1, 0.05)),
-        "pressed": Tokens.flat(Color(1, 1, 1, 0.09)),
-        "focus": Tokens.flat(Color(0, 0, 0, 0)),
-    })
-    _back.add_theme_font_override("font", Tokens.font("semibold"))
-    _back.add_theme_color_override("font_color", Tokens.CREAM_DIM)
-    _back.add_theme_color_override("font_hover_color", Tokens.CREAM)
-    _back.add_theme_color_override("font_focus_color", Tokens.CREAM)
-    _back.add_theme_color_override("font_pressed_color", Tokens.CREAM)
-    _back_rail.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
-    _back_rail.hide()
     _profile_label.add_theme_font_override("font", Tokens.font("medium"))
     _profile_label.add_theme_color_override("font_color", Tokens.CREAM_DIM)
     _moves_heading.add_theme_font_override("font", Tokens.font("medium"))
@@ -451,7 +437,6 @@ func _refresh_render(id: String) -> void:
 func _wire_back() -> void:
     _back.pressed.connect(_on_back_pressed)
     _back.focus_entered.connect(_on_back_focused)
-    _back.focus_exited.connect(_on_back_unfocused)
 
 func _on_semantic_cancel() -> void:
     # Home owns the global Quit modal while this page stays mounted behind it.
@@ -480,15 +465,9 @@ func _on_back_pressed() -> void:
 
 func _on_back_focused() -> void:
     FocusGraph.track(self, _back)
-    _back_rail.show()
-    _back.add_theme_color_override("font_color", Tokens.CREAM)
     var hand = _hand()
     if hand != null and hand.mode == 1:
-        hand.set_focus_target($ReferenceFrame/Header/AnchorBack)
-
-func _on_back_unfocused() -> void:
-    _back_rail.hide()
-    _back.add_theme_color_override("font_color", Tokens.CREAM_DIM)
+        hand.set_focus_target(FocusGraph.anchor_of(_back))
 
 func section_ids() -> Array:
     return SECTIONS.duplicate()
@@ -640,7 +619,7 @@ func focus_anchor_for(control: Control) -> Control:
         if root != null and root.get_node_or_null("HitArea") == control:
             return tab_anchor(section)
     if control == _back:
-        return $ReferenceFrame/Header/AnchorBack
+        return FocusGraph.anchor_of(_back)
     var index: int = _tiles.find(control)
     if index >= 0:
         return _tiles[index].anchor()

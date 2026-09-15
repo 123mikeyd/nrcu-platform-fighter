@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/char_select.gd" id="1_css"]
 [ext_resource type="PackedScene" path="res://scenes/components/PlayerBay.tscn" id="2_bay"]
 [ext_resource type="PackedScene" path="res://scenes/components/ReadyBand.tscn" id="3_ready"]
-[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="4_anchor"]
+[ext_resource type="PackedScene" path="res://scenes/components/BackAction.tscn" id="4_back"]
 [ext_resource type="PackedScene" path="res://scenes/components/SegmentedChoice.tscn" id="5_mode"]
 
 [node name="CharacterSelect" type="Control"]
@@ -62,15 +62,12 @@ offset_top = 2.0
 offset_right = 1000.0
 offset_bottom = 42.0
 
-[node name="BackAction" type="Button" parent="ReferenceFrame/Header"]
+[node name="BackAction" parent="ReferenceFrame/Header" instance=ExtResource("4_back")]
 layout_mode = 0
 offset_left = 1064.0
 offset_top = 4.0
 offset_right = 1168.0
 offset_bottom = 40.0
-focus_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "BACK"
 
 [node name="RosterField" type="Control" parent="ReferenceFrame"]
 layout_mode = 0
@@ -130,8 +127,3 @@ offset_left = 90.0
 offset_top = 196.0
 offset_right = 1191.0
 offset_bottom = 260.0
-
-[node name="CursorAnchor" type="Control" parent="ReferenceFrame/Header/BackAction"]
-layout_mode = 0
-mouse_filter = 2
-script = ExtResource("4_anchor")

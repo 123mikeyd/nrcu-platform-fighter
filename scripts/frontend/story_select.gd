@@ -48,7 +48,6 @@ var _ready_state := true
 @onready var _title: Label = $ReferenceFrame/Header/Title
 @onready var _step: Label = $ReferenceFrame/Header/StepLabel
 @onready var _back: Button = $ReferenceFrame/Header/BackAction
-@onready var _back_rail: Panel = $ReferenceFrame/Header/BackRail
 @onready var _roster_strip: Control = $ReferenceFrame/SelectBody/RosterZone/RosterStrip
 @onready var _fighter_name: Label = $ReferenceFrame/SelectBody/PreviewZone/FighterName
 @onready var _preview_label: Label = $ReferenceFrame/SelectBody/PreviewZone/PreviewLabel
@@ -82,18 +81,6 @@ func _style() -> void:
 	_briefing_copy.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	for rule in [$ReferenceFrame/SelectBody/RuleTop, $ReferenceFrame/SelectBody/RuleMiddle]:
 		rule.add_theme_stylebox_override("panel", Tokens.flat(Tokens.RULE))
-	Tokens.apply_styles(_back, {
-		"normal": Tokens.flat(Color(0, 0, 0, 0)),
-		"hover": Tokens.flat(Color(1, 1, 1, 0.05)),
-		"pressed": Tokens.flat(Color(1, 1, 1, 0.09)),
-		"focus": Tokens.flat(Color(0, 0, 0, 0)),
-	})
-	_back.add_theme_font_override("font", Tokens.font("semibold"))
-	_back.add_theme_color_override("font_color", Tokens.CREAM_DIM)
-	_back.add_theme_color_override("font_hover_color", Tokens.CREAM)
-	_back.add_theme_color_override("font_focus_color", Tokens.CREAM)
-	_back_rail.add_theme_stylebox_override("panel", Tokens.flat(Tokens.ACCENT))
-	_back_rail.hide()
 	Tokens.apply_styles(_continue, {
 		"normal": Tokens.flat(Tokens.SURFACE_1),
 		"hover": Tokens.flat(Tokens.SURFACE_2),
@@ -113,7 +100,6 @@ func _style() -> void:
 func _wire() -> void:
 	_back.pressed.connect(_on_back_pressed)
 	_back.focus_entered.connect(_on_back_focused)
-	_back.focus_exited.connect(_on_back_unfocused)
 	_continue.pressed.connect(_on_continue_pressed)
 	_continue.focus_entered.connect(_on_continue_focused)
 	_continue.focus_exited.connect(_on_continue_unfocused)
@@ -148,15 +134,9 @@ func _on_continue_pressed() -> void:
 
 func _on_back_focused() -> void:
 	FocusGraph.track(self, _back)
-	_back_rail.show()
-	_back.add_theme_color_override("font_color", Tokens.CREAM)
 	var hand = _hand()
 	if hand != null and hand.mode == 1:
-		hand.set_focus_target($ReferenceFrame/Header/AnchorBack)
-
-func _on_back_unfocused() -> void:
-	_back_rail.hide()
-	_back.add_theme_color_override("font_color", Tokens.CREAM_DIM)
+		hand.set_focus_target(FocusGraph.anchor_of(_back))
 
 func _on_continue_focused() -> void:
 	FocusGraph.track(self, _continue)
@@ -329,7 +309,7 @@ func focus_anchor_for(control: Control) -> Control:
 	if control == _continue:
 		return _anchor_continue
 	if control == _back:
-		return $ReferenceFrame/Header/AnchorBack
+		return FocusGraph.anchor_of(_back)
 	var index: int = _tiles.find(control)
 	if index >= 0:
 		return _tiles[index].anchor()
