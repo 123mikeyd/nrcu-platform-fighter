@@ -30,7 +30,7 @@ func payload_damage() -> float:
     return DAMAGE
 func _hit_target(target: Node3D) -> void:
     if _try_absorb(target): return
-    target.receive_hit(DAMAGE,Vector3(direction,0.12,0),PUSH)
+    preload("res://scripts/body_hurtboxes.gd").deliver(target,DAMAGE,Vector3(direction,0.12,0),PUSH,contact_hit)
 func reflect(new_source: Node3D, _new_color: Color) -> void:
     source = new_source
     direction *= -1
@@ -52,7 +52,10 @@ func _physics_process(delta: float) -> void:
     for fighter in get_tree().get_nodes_in_group("fighters"):
         if not source.can_hit(fighter):excluded.append(fighter.get_rid())
     query.exclude = excluded
+    preload("res://scripts/body_hurtboxes.gd").prepare(source, query)
     var hit := get_world_3d().direct_space_state.intersect_ray(query)
+    contact_hit = hit.duplicate()
+    if not hit.is_empty(): hit.collider = preload("res://scripts/body_hurtboxes.gd").resolve(hit.collider)
     if not hit.is_empty():
         global_position = hit.position
         if hit.collider.is_in_group("fighters") and source.can_hit(hit.collider):_hit_target(hit.collider)

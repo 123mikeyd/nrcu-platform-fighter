@@ -55,7 +55,9 @@ class RunnerTests(unittest.TestCase):
         process = subprocess.run([sys.executable, str(MODULE), '--engine', sys.executable, '--list'], capture_output=True, text=True)
         self.assertEqual(process.returncode, 0)
         self.assertIn('test_bobo_status', process.stdout)
-        self.assertEqual(len(json.loads(process.stdout)), 148)
+        expected = sorted(p.stem for p in (MODULE.parent.parent / 'tests').glob('test_*.gd'))
+        self.assertEqual(json.loads(process.stdout), expected)
+        self.assertTrue(expected, 'test discovery must not be empty')
         process = subprocess.run([sys.executable, str(MODULE), '--engine', sys.executable, '--output', '..', '--list'], capture_output=True, text=True)
         self.assertNotEqual(process.returncode, 0)
 

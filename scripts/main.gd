@@ -220,6 +220,22 @@ func apply_level(id: String) -> void:
         stage_theme.queue_free()
     stage_theme = null
     active_level = id
+    var layout = preload("res://scripts/stage_layouts.gd")
+    var surfaces: Array = layout.surfaces(id)
+    for i in layout.NAMES.size():
+        var body: StaticBody3D = get_node(layout.NAMES[i])
+        # Keep RIDs alive for existing fighter one-way exceptions, but absent
+        # surfaces must have neither collision nor presentation.
+        body.collision_layer = (1 if i == 0 else 2) if i < surfaces.size() else 0
+        if i >= surfaces.size():
+            body.get_child(0).hide()
+            continue
+        body.position = surfaces[i][0]
+        body.get_child(0).mesh.size = surfaces[i][1]
+        body.get_child(1).shape.size = surfaces[i][1]
+        if i > 0:
+            body.set_meta("top_y", surfaces[i][0].y + surfaces[i][1].y * 0.5)
+            body.set_meta("half_width", surfaces[i][1].x * 0.5)
     for visual in debug_visuals: visual.visible = id == "debug"
     if id != "debug":
         stage_theme = preload("res://scripts/stage_theme.gd").new()
@@ -231,7 +247,7 @@ func open_story() -> void:
     setup.hide()
     story_state = "ready"
     story_title.text = "STORY 01 / BOBO"
-    story_detail.text = "A big goofball. A very sturdy punching bag.\nDeplete Bobo's 400 HP to win. He stays put and will not attack.\nYou have three stocks — watch the edges!\n\nA / D move · Space jump · F basic · G special\nAim with WASD · E shield · Esc back to setup"
+    story_detail.text = "A big goofball with a slow two-hit claw attack.\nDeplete Bobo's 400 HP. Dodge his claws, then punish the recovery!\nHe stays put. You have three stocks — watch the edges!\n\nA / D move · Space jump · F basic · G special\nAim with WASD · E shield · Esc back to setup"
     story_choice_row.show()
     story_action.text = "START ENCOUNTER"
     story_panel.show()
@@ -263,7 +279,7 @@ func start_story() -> void:
     if start_match(slots, false, true):
         story_state = "playing"
         hud_title.text = "STORY 01 — %s VS BOBO" % player_one.fighter_name
-        hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\nBobo: 400 HP, stationary, no attacks. Deplete his HP! · Esc: match setup"
+        hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\nBobo: 400 HP · slow two-hit claws · punish his recovery! · Esc: match setup"
         player_one.reset_fighter(p1_spawn, true)
         # Central floor lane keeps this large opponent clear of side platforms.
         player_two.reset_fighter(Vector3(0.6, 1.0, 0.0), true)

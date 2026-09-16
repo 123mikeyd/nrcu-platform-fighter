@@ -11,7 +11,7 @@ func _post_import(scene: Node) -> Object:
     var source: AnimationPlayer = raw.find_children("*", "AnimationPlayer", true, false)[0]
     var target: AnimationPlayer = scene.find_children("*", "AnimationPlayer", true, false)[0]
     var library := target.get_animation_library("")
-    for clip in ["Idle", "Run", "Hit"]:
+    for clip in ["Idle", "Run", "Hit", "PitchGuillotine"]:
         if library.has_animation(clip): library.remove_animation(clip)
         library.add_animation(clip, source.get_animation(clip).duplicate(true))
     raw.free()

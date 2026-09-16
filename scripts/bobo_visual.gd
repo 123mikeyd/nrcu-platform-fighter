@@ -34,7 +34,15 @@ func react(clip: String) -> void:
     elapsed = 0
     animation_player.play(clip,0.08)
     animation_player.seek(0,true)
+func seek_thrust(time: float) -> void:
+    if current_clip != "ThrustSlash": react("ThrustSlash")
+    animation_player.stop()
+    animation_player.play("ThrustSlash", 0)
+    animation_player.seek(time, true)
+    animation_player.pause()
+    model.find_children("*", "Skeleton3D", true, false)[0].force_update_all_bone_transforms()
 func tick(delta: float) -> void:
+    if current_clip == "ThrustSlash": return
     elapsed += delta
     if current_clip not in ["Idle","Defeat"] and elapsed >= animation_player.get_animation(current_clip).length:
         react("Idle")

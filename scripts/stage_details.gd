@@ -106,7 +106,7 @@ func fabric(pos: Vector3,width: float,height: float,mat: Material,parent: Node,f
     return mesh(st.commit(),pos,m,parent)
 func room():
     # Textured broad shelf fronts and actual horizontal tops, inset joinery.
-    for p in [[Vector3(0,-0.55,0),Vector3(18,1,5)],[Vector3(-5.2,3,0),Vector3(5,0.45,3.8)],[Vector3(5.2,3,0),Vector3(5,0.45,3.8)],[Vector3(0,6,0),Vector3(4.5,0.4,3.4)]]:
+    for p in preload("res://scripts/stage_layouts.gd").surfaces(level_id):
         box(p[0]+Vector3(0,0,p[1].z/2+0.025),Vector3(p[1].x,p[1].y*0.85,0.055),wood)
         box(p[0]+Vector3(0,p[1].y/2+0.005,0),Vector3(p[1].x,0.012,p[1].z),wood)
         for x in [-p[1].x/2+0.18,p[1].x/2-0.18]:
@@ -221,7 +221,7 @@ func arch(origin: Vector3, size: float):
         line(Vector3(-2.5+i*0.23,0,1.0),Vector3(-2.5+i*0.23,-0.8-i*0.23,1.1),0.035,vine,p)
 func sky():
     # Inlaid platform fascias, bevel courses, engraved framed panels.
-    for p in [[Vector3(0,-0.55,0),Vector3(18,1,5)],[Vector3(-5.2,3,0),Vector3(5,0.45,3.8)],[Vector3(5.2,3,0),Vector3(5,0.45,3.8)],[Vector3(0,6,0),Vector3(4.5,0.4,3.4)]]:
+    for p in preload("res://scripts/stage_layouts.gd").surfaces(level_id):
         var pos: Vector3 = p[0]
         var dim: Vector3 = p[1]
         for y in [-dim.y*0.42,dim.y*0.42]:

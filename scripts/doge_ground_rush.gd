@@ -161,24 +161,27 @@ func after_move() -> void:
     motion=active_motion
     for target in get_tree().get_nodes_in_group("fighters"):
         if not actor.can_hit(target) or target in targets: continue
-        var other := capsule(target)
-        if not other: continue
-        if (other.global_position.x-active_transform.origin.x)*rush_facing < -0.02: continue
-        var half: float = maxf(0,other.shape.height*0.5-other.shape.radius)
-        var a := other.global_transform*Vector3(0,-half,0)
-        var b := other.global_transform*Vector3(0,half,0)
-        var radius: float = own_radius + other.shape.radius * other.global_basis.get_scale().x + 0.01
-        var contact := false
-        var count := maxi(1,ceili(motion.length()/0.02))
-        for i in range(count+1):
-            var offset := motion * (1-float(i)/count)
-            var near := Geometry3D.get_closest_points_between_segments(active_transform*Vector3(0,-own_half,0)-offset,active_transform*Vector3(0,own_half,0)-offset,a,b)
-            if near[0].distance_to(near[1]) <= radius and terrain_ray(active_transform.origin-offset,other.global_position).is_empty():
-                contact = true
+        for other in target.get_hurtbox_shapes():
+            if not other is CollisionShape3D or other.disabled or not other.shape is CapsuleShape3D: continue
+            if (other.global_position.x-active_transform.origin.x)*rush_facing < -0.02: continue
+            var half: float = maxf(0,other.shape.height*0.5-other.shape.radius)
+            var a: Vector3 = other.global_transform*Vector3(0,-half,0)
+            var b: Vector3 = other.global_transform*Vector3(0,half,0)
+            var radius: float = own_radius + other.shape.radius * other.global_basis.get_scale().x + 0.01
+            var contact := false
+            var witness := PackedVector3Array()
+            var count := maxi(1,ceili(motion.length()/0.02))
+            for i in range(count+1):
+                var offset := motion * (1-float(i)/count)
+                var near := Geometry3D.get_closest_points_between_segments(active_transform*Vector3(0,-own_half,0)-offset,active_transform*Vector3(0,own_half,0)-offset,a,b)
+                if near[0].distance_to(near[1]) <= radius and terrain_ray(active_transform.origin-offset,other.global_position).is_empty():
+                    contact = true
+                    witness = near
+                    break
+            if contact:
+                targets.append(target) # Latch before receive_hit can re-enter combat.
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,14,Vector3(rush_facing*0.2,1,0),lerpf(5,8,power),other,witness[1],witness[0])
                 break
-        if contact:
-            targets.append(target) # Latch before receive_hit can re-enter combat.
-            target.receive_hit(14,Vector3(rush_facing*0.2,1,0),lerpf(5,8,power))
     for i in actor.get_slide_collision_count():
         var collision: KinematicCollision3D = actor.get_slide_collision(i)
         for j in collision.get_collision_count():

@@ -33,7 +33,7 @@ static func box(color: Color, border := Color.TRANSPARENT, width := 0) -> StyleB
     s.content_margin_bottom = 8
     return s
 const CONTROLS = "P1  WASD move / aim · Space or W jump\n    F basic · G special · E shield\n\nP2  Arrows move / aim · Enter or Up jump\n    K basic · L special · O shield\n\nPAD Stick / D-pad aim · A jump · X basic\n    B special · shoulder shield\n\nDirection + attack changes your move.\nTap down on an upper platform to drop.\nEsc: match setup · R after winner: rematch.\nConnect controllers before launching."
-const MOVES = "TEKNIUM\nA/D + G force push · neutral G close electric grab\n\nDOGE MAN\nGround: hold S+G, release G to rush\nA/D+G flying tackle · jump then F Superman punch\n\nGGB\nFive jumps · hold jump to float\nA/D + G sticky goo · S + G lead plunge\n\nTURBOFIT\nBasic strikes and sound attacks\n\nICE MAGE\nF palm · G Frost Bolt · W + G Frost Rise\n\nWITCHEER\nF kick/punch · ground S+F sweep · air W+F up basic\nA/D+G coin · W+G swim · G celebrate · S+G absorb/heal"
+const MOVES = "TEKNIUM\nA/D + G force push · neutral G close electric grab\n\nDOGE MAN\nGround: hold S+G, release G to rush\nA/D+G flying tackle · jump then F Superman punch\n\nGGB\nFive jumps · hold jump to float\nA/D + G sticky goo · S + G steel/normal toggle\nSteel fast-drops, stays planted; tap S+G again to move\n\nTURBOFIT\nBasic strikes and sound attacks\n\nICE MAGE\nF palm · G Frost Bolt · W + G Frost Rise\n\nWITCHEER\nF kick/punch · ground S+F sweep · air W+F up basic\nA/D+G coin · W+G swim · G celebrate · S+G absorb/heal"
 static func help(parent: Control, closed: Callable) -> Control:
     var page := Panel.new()
     page.name = "HelpPage"

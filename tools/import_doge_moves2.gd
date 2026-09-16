@@ -16,12 +16,13 @@ func _post_import(scene: Node) -> Object:
         if library.has_animation(clip): library.remove_animation(clip)
         library.add_animation(clip, source.get_animation(clip).duplicate(true))
     exact.free()
-    # New hand-authored two-piece is sampled at 60 Hz; preserve every old clip.
+    # Approved saved v003: dense 480-Hz bake preserves manual subframe curves.
+    # Authored timing remains frames 0..60 at 60 FPS (one second).
     var punch_state := GLTFState.new()
     if document.append_from_file(get_source_file(), punch_state) != OK:
         push_error("Doge two-piece source import failed")
         return scene
-    var punch_scene := document.generate_scene(punch_state, 60.0, false, true)
+    var punch_scene := document.generate_scene(punch_state, 480.0, false, true)
     var punch_player: AnimationPlayer = punch_scene.find_children("*", "AnimationPlayer", true, false)[0]
     if punch_player.has_animation("TysonTwoPiece"):
         if library.has_animation("TysonTwoPiece"): library.remove_animation("TysonTwoPiece")

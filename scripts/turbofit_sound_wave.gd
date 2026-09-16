@@ -76,17 +76,33 @@ func _sweep_wave(motion: Vector3) -> bool:
         if not source.can_hit(fighter) or not damage_active():
             excluded.append(fighter.get_rid())
     query.exclude = excluded
+    preload("res://scripts/body_hurtboxes.gd").prepare(source, query, damage_active())
     var space := get_world_3d().direct_space_state
     var hits := space.intersect_shape(query, 32)
     if hits.is_empty():
         query.motion = motion
         var fractions := space.cast_motion(query)
         if fractions[0] >= 1.0: return false
+        var sweep_origin := query.transform.origin
         query.transform.origin += motion * minf(1.0, fractions[1] + 0.002)
         query.motion = Vector3.ZERO
         hits = space.intersect_shape(query, 32)
+        # cast_motion and intersect_shape use different contact tolerances.
+        # Narrow tilted pilot limbs can yield a cast without a contact manifold.
+        # Refine only INSIDE this already-budgeted movement segment: no radius,
+        # TTL, travel, team, terrain or damage extension. Require a real overlap.
+        if hits.is_empty() and source.get_tree().get_nodes_in_group("fighters").any(func(f): return f.has_node("BodyHurtboxes")):
+            for distance in [0.001, 0.002, 0.004, 0.008, 0.016]:
+                var fraction := minf(1.0, fractions[1] + distance / maxf(motion.length(), 0.000001))
+                query.transform.origin = sweep_origin + motion * fraction
+                hits = space.intersect_shape(query, 32)
+                if not hits.is_empty(): break
+            if hits.is_empty(): return false # A numerical graze is not an impact.
     else:
         query.motion = Vector3.ZERO
+    for hit in hits:
+        hit.contact = preload("res://scripts/body_hurtboxes.gd").shape_contact(space,query,hit,hits)
+        hit.collider = preload("res://scripts/body_hurtboxes.gd").resolve(hit.collider)
     global_position = query.transform.origin - volume_offset
     # Terrain takes priority when touching stage and hurtbody simultaneously.
     for hit in hits:
@@ -96,7 +112,7 @@ func _sweep_wave(motion: Vector3) -> bool:
         if source.can_hit(target) and damage_active():
             if _try_absorb(target): return true
             if not target.shielding:
-                target.receive_hit(11.0, Vector3(direction,0.2,0),4.5)
+                preload("res://scripts/body_hurtboxes.gd").deliver(target,11.0, Vector3(direction,0.2,0),4.5,hit.contact)
             return true
     return true
 

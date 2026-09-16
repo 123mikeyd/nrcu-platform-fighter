@@ -5,6 +5,10 @@ const MODEL=preload("res://assets/ggb/ggb.glb")
 # 0.91314601898 / 1.89958596230, antenna included; replaces the old attachment.
 # Placement only: no controller, collider, hit geometry, material or wing changes.
 const PRESENTATION_SCALE := 0.48186128424
+# Provisional in-game review values, not final art approval. Parent-space units
+# keep hover presentation-only; steel retains the approved floor placement.
+const NORMAL_HOVER := 0.16
+const IDLE_FLAP_AMPLITUDE := 0.14
 var meshes: Array[MeshInstance3D]=[]
 var wings: Array[Node3D]=[]
 var originals: Array[Material]=[]
@@ -57,13 +61,14 @@ func _ready():
     sync_pose(true,Vector3.ZERO,false,1,0,false)
 func set_lead(active:bool):
     is_lead=active
+    position.y = 0.0 if active else NORMAL_HOVER
     for i in meshes.size():
         meshes[i].set_surface_override_material(0,lead_material if active else originals[i])
 func sync_pose(grounded:bool,velocity:Vector3,drop:bool,facing:float,delta:float,interrupted:bool):
     if not frozen_reaction_originals.is_empty(): return
     set_lead(drop and not interrupted)
     phase+=delta*(8.0 if grounded else 38.0)
-    var amplitude:=0.08 if grounded else 0.62
+    var amplitude:=IDLE_FLAP_AMPLITUDE if grounded else 0.62
     if interrupted:amplitude=0.0
     for i in wings.size():
         var side:float=-1.0 if i==0 else 1.0
@@ -72,3 +77,6 @@ func sync_pose(grounded:bool,velocity:Vector3,drop:bool,facing:float,delta:float
     rotation.y=facing*0.48
     model.position.y=0.025*sin(phase*0.5) if not grounded and not interrupted and not is_lead else 0.0
     model.rotation.z=clampf(-velocity.x*0.009,-0.08,0.08) if not grounded and not is_lead else 0.0
+
+func body_center_world() -> Vector3:
+    return meshes[0].to_global(meshes[0].get_aabb().get_center())

@@ -8,6 +8,7 @@ var freeze_bolt := false
 var lifetime := 1.6
 const SPEED := 15.0
 var _visual: MeshInstance3D
+var contact_hit: Dictionary = {}
 
 func _ready() -> void:
     add_to_group("projectiles")
@@ -56,7 +57,7 @@ func _try_absorb(target: Node3D) -> bool:
 func _hit_target(target: Node3D) -> void:
     if _try_absorb(target): return
     var blocked: bool = target.shielding
-    target.receive_hit(payload_damage(), Vector3(direction, 0.2, 0), 1.0 if freeze_bolt else 4.5)
+    preload("res://scripts/body_hurtboxes.gd").deliver(target, payload_damage(), Vector3(direction, 0.2, 0), 1.0 if freeze_bolt else 4.5, contact_hit)
     if freeze_bolt and not blocked:
         target.apply_freeze(source)
 
@@ -91,7 +92,10 @@ func _physics_process(delta: float) -> void:
     for fighter in get_tree().get_nodes_in_group("fighters"):
         if not source.can_hit(fighter):
             query.exclude += [fighter.get_rid()]
+    preload("res://scripts/body_hurtboxes.gd").prepare(source, query)
     var hit := get_world_3d().direct_space_state.intersect_ray(query)
+    contact_hit = hit.duplicate()
+    if not hit.is_empty(): hit.collider = preload("res://scripts/body_hurtboxes.gd").resolve(hit.collider)
     if not hit.is_empty():
         var collider = hit.collider
         if collider.is_in_group("fighters") and source.can_hit(collider):
@@ -104,6 +108,7 @@ func _physics_process(delta: float) -> void:
     for target in get_tree().get_nodes_in_group("fighters"):
         if not source.can_hit(target):
             continue
+        if target.has_node("BodyHurtboxes"): continue # No legacy proximity fallback for pilots.
         var center: Vector3 = target.global_position + Vector3.UP
         var closest := Geometry3D.get_closest_point_to_segment(center, start, end)
         var distance := start.distance_to(closest)

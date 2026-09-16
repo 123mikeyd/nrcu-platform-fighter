@@ -20,7 +20,7 @@ func _ready():
     original_canvas_layer = environment.background_canvas_max_layer
     original_ambient = environment.ambient_light_color
     environment.ambient_light_color = Color(0.9,0.78,0.61) if level_id == "toy_room" else Color(0.66,0.82,1)
-    for item in [[Vector3(0,-0.55,0),Vector3(18,1,5)], [Vector3(-5.2,3,0),Vector3(5,0.45,3.8)], [Vector3(5.2,3,0),Vector3(5,0.45,3.8)], [Vector3(0,6,0),Vector3(4.5,0.4,3.4)]]:
+    for item in preload("res://scripts/stage_layouts.gd").surfaces(level_id):
         box(item[0],item[1],Color(0.58,0.32,0.13) if level_id == "toy_room" else Color(0.58,0.72,0.79))
         box(item[0] + Vector3(0,item[1].y*0.5-0.035,0), Vector3(item[1].x,0.07,item[1].z), Color(0.88,0.62,0.32) if level_id == "toy_room" else Color(0.85,0.91,0.89))
         box(item[0] + Vector3(0,0,item[1].z*0.5+0.01),Vector3(item[1].x,0.09,0.03),Color(0.94,0.72,0.38))
@@ -158,9 +158,10 @@ func build_sky():
     layer.add_child(video)
     video.play()
     # Faceted suspended foundations and gold ribs; no extra collision surfaces.
-    for item in [[Vector3(0,-1.7,0),Vector3(15,1.3,3.8)], [Vector3(-5.2,2.4,0),Vector3(3.7,0.6,2.7)], [Vector3(5.2,2.4,0),Vector3(3.7,0.6,2.7)], [Vector3(0,5.45,0),Vector3(3.0,0.7,2.3)]]:
-        box(item[0],item[1],Color(0.25,0.39,0.5))
-    for x in [-7.5,-5,-2.5,0,2.5,5,7.5]:
+    for item in preload("res://scripts/stage_layouts.gd").surfaces(level_id):
+        var depth := 1.3 if item[1].x > 10 else 0.45
+        box(item[0] - Vector3(0,item[1].y * 0.5 + depth * 0.5,0),Vector3(item[1].x * 0.8,depth,item[1].z * 0.76),Color(0.25,0.39,0.5))
+    for x in [-10,-7.5,-5,-2.5,0,2.5,5,7.5,10]:
         box(Vector3(x,-1,2.52),Vector3(0.1,0.9,0.08),Color(0.95,0.74,0.34))
     for x in [-10.8,10.8]:
         box(Vector3(x,1,-6),Vector3(1.1,6,1.1),Color(0.57,0.69,0.74))

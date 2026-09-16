@@ -43,7 +43,10 @@ func _physics_process(delta: float) -> void:
         if not source.can_hit(fighter): query.exclude += [fighter.get_rid()]
     # One ordered physics sweep: terrain occludes fighters. Never create a pool
     # from the capsule of a fighter or a wall/ceiling, only a downward top hit.
+    preload("res://scripts/body_hurtboxes.gd").prepare(source, query)
     var hit := get_world_3d().direct_space_state.intersect_ray(query)
+    contact_hit = hit.duplicate()
+    if not hit.is_empty(): hit.collider = preload("res://scripts/body_hurtboxes.gd").resolve(hit.collider)
     if not hit.is_empty():
         var collider = hit.collider
         if collider.is_in_group("fighters"):

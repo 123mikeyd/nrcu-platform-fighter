@@ -7,6 +7,29 @@ const GooProjectileScript = preload("res://scripts/goo_projectile.gd")
 const BotScript = preload("res://scripts/bot_controller.gd")
 var prototype_fire := false
 var burn
+var reaction_recovery
+var humanoid_air_basic
+var humanoid_air_side
+var fitted_reaction
+
+# Contact routing affects presentation only; the native damage sink remains authoritative.
+func receive_contact_hit(amount: float, direction: Vector3, push: float, point: Vector3, region := "") -> void:
+    var accepted = controls_enabled and stocks > 0 and not shielding and not is_knockdown_protected() and amount > 0
+    var role = region if region in ["head", "body"] else (fitted_reaction.classify(point) if fitted_reaction else "")
+    receive_hit(amount, direction, push)
+    if accepted and fitted_reaction and controls_enabled and stocks > 0:
+        fitted_reaction.begin(role, signf(direction.x))
+
+func is_knockdown_protected() -> bool:
+    return reaction_recovery != null and reaction_recovery.is_knockdown_protected()
+
+func begin_uppercut_reaction() -> void:
+    if reaction_recovery: reaction_recovery.begin_uppercut_reaction()
+
+func apply_status_damage(amount: float) -> void:
+    if is_knockdown_protected(): return
+    damage_percent = CombatMathScript.apply_damage(damage_percent, amount)
+    state_changed.emit()
 
 func apply_burn(caster: Node3D) -> bool:
     if not controls_enabled or stocks <= 0 or shielding or not is_instance_valid(caster) or not caster.controls_enabled or not caster.can_hit(self): return false
@@ -28,13 +51,14 @@ var witcheer_clip := ""
 var witcheer_elapsed := 0.0
 var witcheer_facing := 1.0
 var witcheer_struck := false
+var witcheer_basic_targets: Array = []
 var witcheer_moves: Dictionary = {}
 var witcheer_clear := false
 var witcheer_absorbing := false
 var witcheer_air_started := false
 
 func _latch_witcheer_inputs() -> void:
-    if character_id not in ["witcheer", "doge_man"] or control_type != "human" or not is_inside_tree(): return
+    if character_id not in ["witcheer", "doge_man", "ggb", "mephisto"] or control_type != "human" or not is_inside_tree(): return
     var held := read_controls(0)
     _attack_was_down = held.attack
     _special_was_down = held.special
@@ -46,6 +70,7 @@ func _start_witcheer(clip: String) -> void:
     witcheer_clip = clip
     witcheer_elapsed = 0
     witcheer_struck = false
+    witcheer_basic_targets.clear()
     witcheer_facing = facing
     witcheer_air_started = not is_grounded()
     attack_cooldown = float(witcheer_moves[clip].duration)
@@ -60,6 +85,7 @@ func _cancel_witcheer() -> void:
     witcheer_clip = ""
     witcheer_elapsed = 0
     witcheer_struck = false
+    witcheer_basic_targets.clear()
     witcheer_clear = false
     witcheer_absorbing = false
 
@@ -92,9 +118,23 @@ func _tick_witcheer(delta: float) -> void:
     if hitstun > 0 or freeze_remaining > 0 or not controls_enabled or magic_locked():
         _cancel_witcheer()
         return
+    var previous_source = witcheer_source_time()
     witcheer_elapsed += delta
     facing = witcheer_facing
     var move: Dictionary = witcheer_moves[witcheer_clip]
+    if witcheer_clip == "TurnaroundKick":
+        preload("res://scripts/witcheer_basic_contacts.gd").sample(self,previous_source,witcheer_source_time())
+        if witcheer_source_time() >= float(move.duration):
+            facing = -witcheer_facing
+            _cancel_witcheer()
+        return
+    if witcheer_clip in ["NeutralHook","HighKick"]:
+        if not is_grounded():
+            _cancel_witcheer()
+            return
+        preload("res://scripts/witcheer_basic_contacts.gd").sample(self,previous_source,witcheer_source_time())
+        if witcheer_source_time() >= float(move.duration): _cancel_witcheer()
+        return
     if not witcheer_struck and witcheer_source_time() + 0.000001 >= float(move.contact_time):
         witcheer_struck = true
         # Seek the exact authored event pose before the damaging/spawn event.
@@ -137,6 +177,12 @@ func magic_locked() -> bool:
     return is_instance_valid(caught_by) or (teknium_magic != null and teknium_magic.phase != "idle")
 
 func cancel_magic() -> void:
+    if humanoid_air_basic: humanoid_air_basic.cancel()
+    if humanoid_air_side: humanoid_air_side.cancel()
+    if doge_air_drop: doge_air_drop.cancel()
+    if fitted_reaction: fitted_reaction.clear()
+    if reaction_recovery: reaction_recovery.clear()
+    if mephisto_moves: mephisto_moves.cancel()
     electrocution_presentation.clear()
     if is_instance_valid(caught_by): caught_by.cancel()
     caught_by = null
@@ -146,6 +192,12 @@ func _exit_tree() -> void:
     cancel_magic()
 
 func cancel_for_grab() -> void:
+    if humanoid_air_basic: humanoid_air_basic.cancel()
+    if humanoid_air_side: humanoid_air_side.cancel()
+    if doge_air_drop: doge_air_drop.cancel()
+    if fitted_reaction: fitted_reaction.clear()
+    if reaction_recovery: reaction_recovery.clear()
+    if mephisto_moves: mephisto_moves.cancel()
     _cancel_witcheer()
     _cancel_ice_attack()
     _cancel_turbofit_attack()
@@ -166,6 +218,8 @@ func cancel_for_grab() -> void:
     shielding = false
     hitstun = 0
     last_move = ""
+    # A grab interrupts steel before the caught-pose path bypasses normal sync.
+    if character_id == "ggb": _update_move_visuals(0, true)
 
 signal state_changed
 signal eliminated(fighter: Fighter)
@@ -364,6 +418,8 @@ var doge_tyson_followup := false
 var doge_punch_buffered := false
 var doge_buffer_branch := ""
 var doge_ground_rush
+var doge_ground_basic
+var doge_air_drop
 var charging := false
 var charge_time := 0.0
 var recovery_spent := false
@@ -381,6 +437,7 @@ var tackle_active := 0.0
 var tackle_spent := false
 var tackle_targets: Array = []
 var drop_committed := false
+var _ggb_impact_pending := false
 var _ggb_dust: Node3D
 var float_remaining := 1.2
 var swing_windup := 0.0
@@ -397,7 +454,12 @@ const MAX_CHARGE_TIME := 1.5
 var controls_enabled := true:
     set(value):
         controls_enabled = value
-        if character_id == "doge_man": _latch_witcheer_inputs()
+        if character_id in ["doge_man", "ggb", "mephisto"]: _latch_witcheer_inputs()
+        if character_id == "ggb" and not value:
+            drop_committed = false
+            _ggb_impact_pending = false
+            _clear_ggb_dust()
+            _update_move_visuals(0, true)
         if character_id == "witcheer":
             if not value: _cancel_witcheer()
             else: _latch_witcheer_inputs()
@@ -476,6 +538,7 @@ func _apply_head_slip() -> void:
     if absf(velocity.x) < HEAD_SLIP_SPEED:
         velocity.x = _head_slip_direction * HEAD_SLIP_SPEED
 
+var mephisto_moves
 var _active_collision_layer := 1
 var _active_collision_mask := 3
 var _visual_root: Node3D
@@ -490,6 +553,13 @@ const AIR_ACCELERATION := 22.0
 const JUMP_SPEED := 10.5
 const GRAVITY := 25.0
 const MAX_FALL_SPEED := 18.0
+
+func get_hurtbox_shapes() -> Array:
+    var pilot = get_node_or_null("BodyHurtboxes")
+    if pilot:
+        pilot.sync()
+        return pilot.shapes
+    return get_children()
 
 func _ready() -> void:
     if character_id == "witcheer":
@@ -510,12 +580,47 @@ func _ready() -> void:
     if not is_in_group("fighters"):
         add_to_group("fighters")
     _build_visuals()
+    if character_id == "doge_man":
+        doge_ground_basic = preload("res://scripts/doge_ground_basic.gd").new()
+        doge_ground_basic.name = "DogeGroundBasic"
+        add_child(doge_ground_basic)
+        doge_air_drop = preload("res://scripts/doge_air_drop.gd").new()
+        doge_air_drop.name = "DogeAirDrop"
+        add_child(doge_air_drop)
+    if character_id in preload("res://scripts/humanoid_air_side.gd").VIEWS:
+        humanoid_air_side = preload("res://scripts/humanoid_air_side.gd").new()
+        humanoid_air_basic = preload("res://scripts/humanoid_air_basic.gd").new()
+        humanoid_air_basic.name = "HumanoidAirBasic"
+        add_child(humanoid_air_basic)
+        humanoid_air_side.name = "HumanoidAirSide"
+        add_child(humanoid_air_side)
+    if character_id in ["doge_man", "ice_mage", "mephisto", "bobo"]:
+        fitted_reaction = preload("res://scripts/approved_fitted_reaction.gd").new()
+        fitted_reaction.name = "ApprovedFittedReaction"
+        add_child(fitted_reaction)
+    if character_id == "teknium":
+        reaction_recovery = preload("res://scripts/approved_teknium_recovery.gd").new()
+        reaction_recovery.name = "ApprovedRecovery"
+        add_child(reaction_recovery)
+    if character_id in ["teknium", "turbofit"]:
+        var hurtboxes = preload("res://scripts/body_hurtboxes.gd").new()
+        hurtboxes.name = "BodyHurtboxes"
+        add_child(hurtboxes)
+    if character_id == "mephisto":
+        mephisto_moves = preload("res://scripts/mephisto_moves.gd").new()
+        mephisto_moves.name = "MephistoMoves"
+        add_child(mephisto_moves)
     if character_id == "teknium":
         teknium_magic = preload("res://scripts/teknium_magic.gd").new()
         teknium_magic.name = "TekniumMagic"
         add_child(teknium_magic)
 
 func _physics_process(delta: float) -> void:
+    if doge_ground_basic: doge_ground_basic.before_tick()
+    if humanoid_air_basic: humanoid_air_basic.before_tick()
+    if humanoid_air_side: humanoid_air_side.before_tick()
+    if doge_air_drop: doge_air_drop.before_tick()
+    if reaction_recovery: reaction_recovery.before_tick(delta)
     if burn: burn.tick(delta)
     grab_immunity = maxf(0, grab_immunity - delta)
     _tick_freeze(delta)
@@ -582,11 +687,14 @@ func _physics_process(delta: float) -> void:
         hitstun -= delta
     else:
         var move_axis := float(int(right_down) - int(left_down))
+        if mephisto_moves and not mephisto_moves.move.is_empty(): move_axis = 0
         if doge_ground_rush and doge_ground_rush.phase != "idle": move_axis = 0
         var aim := Vector2(move_axis, float(int(down_down) - int(up_down)))
+        # Capture opposite+basic before movement auto-turns; no held-input retrigger.
+        var witcheer_turn_edge := character_id == "witcheer" and attack_down and not _attack_was_down and aim.x * facing < -0.1 and absf(aim.y) <= 0.1
         var acceleration := GROUND_ACCELERATION if is_grounded() else AIR_ACCELERATION
         velocity.x = move_toward(velocity.x, (0.0 if charging or shielding or landing_lag > 0 else move_axis * MOVE_SPEED * ground_speed_multiplier()), acceleration * delta)
-        if absf(move_axis) > 0.1 and not charging and not _torpedo_committed() and not drop_committed:
+        if absf(move_axis) > 0.1 and not charging and not _torpedo_committed() and not drop_committed and not witcheer_turn_edge and witcheer_clip != "TurnaroundKick":
             facing = signf(move_axis)
             if _visual_root:
                 _visual_root.scale.x = facing
@@ -602,7 +710,10 @@ func _physics_process(delta: float) -> void:
             elif special_down and not _special_was_down:
                 start_special(aim)
             elif jump_down and not _jump_was_down and not attack_down and not special_down:
-                try_jump()
+                # Holding Up for Tyson's next press must not cancel it via tap-jump.
+                # The dedicated jump key retains its explicit cancel behavior.
+                if input.jump or doge_attack_clip != "TysonTwoPiece":
+                    try_jump()
             elif down_down and not _down_was_down and not attack_down and not special_down:
                 try_drop_through()
 
@@ -613,6 +724,11 @@ func _physics_process(delta: float) -> void:
 
     _tick_character_move(delta)
     if doge_ground_rush: doge_ground_rush.tick(delta)
+    if reaction_recovery: reaction_recovery.before_move(delta)
+    if humanoid_air_basic: humanoid_air_basic.before_move()
+    if humanoid_air_side: humanoid_air_side.before_move()
+    if doge_air_drop: doge_air_drop.before_move()
+    if doge_ground_basic: doge_ground_basic.before_move()
     _update_platform_collisions(delta)
     _apply_head_slip()
     move_and_slide()
@@ -648,14 +764,29 @@ func _physics_process(delta: float) -> void:
     _query_doge_goalkeeper()
     if doge_ground_rush: doge_ground_rush.after_move()
     if teknium_magic: teknium_magic.tick(delta)
+    if mephisto_moves: mephisto_moves.tick(delta)
+    if reaction_recovery: reaction_recovery.after_tick(delta)
+    if humanoid_air_basic: humanoid_air_basic.after_tick(delta)
+    if humanoid_air_side: humanoid_air_side.after_tick(delta)
+    if doge_air_drop: doge_air_drop.after_tick(delta)
+    if doge_ground_basic: doge_ground_basic.after_tick(delta)
     global_position.z = 0.0
     if global_position.y < -8.0 or absf(global_position.x) > 16.0 or global_position.y > 15.0:
         _handle_blast_zone()
 
 func can_hit(target: Node) -> bool:
+    if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return false
+    if is_instance_valid(target) and target.has_method("is_knockdown_protected") and target.is_knockdown_protected(): return false
     return is_instance_valid(target) and target != self and target.is_in_group("fighters") and target.controls_enabled and (team_id < 0 or target.team_id < 0 or team_id != target.team_id)
 
 func read_controls(delta: float) -> Dictionary:
+    var result = _read_raw_controls(delta)
+    if humanoid_air_basic: result = humanoid_air_basic.filter_controls(result)
+    if humanoid_air_side: result = humanoid_air_side.filter_controls(result)
+    if doge_air_drop: result = doge_air_drop.filter_controls(result)
+    return reaction_recovery.filter_controls(result) if reaction_recovery else result
+
+func _read_raw_controls(delta: float) -> Dictionary:
     if control_type == "bot":
         return _bot.read(self, delta)
     var result := {"left": false, "right": false, "up": false, "down": false, "jump": false, "attack": false, "special": false, "shield": false}
@@ -692,6 +823,7 @@ func _update_platform_collisions(delta: float) -> void:
             _ignored_platforms.erase(platform)
 
 func try_drop_through() -> bool:
+    if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return false
     if doge_ground_rush and doge_ground_rush.phase != "idle": return false
     if magic_locked(): return false
     if freeze_remaining > 0:
@@ -713,6 +845,9 @@ func try_drop_through() -> bool:
     return false
 
 func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -> void:
+    if is_knockdown_protected(): return
+    var episode = reaction_recovery != null and not reaction_recovery.knockdown_phase.is_empty()
+    var old_reaction_facing = reaction_recovery.reaction_facing if reaction_recovery else facing
     cancel_magic()
     if hit_damage > 0 and freeze_remaining > 0:
         _thaw()
@@ -739,6 +874,7 @@ func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -
     if character_id == "doge_man" and _visual_root:
         _visual_root.get_node("DogeVisual").begin_hit()
     _update_move_visuals()
+    if reaction_recovery: reaction_recovery.after_hit(episode, old_reaction_facing)
     state_changed.emit()
 
 func lose_stock() -> void:
@@ -765,6 +901,9 @@ func reset_fighter(new_spawn: Vector3, reset_stocks := false) -> void:
     state_changed.emit()
 
 func reset_air_resources() -> void:
+    # Grounded Cinder startup already reserved this recovery. Ordinary terrain
+    # contact must not refund its jumps before the lift leaves the floor.
+    if mephisto_moves and mephisto_moves.move=="CinderToss" and not mephisto_moves.impulse_done:return
     _land_character_move()
     tackle_spent = false
     float_remaining = 1.2
@@ -830,6 +969,8 @@ func ground_speed_multiplier() -> float:
     return multiplier
 
 func try_jump() -> bool:
+    if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return false
+    if mephisto_moves and not mephisto_moves.move.is_empty(): return false
     if doge_ground_rush and doge_ground_rush.phase != "idle": return false
     if not witcheer_clip.is_empty(): return false
     if magic_locked(): return false
@@ -853,9 +994,19 @@ func try_jump() -> bool:
     return true
 
 func start_special(aim: Vector2) -> void:
+    if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return
     if doge_ground_rush and doge_ground_rush.phase != "idle": return
     if magic_locked(): return
     if freeze_remaining > 0:
+        return
+    # The return toggle alone bypasses steel's action/landing lock. Keyboard
+    # dispatch already requires a fresh special edge; holding never retriggers.
+    if character_id == "ggb" and drop_committed:
+        if aim.y > 0.1 and controls_enabled and hitstun <= 0:
+            drop_committed = false
+            _ggb_impact_pending = false
+            last_move = "NORMAL FORM"
+            _update_move_visuals()
         return
     if not doge_attack_clip.is_empty() and aim.y < -0.1 and not recovery_spent and controls_enabled and hitstun <= 0:
         _cancel_doge_attack()
@@ -864,6 +1015,10 @@ func start_special(aim: Vector2) -> void:
     if _torpedo_committed() or landing_lag > 0 or drop_committed or attack_cooldown > 0.0 or hitstun > 0.0 or not controls_enabled or charging:
         return
     _cancel_doge_attack()
+    if character_id == "mephisto":
+        if not mephisto_moves.move.is_empty(): return
+        mephisto_moves.start_kit(mephisto_moves.route(aim,not is_grounded(),true),signf(aim.x) if absf(aim.x)>.1 else facing)
+        return
     if character_id == "witcheer":
         if absf(aim.x) > 0.1: facing = signf(aim.x)
         if aim.y < -0.1:
@@ -922,8 +1077,9 @@ func start_special(aim: Vector2) -> void:
             doge_ground_rush.start()
         elif character_id == "ggb":
             drop_committed = true
+            _ggb_impact_pending = true
             velocity = Vector3(0, -24, 0)
-            last_move = "HEAVY DROP"
+            last_move = "STEEL FORM"
             _update_move_visuals()
             if is_grounded():
                 _land_character_move()
@@ -955,6 +1111,9 @@ func start_special(aim: Vector2) -> void:
         projectile.sound_wave = character_id == "turbofit"
         get_parent().add_child(projectile)
         projectile.global_position = global_position + Vector3(facing * 0.8, 1, 0)
+        if character_id == "ggb" and _visual_root:
+            var view = _visual_root.get_node_or_null("GGBVisual")
+            if view: projectile.global_position.y = view.body_center_world().y
         attack_cooldown = 0.55
         last_move = "STICKY GOO" if character_id == "ggb" else ("SOUND WAVE" if character_id == "turbofit" else "PROJECTILE")
     elif aim == Vector2.ZERO:
@@ -1053,7 +1212,9 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
             _visual_root.scale = Vector3.ONE
             _visual_root.rotation = Vector3.ZERO
             var attack_duration := float(doge_attack_timings[doge_attack_clip].duration) if not doge_attack_clip.is_empty() else 1.0
-            if doge_ground_rush and doge_ground_rush.phase != "idle":
+            if doge_ground_basic and not doge_ground_basic.clip.is_empty():
+                doge_ground_basic.present(doge_ground_basic.elapsed)
+            elif doge_ground_rush and doge_ground_rush.phase != "idle":
                 doge_ground_rush.present(doge_visual,delta)
             elif charging and (not doge_ground_rush or doge_ground_rush.phase == "idle"):
                 # Draw back once over 1.2s to source frame58 (rear-most right foot).
@@ -1115,17 +1276,27 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
 
 
 func basic_attack(aim: Vector2, airborne: bool) -> void:
+    if reaction_recovery:
+        if not reaction_recovery.knockdown_phase.is_empty(): return
+        if not airborne and reaction_recovery.side_continue(aim): return
+        if not airborne and aim.y < -0.1:
+            reaction_recovery.lab_start("uppercut")
+            return
+        if not airborne and absf(aim.x) > .1 and absf(aim.y) <= .1:
+            reaction_recovery.lab_start("side_basic")
+            return
     if doge_ground_rush and doge_ground_rush.phase != "idle": return
     if magic_locked(): return
     if freeze_remaining > 0:
         return
     if not doge_attack_clip.is_empty():
         # One fresh edge reserves one next strike, never an arbitrary cancel.
-        if controls_enabled and hitstun <= 0 and not airborne and aim.y >= -0.1:
+        # Tyson's second press accepts any held direction; keep later links separate.
+        if controls_enabled and hitstun <= 0 and not airborne and doge_attack_clip == "TysonTwoPiece" and doge_attack_elapsed >= 0.15 and doge_attack_elapsed <= 0.35 and not doge_tyson_followup:
+            doge_tyson_followup = true
+        elif controls_enabled and hitstun <= 0 and not airborne and aim.y >= -0.1:
             if doge_attack_clip == "TysonTwoPiece":
-                if doge_attack_elapsed >= 0.15 and doge_attack_elapsed <= 0.35 and not doge_tyson_followup and absf(aim.y) <= 0.1:
-                    doge_tyson_followup = true
-                elif doge_attack_elapsed >= 0.45 and doge_buffer_branch.is_empty():
+                if doge_attack_elapsed >= 0.45 and doge_buffer_branch.is_empty():
                     doge_buffer_branch = "tyson" if aim.y > 0.1 else "normal"
                     doge_punch_buffered = true
             elif doge_attack_clip in ["Punch1", "Punch2", "Punch3", "Punch4"] and doge_buffer_branch.is_empty():
@@ -1134,13 +1305,44 @@ func basic_attack(aim: Vector2, airborne: bool) -> void:
                     doge_buffer_branch = "tyson" if aim.y > 0.1 else "normal"
                     doge_punch_buffered = true
         return
+    if doge_ground_basic and not doge_ground_basic.clip.is_empty():
+        doge_ground_basic.press()
+        return
     if _torpedo_committed() or landing_lag > 0 or drop_committed or attack_cooldown > 0.0 or hitstun > 0.0 or not controls_enabled or charging:
+        return
+    if character_id == "witcheer" and absf(aim.y) <= 0.1 and aim.x * facing < -0.1:
+        _start_witcheer("TurnaroundKick")
+        return
+    # Doge-only neutral air shares the existing native-limb Superman route.
+    # Horizontal-only air basic uses the approved edited Drop Kick below.
+    if character_id == "doge_man" and humanoid_air_side and airborne and absf(aim.x) <= .1 and absf(aim.y) <= .1:
+        humanoid_air_side.start(Vector2(facing, 0))
+        return
+    if humanoid_air_basic and airborne and (absf(aim.y) > .1 or absf(aim.x) <= .1):
+        humanoid_air_basic.start(aim)
+        return
+    if doge_air_drop and airborne and absf(aim.x) > .1 and absf(aim.y) <= .1:
+        doge_air_drop.start(aim)
+        return
+    # Horizontal AIR BASIC only; vertical diagonals retain existing priority.
+    if humanoid_air_side and airborne and absf(aim.x) > .1 and absf(aim.y) <= .1:
+        humanoid_air_side.start(aim)
         return
     if character_id == "witcheer":
         if absf(aim.x) > 0.1: facing = signf(aim.x)
-        _start_witcheer(("SpinRise" if aim.y < -0.1 else "JumpPunch") if airborne else ("CaneSweep" if aim.y > 0.1 else "HighKick"))
+        _start_witcheer(("SpinRise" if aim.y < -0.1 else "JumpPunch") if airborne else ("CaneSweep" if aim.y > 0.1 else ("NeutralHook" if absf(aim.y) <= 0.1 and absf(aim.x) <= 0.1 else "HighKick")))
+        return
+    if reaction_recovery and airborne and aim.y < -.1:
+        reaction_recovery.lab_start("air_up")
+        return
+    if reaction_recovery and not airborne and absf(aim.x) <= .1 and absf(aim.y) <= .1:
+        reaction_recovery.lab_start("jab")
         return
     # A fresh accepted input can share the cooldown-expiry physics tick.
+    if character_id == "mephisto":
+        if not mephisto_moves.move.is_empty(): return
+        mephisto_moves.start_kit(mephisto_moves.route(aim,airborne,false),signf(aim.x) if absf(aim.x)>.1 else facing)
+        return
     # Clear only the old visual episode, never the combat/resource state.
     if character_id == "doge_man" and _visual_root:
         var view = _visual_root.get_node_or_null("DogeVisual")
@@ -1152,6 +1354,9 @@ func basic_attack(aim: Vector2, airborne: bool) -> void:
         _start_doge_attack("SupermanMoves2", aim)
         return
     if character_id == "doge_man" and not airborne:
+        if absf(aim.y) <= 0.1:
+            doge_ground_basic.start(aim)
+            return
         _start_doge_attack("Uppercut" if aim.y < -0.1 else ("TysonTwoPiece" if aim.y > 0.1 else "Punch%d" % doge_combo_next), aim)
         return
     if character_id == "turbofit" and ((not airborne and aim.y > 0.1) or (airborne and aim.y >= -0.1)):
@@ -1263,7 +1468,7 @@ func _query_air_side_kick() -> void:
             continue
         if (target.global_position.x - global_position.x) * turbofit_attack_facing <= 0:
             continue
-        for child in target.get_children():
+        for child in target.get_hurtbox_shapes():
             if not child is CollisionShape3D or child.disabled or not child.shape is CapsuleShape3D:
                 continue
             # Actual hurtbody/movement capsule, including node offset, rotation
@@ -1278,7 +1483,7 @@ func _query_air_side_kick() -> void:
             if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                 _air_kick_targets.append(target)
                 var timing: Dictionary = turbofit_attack_timings.AirSideKick
-                target.receive_hit(float(timing.damage), Vector3(turbofit_attack_facing, 0.35, 0), float(timing.knockback))
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(timing.damage), Vector3(turbofit_attack_facing, 0.35, 0), float(timing.knockback),child,nearest,center)
                 break
 
 func _query_air_down_kick() -> void:
@@ -1301,7 +1506,7 @@ func _query_air_down_kick() -> void:
         # Down-basic requires a lower opponent AND actual foot/body contact.
         if target.global_position.y >= global_position.y:
             continue
-        for child in target.get_children():
+        for child in target.get_hurtbox_shapes():
             if not child is CollisionShape3D or child.disabled or not child.shape is CapsuleShape3D:
                 continue
             var capsule: CapsuleShape3D = child.shape
@@ -1313,7 +1518,7 @@ func _query_air_down_kick() -> void:
             var nearest := Geometry3D.get_closest_point_to_segment(center, a, b)
             if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                 _air_down_targets.append(target)
-                target.receive_hit(float(timing.damage), Vector3.DOWN, float(timing.knockback))
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(timing.damage), Vector3.DOWN, float(timing.knockback),child,nearest,center)
                 break
 
 func _tick_sound_orb(delta: float) -> void:
@@ -1445,7 +1650,7 @@ func _query_doge_two_piece() -> void:
         for target in get_tree().get_nodes_in_group("fighters"):
             if not can_hit(target) or (target.global_position.x - global_position.x) * doge_attack_facing <= 0:
                 continue
-            for child in target.get_children():
+            for child in target.get_hurtbox_shapes():
                 if not child is CollisionShape3D or child.disabled or not child.shape is CapsuleShape3D:
                     continue
                 var capsule: CapsuleShape3D = child.shape
@@ -1457,7 +1662,7 @@ func _query_doge_two_piece() -> void:
                 var nearest := Geometry3D.get_closest_point_to_segment(center, a, b)
                 if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                     var lift := 0.25 if _doge_two_piece_event == 2 else 0.0
-                    target.receive_hit(float(event.damage), Vector3(doge_attack_facing, lift, 0), float(event.knockback))
+                    preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(event.damage), Vector3(doge_attack_facing, lift, 0), float(event.knockback),child,nearest,center)
                     if _doge_two_piece_event == 1:
                         # Setup jab retains ordinary damage/shield/hitstun, but
                         # must not push its victim out of the following right.
@@ -1482,7 +1687,7 @@ func _query_doge_air_karate() -> void:
     for target in get_tree().get_nodes_in_group("fighters"):
         if not can_hit(target) or target in _doge_karate_targets or (target.global_position.x - global_position.x) * doge_attack_facing <= 0:
             continue
-        for child in target.get_children():
+        for child in target.get_hurtbox_shapes():
             if not child is CollisionShape3D or child.disabled or not child.shape is CapsuleShape3D: continue
             var capsule: CapsuleShape3D = child.shape
             var transform: Transform3D = child.global_transform
@@ -1493,7 +1698,7 @@ func _query_doge_air_karate() -> void:
             var nearest := Geometry3D.get_closest_point_to_segment(center, a, b)
             if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                 _doge_karate_targets.append(target)
-                target.receive_hit(float(timing.damage), Vector3(doge_attack_facing * cos(deg_to_rad(30)), -0.5, 0), float(timing.knockback))
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(timing.damage), Vector3(doge_attack_facing * cos(deg_to_rad(30)), -0.5, 0), float(timing.knockback),child,nearest,center)
                 break
 
 func _query_doge_goalkeeper() -> void:
@@ -1507,7 +1712,7 @@ func _query_doge_goalkeeper() -> void:
     var radius: float = 0.22 * view.global_basis.x.length() / 1.25
     for target in get_tree().get_nodes_in_group("fighters"):
         if not can_hit(target) or target in _doge_goalkeeper_targets: continue
-        for child in target.get_children():
+        for child in target.get_hurtbox_shapes():
             if not child is CollisionShape3D or child.disabled or not child.shape is CapsuleShape3D: continue
             var capsule: CapsuleShape3D = child.shape
             var transform: Transform3D = child.global_transform
@@ -1518,7 +1723,7 @@ func _query_doge_goalkeeper() -> void:
             var nearest := Geometry3D.get_closest_point_to_segment(center, a, b)
             if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                 _doge_goalkeeper_targets.append(target)
-                target.receive_hit(lerpf(10, 26, doge_goalkeeper_power), Vector3(doge_attack_facing, 0.25, 0), lerpf(4, 9, doge_goalkeeper_power))
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,lerpf(10, 26, doge_goalkeeper_power), Vector3(doge_attack_facing, 0.25, 0), lerpf(4, 9, doge_goalkeeper_power),child,nearest,center)
                 break
 
 func _query_doge_superman() -> void:
@@ -1534,6 +1739,8 @@ func _query_doge_superman() -> void:
     if _attack_flash: _attack_flash.visible = false
 
 func _cancel_doge_attack(preserve_up_pose := false) -> void:
+    if doge_air_drop: doge_air_drop.cancel()
+    if doge_ground_basic: doge_ground_basic.cancel()
     _doge_goalkeeper_targets.clear()
     doge_goalkeeper_hold = 0.0
     doge_goalkeeper_source = 0.0
@@ -1603,7 +1810,13 @@ func _clear_ggb_dust() -> void:
 func _land_character_move() -> void:
     if not drop_committed:
         return
-    drop_committed = false
+    if character_id == "ggb":
+        # reset_air_resources runs before and after movement on every floor
+        # tick. Retain steel, but consume the old impact exactly once.
+        if not _ggb_impact_pending: return
+        _ggb_impact_pending = false
+    else:
+        drop_committed = false
     attack_cooldown = 0.65
     landing_lag = 0.65
     attack_flash_time = 0.0
@@ -1861,16 +2074,9 @@ func _build_visuals() -> void:
         _sound_orb_visual.add_child(ring)
 
     _attack_flash = MeshInstance3D.new()
-    var attack_mesh := SphereMesh.new()
-    attack_mesh.radius = 0.52
-    attack_mesh.height = 1.04
-    _attack_flash.mesh = attack_mesh
-    var attack_material := StandardMaterial3D.new()
-    attack_material.albedo_color = Color(0.25, 1.0, 0.38) if player_index == 1 else Color(1.0, 0.48, 0.12)
-    attack_material.emission_enabled = true
-    attack_material.emission = attack_material.albedo_color
-    attack_material.emission_energy_multiplier = 3.0
-    _attack_flash.material_override = attack_material
+    _attack_flash.name = "AttackTimingMarker"
+    # Keep the existing timing/position handle for attack routes, but remove
+    # the overbright prototype sphere. This node never owned collision.
     _attack_flash.position.y = 1.0
     _attack_flash.visible = false
     add_child(_attack_flash)

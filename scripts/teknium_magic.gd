@@ -116,17 +116,21 @@ func clear_path(start: Vector3, end: Vector3, target) -> bool:
         excluded.append(fighter.get_rid())
     query.exclude = excluded
     query.hit_from_inside=true
+    query.collision_mask = 3 # Damage-only bodies never obstruct terrain visibility.
     return actor.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 func capture():
     var hand:Vector3=visual.hand_tip("RightHand")
     var best_distance:=INF
     var best
+    # Normal Start now installs the reviewed anatomy. Its accompanying
+    # surface-distance policy must not depend on a diagnostic launcher flag.
+    var reviewed_receiving = actor.get_tree().get_nodes_in_group("fighters").any(func(f): return f.has_node("BodyHurtboxes"))
     for target in actor.get_tree().get_nodes_in_group("fighters"):
         if not actor.can_hit(target) or target.stocks<=0 or target.shielding or target.freeze_remaining>0 or target.grab_immunity>0 or is_instance_valid(target.caught_by):continue
         if target.teknium_magic and target.teknium_magic.phase!="idle":continue
         var offset:Vector3=target.global_position-actor.global_position
         if offset.length()>1.85 or offset.x*facing<=0:continue
-        for child in target.get_children():
+        for child in target.get_hurtbox_shapes():
             if not child is CollisionShape3D or child.disabled or not child.shape is CapsuleShape3D:continue
             var shape:CapsuleShape3D=child.shape
             var transform:Transform3D=child.global_transform
@@ -135,8 +139,11 @@ func capture():
             var radius:=shape.radius*maxf(transform.basis.x.length(),transform.basis.z.length())
             var distance:=hand.distance_to(nearest)
 
-            if distance<=radius+GRAB_RADIUS and distance<best_distance and clear_path(actor.global_position+Vector3.UP,hand,target) and clear_path(hand,nearest,target):
-                best=target;best_distance=distance
+            # Surface distance is needed for differently sized pilot regions;
+            # ordinary legacy launch keeps its original axis-selection policy.
+            var surface_distance := maxf(0.0, distance-radius) if reviewed_receiving else distance
+            if distance<=radius+GRAB_RADIUS and surface_distance<best_distance and clear_path(actor.global_position+Vector3.UP,hand,target) and clear_path(hand,nearest,target):
+                best=target;best_distance=surface_distance
     if not is_instance_valid(best):return
     victim=best
     victim.cancel_for_grab()
@@ -157,6 +164,11 @@ func update_arcs():
     mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
     var start:Vector3=arcs.to_local(visual.hand_tip("RightHand"))
     var center:Vector3=arcs.to_local(victim.global_position+Vector3(0,1.25,0))
+    # GGB is a small hovering rigid mesh. Attach only its cosmetic ribbons to
+    # the real body; capture capsule, anchor and electrical damage stay exact.
+    if victim.character_id == "ggb":
+        var view = victim._visual_root.get_node_or_null("GGBVisual")
+        if view: center = arcs.to_local(view.body_center_world())
     for strand in 4:
         var previous:=start
         for point in range(1,7):

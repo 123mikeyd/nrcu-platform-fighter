@@ -1,6 +1,6 @@
-# NRCU Platform Fighter
+# NRCU Platform Fighter — v0.2
 
-Private work-in-progress Godot game for development and collaborative playtesting.
+**Unfinished alpha playtest — this is not a finished game.** Public development snapshot for collaborative playtesting. See [v0.2 release notes](RELEASE_NOTES_v0.2.md) for changes, known issues, and the checks actually completed.
 
 ## Play
 
@@ -8,7 +8,7 @@ Use the Windows ZIP in [Releases](../../releases). Extract everything and launch
 
 ## Open the source
 
-Install **Godot 4.7.2**, Git, and Git LFS. Clone this private repository using an account with access, run `git lfs pull` inside the clone, then import `project.godot` in Godot. Let the initial import finish, then press F5 to launch the project home screen.
+Install **Godot 4.7.2**, Git, and Git LFS. Clone this public repository (no collaborator invitation is required to read or download it), run `git lfs pull` inside the clone, then import `project.godot` in Godot. Let the initial import finish, then press F5 to launch the project home screen.
 
 The project uses the Compatibility renderer. The `.godot` cache regenerates locally; it is deliberately not versioned. Keep the source `.import` settings, `.uid` sidecars, and `tools/import_*.gd` hooks: they preserve the intended animation sampling. Blender and the author's personal source library are not required to play or import the supplied assets.
 
@@ -23,7 +23,7 @@ Install the matching Godot **4.7.2 export templates** and use the **Windows Play
 ## Current scope
 
 - Freeplay with local keyboard/gamepad slots and bots; no online multiplayer is claimed.
-- Story Mode currently contains the passive 400-HP Bobo encounter for testing.
+- Story Mode contains a stationary 400-HP Bobo encounter. Bobo now attempts a slow two-part thrust/slash when an opponent is nearby.
 - Fighters and homepage remain in progress. Mephisto is unfinished and deferred from this test pass.
 - Shared agent workflow: [Godot development and testing skill](skills/nous-game-dev-testing/SKILL.md).
 
@@ -35,4 +35,4 @@ This repository is a sanitized collaboration snapshot of the current local game.
 
 ## Sharing boundaries
 
-No blanket open-source or asset redistribution license is granted here. Access is for this private collaboration. Ask before reusing art, characters, music, or other assets in a different game or making material public. Private acquisition notes, local source-library paths, Blender masters, and historical review outputs are intentionally excluded. Preserve third-party notices and review rights before broader distribution.
+No blanket open-source or asset redistribution license is granted here. Public visibility is not permission to reuse the assets. Ask before reusing art, characters, music, or other assets in a different game or redistributing them separately. Private acquisition notes, local source-library paths, Blender masters, and historical review outputs are intentionally excluded. Preserve third-party notices and review rights before broader distribution.

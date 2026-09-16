@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="NRCU Platform Fighter"
+config/version="0.2"
 config/description="Original 2.5D NRCU platform-fighter prototype"
 run/main_scene="res://scenes/home.tscn"
 config/features=PackedStringArray("4.7")

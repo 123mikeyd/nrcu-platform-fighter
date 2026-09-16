@@ -133,6 +133,9 @@ func _ready() -> void:
             library.add_animation(name, animation)
         animation_player.remove_animation_library(library_name)
         animation_player.add_animation_library(library_name, library)
+    var ground_library = load("res://assets/doge_man/ground_basic_20260915.tres")
+    for clip in ground_library.get_animation_list():
+        animation_player.get_animation_library("").add_animation(clip, ground_library.get_animation(clip).duplicate(true))
     for mesh in model.find_children("*", "MeshInstance3D", true, false):
         for shape_index in mesh.mesh.get_blend_shape_count():
             if "Fist_STUDY" in str(mesh.mesh.get_blend_shape_name(shape_index)):
