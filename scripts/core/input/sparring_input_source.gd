@@ -114,4 +114,3 @@ func _bounds(value: Variant) -> Dictionary:
 		if not is_finite(value[key]): return fallback
 	if value.left >= value.right: return fallback
 	return value
-

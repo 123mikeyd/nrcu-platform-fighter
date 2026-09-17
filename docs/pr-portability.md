@@ -20,7 +20,10 @@ python3 ../nrcu-review-source/tools/run_all_tests.py \
 ```
 
 The curated manifest includes current upstream dependencies and all retained
-regressions. The original home scene remains the default. Select the opt-in
+regressions, including the pressure transaction and v0.2 public Ice dispatch
+characterizations. [Optional Ice compatibility](OPTIONAL_ICE_COMPATIBILITY.md)
+is explicitly incomplete; its authored-helper oracle is not a production parity
+fix. The original home scene remains the default. Select the opt-in
 frontend explicitly:
 
 ```sh

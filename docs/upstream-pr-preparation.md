@@ -51,8 +51,10 @@ fighter; the original bot bytes and executable decision comparisons are retained
 
 ## Review boundaries
 
-The curated source manifest contains 1,699 files: 590 current upstream paths and
-1,109 additive paths, including legitimate import/UID dependencies. It is a review
+The curated source manifest contains 1,704 files: 590 current upstream paths and
+1,114 additive paths, including legitimate import/UID dependencies. The five
+post-review additions are two regression scripts, their Godot-generated UID
+sidecars, and the optional Ice compatibility disclosure. It is a review
 and portable-source inventory, not a runtime-pack allowlist or blanket staging
 command. Existing literal resource dependencies are included; dynamic original
 roster assets, generated profiles, overrides, external textures and raw JSON are
@@ -74,7 +76,8 @@ strict exit status, complete engine-log errors and success markers, not exit zer
 alone. The untouched v0.2 baseline was cold-imported and tested independently.
 No legacy failure may be attributed to upstream without that direct comparison.
 
-Verified against current upstream:
+Historical execution before the uncommitted pressure fix and Ice oracle
+clarification (retained evidence; not the final candidate result):
 
 - Fresh 1,699-file manifest-only cold import: strict classifier PASS.
 - All 748 declared GDScripts: explicit `--check-only` compilation PASS, with
@@ -104,6 +107,37 @@ Verified against current upstream:
   The initial combined-tree full sweep reproduced every inherited result and
   every exact error-signature set.
 
+## Post-fix candidate verification (uncommitted)
+
+- Exact 1,704-path source inventory and dependency closure validated;
+  a cache-free reimport of the recovered disposable stage passed strict complete
+  import/export log scans. No source cache was copied.
+- 750 / 750 GDScripts compile with complete logs retained;
+  26 / 26 Python tooling tests and the separate strict
+  Python navigation/output regression pass.
+- Fresh full sweep: **611 runners, 564 PASS / 47 FAIL**,
+  smoke PASS. All 157 inherited outcomes and exact error sets
+  match the untouched baseline (110 PASS / 47 FAIL).
+  All 454 additive runners pass, including both pressure
+  regressions and the clarified Ice/source-dispatch characterizations.
+  All 17 frontend runners pass. This is **not an all-green suite**.
+- An earlier finalization sweep was incomplete: a process-wide file limit also
+  capped legitimate generated test evidence. Its SIGXFSZ failure is preserved.
+  The result above is a fresh complete sweep with log-only caps, not substituted
+  reruns or a relabeling of that aborted run. Source/resource pins stayed stable.
+- The unpublished final Web PCK passes the actual output-only 28-raw-resource
+  identity and generated-host/override probe. All served artifact hashes match.
+  Real browser keyboard/mouse routes at 1280x720 and 960x540 verified menu,
+  selection, READY, double jump onto upper support, Sparring AI pursuit, actual
+  damage, deliberate stock losses, results, rematch reset and Original Game
+  return. Continuous strict browser error collection is empty. This is local
+  software-rendered functional acceptance, not physical-device, performance,
+  human-feel or full-roster approval. No live build was published.
+
+The pressure fix still requires independent review. Optional Ice's public aerial
+migration remains an explicit compatibility gap, not a production fix; see
+[the narrow oracle contract](OPTIONAL_ICE_COMPATIBILITY.md).
+
 Portable commands (Python 3.11+, materialized Git LFS, Godot
 `4.7.2.stable.official.ed1daf0bf`):
 
@@ -127,15 +161,18 @@ strict command exits nonzero; do not suppress or relabel it GREEN.
 
 ## Remaining merge/sharing gates
 
-- The retained [right-pressure regression](../tests/test_core_body_right_pressure.gd)
-  still fails on native-solid hanger pressure/penetration and anchor retention.
-  This is an additive-core failure, not an upstream baseline failure.
-- [Ice source comparison](../tests/test_core_ice_source.gd) exposes current
-  upstream aerial-basic action-lock differences. The optional Ice prerequisite
-  has not been migrated to v0.2's humanoid aerial attacks. Keep this failure
-  explicit rather than weakening the comparison or claiming full-roster parity.
+- The uncommitted native-solid pressure transaction fix passes its original
+  [right-pressure regression](../tests/test_core_body_right_pressure.gd), added
+  reversed-registration/stopped-hanger regression and 77 scoped collateral
+  runners. Independent review of that production change is still pending.
+- [Optional Ice compatibility](OPTIONAL_ICE_COMPATIBILITY.md) remains incomplete:
+  core Ice uses authored IceStrike for air basics while upstream v0.2 public
+  dispatch selects kicks/Superman. The clarified source test proves retained
+  authored-helper parity, not public-air parity. A separate characterization
+  pins unchanged upstream dispatch. No Ice production behavior was changed and
+  Ice is not supported by this two-fighter frontend.
 - Review all untouched-upstream failures separately from additive compatibility
-  failures; do not confuse a two-fighter passing slice with an all-green game.
+  gaps; do not confuse passing candidate regressions with an all-green game.
 - Independent maintainer/code review remains required. Local commits are not
   marked independently verified.
 - Current browser/native human feel, physical-controller, performance and
