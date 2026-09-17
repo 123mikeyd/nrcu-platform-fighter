@@ -266,6 +266,7 @@ func _ready() -> void:
         # A newly entered scene must not turn already-held keys into presses.
         source.reset()
         # Deliberately no load/save profile: fixed combat controls, no disk changes.
+        source.enable_event_capture()
         sources.append(source)
         var visual = Presenter.new()
         actor.add_child(visual)
@@ -304,6 +305,8 @@ func set_defense_enabled(value: bool) -> void:
     reset_lab()
 
 func set_paused(value: bool) -> void:
+    paused = true
+    Input.flush_buffered_events()
     paused = value
     pending_steps = 0
     for slot in range(sources.size()):
@@ -350,6 +353,7 @@ func reset_lab() -> void:
     _reset_round_input_and_visuals()
 
 func _reset_round_input_and_visuals() -> void:
+    Input.flush_buffered_events()
     _refresh_ai_stage_bounds()
     repo_inputs.reset()
     sparring_inputs.reset()
@@ -744,9 +748,7 @@ func back_to_movement() -> void:
 
 func _exit_tree() -> void:
     for source in sources:
-        source.reset()
-        if Input.joy_connection_changed.is_connected(source._on_joy_connection_changed):
-            Input.joy_connection_changed.disconnect(source._on_joy_connection_changed)
+        source.shutdown()
     for id in simulation.fighters:
         simulation.set_enabled(id, false)
     _sync_projectiles()
@@ -1005,3 +1007,17 @@ func _build_world() -> void:
     mesh.mesh.size = shape.shape.size
     floor_body.add_child(mesh)
     add_child(floor_body)
+
+func _input(event: InputEvent) -> void:
+    # Track releases before GUI so consumed releases cannot stick buttons.
+    if (event is InputEventKey or event is InputEventJoypadButton) and not event.pressed:
+        _route_gameplay_event(event)
+
+func _unhandled_input(event: InputEvent) -> void:
+    _route_gameplay_event(event)
+
+func _route_gameplay_event(event: InputEvent) -> void:
+    if paused or not simulation.result.is_empty(): return
+    for slot in sources.size():
+        if slot == 1 and (_ai_enabled()): continue
+        sources[slot].feed_event(event)

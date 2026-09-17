@@ -6,10 +6,17 @@ var held: Dictionary = {}
 var pressed: Dictionary = {}
 var released: Dictionary = {}
 var source_id: String = ""
+## Optional per-edge direction; axis remains the current movement snapshot.
+var pressed_axis: Dictionary = {}
 
 func to_dict() -> Dictionary:
-	return {"tick": tick, "axis": [axis.x, axis.y], "held": held.duplicate(true),
+	var data := {"tick": tick, "axis": [axis.x, axis.y], "held": held.duplicate(true),
 		"pressed": pressed.duplicate(true), "released": released.duplicate(true), "source_id": source_id}
+	if not pressed_axis.is_empty():
+		data["pressed_axis"] = {}
+		for action in pressed_axis:
+			data.pressed_axis[action] = [pressed_axis[action].x, pressed_axis[action].y]
+	return data
 
 static func from_dict(data: Dictionary):
 	var frame = load("res://scripts/core/input/input_frame.gd").new()
@@ -22,4 +29,8 @@ static func from_dict(data: Dictionary):
 		if value is Dictionary:
 			frame.set(field, value.duplicate(true))
 	frame.source_id = str(data.get("source_id", ""))
+	for action in data.get("pressed_axis", {}):
+		var value = data.pressed_axis[action]
+		if value is Array and value.size() == 2:
+			frame.pressed_axis[action] = Vector2(float(value[0]), float(value[1]))
 	return frame

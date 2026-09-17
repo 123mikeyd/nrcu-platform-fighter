@@ -21,7 +21,7 @@ func advance(frame: Frame, hitstop: bool = false) -> void:
 		_last_event_tick[identity] = frame.tick
 		_sequence += 1
 		_pending.append({"action": action, "sequence": _sequence, "tick": frame.tick,
-			"axis": frame.axis, "age": 0})
+			"axis": frame.pressed_axis.get(action, frame.axis), "age": 0})
 
 func peek(action: String) -> Dictionary:
 	for request in _pending:

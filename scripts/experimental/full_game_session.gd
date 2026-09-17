@@ -68,6 +68,7 @@ func _ready():
 		source.slot = slot
 		source.device = selected_devices[slot]
 		source.reset()
+		source.enable_event_capture()
 		sources.append(source)
 		var presenter = preload("res://scripts/core/presentation/teknium_presenter.gd").new() if id == "teknium" else preload("res://scripts/core/presentation/turbofit_presenter.gd").new()
 		actor.add_child(presenter)
@@ -106,6 +107,8 @@ func refresh_navigation() -> bool:
 	error = ""
 	return true
 func reset_inputs():
+	# Drain the engine input queue before discarding the old ownership interval.
+	Input.flush_buffered_events()
 	if inputs != null:
 		inputs.reset()
 		refresh_navigation()
@@ -114,8 +117,9 @@ func reset_inputs():
 		simulation.fighters[i+1].buffer.clear()
 		presenters[i].reset()
 func set_paused(value: bool):
-	paused = value
+	paused = true
 	reset_inputs()
+	paused = value
 func rematch():
 	simulation.rematch()
 	last_lifecycle = ""
@@ -167,8 +171,20 @@ func present():
 	grab_effects.present(relations)
 func _exit_tree():
 	for source in sources:
-		source.reset()
-		if Input.joy_connection_changed.is_connected(source._on_joy_connection_changed):
-			Input.joy_connection_changed.disconnect(source._on_joy_connection_changed)
+		source.shutdown()
 	for id in simulation.fighters: simulation.set_enabled(id,false)
 	simulation.fighters.clear()
+
+func _input(event: InputEvent) -> void:
+	# Track releases before GUI so consumed releases cannot stick buttons.
+	if (event is InputEventKey or event is InputEventJoypadButton) and not event.pressed:
+		_route_gameplay_event(event)
+
+func _unhandled_input(event: InputEvent) -> void:
+	_route_gameplay_event(event)
+
+func _route_gameplay_event(event: InputEvent) -> void:
+	if paused or not simulation.result.is_empty(): return
+	for slot in sources.size():
+		if slot == 1 and (inputs == null or inputs.enabled): continue
+		sources[slot].feed_event(event)

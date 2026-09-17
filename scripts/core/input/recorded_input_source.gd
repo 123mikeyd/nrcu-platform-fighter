@@ -61,4 +61,12 @@ static func _valid_frame(entry: Variant) -> bool:
 		for action in entry[field]:
 			if not action in ["jump", "attack", "special", "shield", "down"] or not entry[field][action] is bool:
 				return false
+	var aims = entry.get("pressed_axis", {})
+	if not aims is Dictionary: return false
+	for action in aims:
+		if action not in ["jump", "attack", "special", "shield", "down"]: return false
+		if not aims[action] is Array or aims[action].size() != 2: return false
+		for value in aims[action]:
+			if not (value is float or value is int) or not is_finite(float(value)) or absf(float(value)) > 1:
+				return false
 	return true
