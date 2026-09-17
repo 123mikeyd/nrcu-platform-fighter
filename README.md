@@ -4,11 +4,15 @@
 
 ## Play
 
-[![Play Now — Download for Windows](https://img.shields.io/badge/PLAY_NOW-Download_for_Windows-267B52?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/123mikeyd/nrcu-platform-fighter/releases/download/v0.3/NRCU-v0.3-Windows.zip)
+[![Play Now — In Your Browser](https://img.shields.io/badge/PLAY_NOW-In_Your_Browser-267B52?style=for-the-badge)](https://123mikeyd.github.io/nrcu-platform-fighter/)
 
-**Windows 64-bit download, not a browser game.** [Download v0.3](https://github.com/123mikeyd/nrcu-platform-fighter/releases/download/v0.3/NRCU-v0.3-Windows.zip) · [Release notes and checksum](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3)
+**[Play in your browser](https://123mikeyd.github.io/nrcu-platform-fighter/)** — no installer or manual ZIP download. Click Play Now on the launch page and keep the tab open while it loads. The full game's first-load data is approximately **470 MiB**, so use a desktop computer and a good connection. Chrome on Windows was tested; mobile/touch, other browsers and physical controllers are not certified.
 
-Extract the complete ZIP, open `NRCU-Alpha`, and launch `NRCU.exe` beside `NRCU.pck`. Choose **PLAY** for a local match or **STORY MODE** for Bobo. P1: WASD move/aim, Space jump, F basic, G special, E shield. Escape pauses. See [TESTING.md](TESTING.md) for bug-report instructions.
+The public HTTPS build was checked through title/home, Story selection, movement, attack damage and pause with no captured browser errors. Local browser testing also covered a natural Bobo victory, replay and animated Sky Temple. This remains the same unfinished alpha, not a fix for every inherited gameplay issue. See [Web build details](WEB_BUILD.md) and the [Web release](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3-web.1).
+
+**Prefer native Windows?** [Download v0.3 for Windows](https://github.com/123mikeyd/nrcu-platform-fighter/releases/download/v0.3/NRCU-v0.3-Windows.zip) · [Windows release notes and checksum](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3)
+
+For Windows, extract the complete ZIP, open `NRCU-Alpha`, and launch `NRCU.exe` beside `NRCU.pck`. In either version, choose **PLAY** for a local match or **STORY MODE** for Bobo. P1: WASD move/aim, Space jump, F basic, G special, E shield. Escape pauses. See [TESTING.md](TESTING.md) for bug-report instructions.
 
 The freshly extracted Windows build was exercised with native keyboard/mouse inputs, including Story combat and pause. The final focused selection passed **35/35**; the broader inherited selection remains **142 passed / 48 failed**. This is a playable development snapshot, not all-green certification. Physical controllers and exhaustive matchups are not verified.
 
