@@ -1,0 +1,35 @@
+extends "res://tests/test_core_defense_match.gd"
+func run() -> void:
+	var floor = floor_body(); var p = DefenseProfile.new(); p.shield_drain = 0
+	var m = setup_match(p); await settle(m)
+	m.fighters[2].ready_tick = m.tick + 3
+	await tick(m, {2: shield(true, Vector2.LEFT)})
+	check(m.defense_telemetry(2).state == "idle", "action cooldown rejects defense")
+	check(not m.fighters[2].buffer.peek("shield").is_empty(), "rejected edge unconsumed")
+	for i in 3: await tick(m)
+	check(m.defense_telemetry(2).state == "dodge_startup", "buffered press direction accepts after cooldown even released")
+	m.set_frozen(2, true)
+	var snapshot = m.defense_telemetry(2)
+	for i in 4: await tick(m, {2: shield(false, Vector2.LEFT)})
+	check(m.defense_telemetry(2) == snapshot, "freeze interrupts then holds defense clocks and resources")
+	m.set_frozen(2, false); m.set_enabled(2, false)
+	snapshot = m.defense_telemetry(2)
+	await tick(m, {2: shield(true, Vector2.LEFT)})
+	check(m.defense_telemetry(2) == snapshot and m.fighters[2].buffer.peek("shield").is_empty(), "disabled no clocks or input")
+	m.set_enabled(2, true)
+	m.reset({1: Vector3(0,0.01,0), 2: Vector3(1.5,0.01,0)})
+	check(m.defense_telemetry(2).shield_health == 100 and m.defense_telemetry(2).cooldown_ticks == 0, "reset restores defense resources")
+	await settle(m)
+	await tick(m, {2: shield(true)})
+	check(m.fighters[2].buffer.peek("shield").is_empty(), "accepted neutral shield consumes edge")
+	await tick(m)
+	await tick(m, {2: shield(true, Vector2.LEFT)})
+	m.fighters[2].hitstop_left = 3
+	snapshot = m.defense_telemetry(2); var at = m.fighters[2].actor.position
+	for i in 3: await tick(m)
+	check(m.defense_telemetry(2) == snapshot and m.fighters[2].actor.position == at, "hitstop preserves defense and body")
+	await tick(m)
+	check(m.defense_telemetry(2).remaining_ticks == snapshot.remaining_ticks - 1, "resume advances once")
+	cleanup(m); floor.free()
+	if not failures: print("PASS: core defense match gates (%d checks)" % checks)
+	quit(1 if failures else 0)

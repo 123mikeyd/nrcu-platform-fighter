@@ -1,0 +1,6 @@
+[gd_resource type="Resource" format=3]
+
+[resource]
+metadata/model_hand = Vector3(-0.571867, 1.1936806, 1.0007538)
+metadata/source_seconds = 0.6666666666666666
+metadata/source_frame = 46

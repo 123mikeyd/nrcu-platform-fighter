@@ -1,0 +1,25 @@
+extends "res://tests/test_core_combat_lab.gd"
+func run() -> void:
+    var lab = load("res://scenes/combat_lab.tscn").instantiate()
+    root.add_child(lab)
+    lab.set_physics_process(false)
+    check(lab.simulation.hitstop_profile == null, "legacy sandbox opts out")
+    lab.start_stock_match()
+    check(lab.simulation.hitstop_profile != null, "3-stock entry explicitly enables hitstop")
+    if lab.simulation.hitstop_profile != null:
+        check(lab.simulation.hitstop_profile.direct_hit_ticks == 4, "initial proposed tuning is four ticks")
+    check(lab.has_method("set_hitstop_enabled"), "lab exposes explicit hitstop toggle")
+    if lab.has_method("set_hitstop_enabled"):
+        check(lab.hitstop_button.focus_mode == Control.FOCUS_NONE, "toggle cannot steal combat keys")
+        lab.set_hitstop_enabled(false)
+        check(lab.simulation.hitstop_profile == null, "toggle disables new pauses")
+        lab.rematch_lab()
+        check(lab.simulation.hitstop_profile == null, "rematch preserves explicit opt out")
+        lab.set_hitstop_enabled(true)
+        lab.rematch_lab()
+        check(lab.simulation.hitstop_profile.direct_hit_ticks == 4, "rematch preserves opt in")
+        lab.enter_sandbox()
+        check(lab.simulation.hitstop_profile == null, "sandbox entry restores compatibility timing")
+    lab.free()
+    if failures == 0: print("PASS: hitstop lab configuration and focus")
+    quit(1 if failures else 0)

@@ -1,0 +1,16 @@
+extends "res://tests/test_core_top_support_lifecycle.gd"
+func run():
+	var f = setup_pair("teknium","turbofit")
+	await acquire(f)
+	await step(f.m)
+	check(not f.m.top_support_telemetry(1).relation.is_empty(),"retained support prerequisite")
+	var before = f.m._top_support_snapshots()
+	f.m.top_support.begin(before)
+	f.m.top_support.release(1)
+	check(f.m.top_support_telemetry(1).geometry.pose_category != "supported","same-sync released carrier is not a supported source")
+	var after = f.m._top_support_snapshots(true)
+	check(after[1].position == before[1].position,"same-batch release does not invent physical sole descent through coordinate-basis change")
+	check(f.m.top_support_telemetry(1).geometry.pose_category != "supported","released live carrier cannot advertise a supported source category")
+	dispose(f)
+	if not failures: print("PASS: support sole coordinate basis and category release")
+	quit(1 if failures else 0)

@@ -1,0 +1,149 @@
+{
+	"analyzed_count": 7,
+	"entries": [
+		{
+			"asset": "res://assets/doge_man/doge_attacks.glb",
+			"body_height": 1.67745869498103,
+			"body_radius": 0.395993828773499,
+			"errors": [],
+			"hurtboxes": 19,
+			"id": "doge_man",
+			"override_resource": "",
+			"profile": "res://data/collision/generated/doge_man.tres",
+			"sha256": "bd41fe4225565790235edb423b4a11f670057695e5ae427bbe875fa0d720a463",
+			"status": "generated",
+			"vertices": 13885,
+			"visual_scale": 1.25,
+			"warnings": [
+				"Body is a grounded gameplay capsule fit to core extrema, not a full mesh containment guarantee at rounded caps.",
+				"Dominant-bone segmentation cannot distinguish fused clothing/props/hair with shared weights; manual review required.",
+				"Skeleton segment fallback for Spine; radius heuristic, low confidence",
+				"Rest foot origin does not include animated presenter offsets/root travel; preserve approved presenter behavior when integrating."
+			]
+		},
+		{
+			"asset": "res://assets/ggb/ggb.glb",
+			"body_height": 1.04302191734314,
+			"body_radius": 0.52151095867157,
+			"errors": [],
+			"hurtboxes": 0,
+			"id": "ggb",
+			"override_resource": "",
+			"profile": "res://data/collision/generated/ggb.tres",
+			"sha256": "63a0441ba3644e6c24ec844fe0459ed8aa971d58862784a12ec4aed766a1a853",
+			"status": "generated",
+			"vertices": 5610,
+			"visual_scale": 0.48186128424,
+			"warnings": [
+				"Body is a grounded gameplay capsule fit to core extrema, not a full mesh containment guarantee at rounded caps.",
+				"Dominant-bone segmentation cannot distinguish fused clothing/props/hair with shared weights; manual review required.",
+				"No skeleton: static nondecorative mesh envelope only; no fabricated bone hurtboxes.",
+				"Rest foot origin does not include animated presenter offsets/root travel; preserve approved presenter behavior when integrating."
+			]
+		},
+		{
+			"asset": "res://assets/ice_mage/ice_mage_combat.glb",
+			"body_height": 1.7672065453385,
+			"body_radius": 0.455344498157501,
+			"errors": [],
+			"hurtboxes": 19,
+			"id": "ice_mage",
+			"override_resource": "",
+			"profile": "res://data/collision/generated/ice_mage.tres",
+			"sha256": "43311f59c8af257760d72322ac9962cccf0b5007d11ea333ca8bf903708d1e6a",
+			"status": "generated",
+			"vertices": 31065,
+			"visual_scale": 1.15,
+			"warnings": [
+				"Body is a grounded gameplay capsule fit to core extrema, not a full mesh containment guarantee at rounded caps.",
+				"Dominant-bone segmentation cannot distinguish fused clothing/props/hair with shared weights; manual review required.",
+				"Rest foot origin does not include animated presenter offsets/root travel; preserve approved presenter behavior when integrating."
+			]
+		},
+		{
+			"asset": "res://assets/mephisto/mephisto_girl.glb",
+			"body_height": 1.75986236430433,
+			"body_radius": 0.313448280096054,
+			"errors": [],
+			"hurtboxes": 19,
+			"id": "mephisto",
+			"override_resource": "",
+			"profile": "res://data/collision/generated/mephisto.tres",
+			"sha256": "8c483a183f1b7c801fff04b7d4534326e27f4065049a785d7c659ff4fe0393a8",
+			"status": "generated",
+			"vertices": 7322,
+			"visual_scale": 1.25,
+			"warnings": [
+				"Body is a grounded gameplay capsule fit to core extrema, not a full mesh containment guarantee at rounded caps.",
+				"Dominant-bone segmentation cannot distinguish fused clothing/props/hair with shared weights; manual review required.",
+				"Rest foot origin does not include animated presenter offsets/root travel; preserve approved presenter behavior when integrating."
+			]
+		},
+		{
+			"asset": "res://assets/teknium/teknium_animations.glb",
+			"body_height": 1.70208269358417,
+			"body_radius": 0.506420612335205,
+			"errors": [],
+			"hurtboxes": 19,
+			"id": "teknium",
+			"override_resource": "",
+			"profile": "res://data/collision/generated/teknium.tres",
+			"sha256": "815cc447b47e751d385ec71603d73697ae762fd27ca0c6597f331c5e3aeab100",
+			"status": "generated",
+			"vertices": 14945,
+			"visual_scale": 1.25,
+			"warnings": [
+				"Body is a grounded gameplay capsule fit to core extrema, not a full mesh containment guarantee at rounded caps.",
+				"Dominant-bone segmentation cannot distinguish fused clothing/props/hair with shared weights; manual review required.",
+				"Rest foot origin does not include animated presenter offsets/root travel; preserve approved presenter behavior when integrating."
+			]
+		},
+		{
+			"asset": "res://assets/turbofit/turbofit_animations.glb",
+			"body_height": 2.08588960766792,
+			"body_radius": 0.402668058872223,
+			"errors": [],
+			"hurtboxes": 25,
+			"id": "turbofit",
+			"override_resource": "",
+			"profile": "res://data/collision/generated/turbofit.tres",
+			"sha256": "88cae0fe88ad648367c137b547468d47d41695b898301df0f8440153e02fe427",
+			"status": "generated",
+			"vertices": 19268,
+			"visual_scale": 1.25,
+			"warnings": [
+				"Body is a grounded gameplay capsule fit to core extrema, not a full mesh containment guarantee at rounded caps.",
+				"Dominant-bone segmentation cannot distinguish fused clothing/props/hair with shared weights; manual review required.",
+				"No vertices/child segment for mixamorig_LeftToe_End; hurtbox omitted",
+				"No vertices/child segment for mixamorig_RightToe_End; hurtbox omitted",
+				"No vertices/child segment for mixamorig_LeftHandIndex4; hurtbox omitted",
+				"No vertices/child segment for mixamorig_RightHandIndex4; hurtbox omitted",
+				"Rest foot origin does not include animated presenter offsets/root travel; preserve approved presenter behavior when integrating."
+			]
+		},
+		{
+			"asset": "res://assets/witcheer/witcheer_run.glb",
+			"body_height": 1.49742731794539,
+			"body_radius": 0.388642907142639,
+			"errors": [],
+			"hurtboxes": 19,
+			"id": "witcheer",
+			"override_resource": "",
+			"profile": "res://data/collision/generated/witcheer.tres",
+			"sha256": "62ad317385b24b53448f066576994b38e71b85c3d3c1e6426add596b37de10b5",
+			"status": "generated",
+			"vertices": 69650,
+			"visual_scale": 1.2,
+			"warnings": [
+				"Body is a grounded gameplay capsule fit to core extrema, not a full mesh containment guarantee at rounded caps.",
+				"Dominant-bone segmentation cannot distinguish fused clothing/props/hair with shared weights; manual review required.",
+				"Rest foot origin does not include animated presenter offsets/root travel; preserve approved presenter behavior when integrating."
+			]
+		}
+	],
+	"failed_count": 0,
+	"generated_count": 7,
+	"generator_version": 1,
+	"roster_count": 7,
+	"unique_count": 7
+}

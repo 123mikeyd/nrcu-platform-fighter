@@ -1,0 +1,219 @@
+[gd_resource type="Resource" format=3]
+
+[ext_resource type="Script" path="res://scripts/core/collision/generated_hurtbox.gd" id="stable_001"]
+[ext_resource type="Script" path="res://scripts/core/collision/character_collision_profile.gd" id="stable_002"]
+
+[sub_resource type="Resource" id="stable_003"]
+script = ExtResource("stable_001")
+hurtbox_id = "head"
+bone_name = "Head"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.32552433, 11.09109, -14.310665)
+radius = 22.794682
+height = 89.38142585754395
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_004"]
+script = ExtResource("stable_001")
+hurtbox_id = "hips"
+bone_name = "Hips"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.9983177, 6.0733967, 15.148848)
+radius = 38.109283
+height = 125.67248916625977
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_005"]
+script = ExtResource("stable_001")
+hurtbox_id = "left_arm"
+bone_name = "LeftArm"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12637615, 12.041372, 3.7710533)
+radius = 10.189358
+height = 45.3694
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_006"]
+script = ExtResource("stable_001")
+hurtbox_id = "left_foot"
+bone_name = "LeftFoot"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4231572, 5.3826666, 4.363454)
+radius = 13.581646
+height = 54.4644718170166
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_007"]
+script = ExtResource("stable_001")
+hurtbox_id = "left_fore_arm"
+bone_name = "LeftForeArm"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1830883, 12.211069, 0.17796707)
+radius = 8.299911
+height = 41.58870887756348
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_008"]
+script = ExtResource("stable_001")
+hurtbox_id = "left_hand"
+bone_name = "LeftHand"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.32256794, 11.936716, 1.0144272)
+radius = 12.433112
+height = 48.48679542541504
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_009"]
+script = ExtResource("stable_001")
+hurtbox_id = "left_leg"
+bone_name = "LeftLeg"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6891632, 15.873425, 1.0769973)
+radius = 11.479095
+height = 59.850075
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_010"]
+script = ExtResource("stable_001")
+hurtbox_id = "left_toe_base"
+bone_name = "LeftToeBase"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7289758, 6.3361664, -0.2944535)
+radius = 10.104777
+height = 33.25620460510254
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_011"]
+script = ExtResource("stable_001")
+hurtbox_id = "left_up_leg"
+bone_name = "LeftUpLeg"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.1968117, 15.664017, 6.16029)
+radius = 30.0263
+height = 108.46997451782227
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_012"]
+script = ExtResource("stable_001")
+hurtbox_id = "right_arm"
+bone_name = "RightArm"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.90554047, 10.626868, 4.008293)
+radius = 9.539474
+height = 40.701492
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_013"]
+script = ExtResource("stable_001")
+hurtbox_id = "right_foot"
+bone_name = "RightFoot"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.70818424, 5.8544164, 3.3958983)
+radius = 14.104958
+height = 53.83700084686279
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_014"]
+script = ExtResource("stable_001")
+hurtbox_id = "right_fore_arm"
+bone_name = "RightForeArm"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0017127991, 12.458057, 0.25782013)
+radius = 8.296555
+height = 42.006584
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_015"]
+script = ExtResource("stable_001")
+hurtbox_id = "right_hand"
+bone_name = "RightHand"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.74205303, 12.569141, 1.211586)
+radius = 12.424886
+height = 50.22307014465332
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_016"]
+script = ExtResource("stable_001")
+hurtbox_id = "right_leg"
+bone_name = "RightLeg"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.7809873, 18.54462, 0.77141666)
+radius = 11.384938
+height = 60.366228103637695
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_017"]
+script = ExtResource("stable_001")
+hurtbox_id = "right_toe_base"
+bone_name = "RightToeBase"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38864088, 6.2327814, -0.16829407)
+radius = 10.053432
+height = 33.74055
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_018"]
+script = ExtResource("stable_001")
+hurtbox_id = "right_up_leg"
+bone_name = "RightUpLeg"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5065346, 13.509378, 9.928759)
+radius = 25.834734
+height = 87.21778
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_019"]
+script = ExtResource("stable_001")
+hurtbox_id = "spine"
+bone_name = "Spine"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.20223665, 5.537098, 4.59692)
+radius = 3.5219722
+height = 12.726386
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_020"]
+script = ExtResource("stable_001")
+hurtbox_id = "spine_01"
+bone_name = "Spine01"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6791129, 7.4169807, 6.1457243)
+radius = 17.570387
+height = 50.102757
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[sub_resource type="Resource" id="stable_021"]
+script = ExtResource("stable_001")
+hurtbox_id = "spine_02"
+bone_name = "Spine02"
+local_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.16326141, 9.601109, -0.16760635)
+radius = 17.567268
+height = 51.795326
+confidence = "medium_dominant_skin_rest"
+provenance = "dominant weighted vertices; inverse global rest; conservative local vertical capsule"
+
+[resource]
+script = ExtResource("stable_002")
+character_id = "witcheer"
+source_asset = "res://assets/witcheer/witcheer_run.glb"
+source_sha256 = "03620ab6c481a5487f50bbab821bf428dcbf7d384c8c437c894b96875221260c"
+visual_scale = 1.2
+foot_origin = Vector3(0, 1.455861e-07, 0)
+body_radius = 0.3886429
+body_height = 1.4974273179453945
+body_center = Vector3(-0.00024469197, 0.7487137, -0.064469084)
+hurtboxes = Array[Resource]([SubResource("stable_003"), SubResource("stable_004"), SubResource("stable_005"), SubResource("stable_006"), SubResource("stable_007"), SubResource("stable_008"), SubResource("stable_009"), SubResource("stable_010"), SubResource("stable_011"), SubResource("stable_012"), SubResource("stable_013"), SubResource("stable_014"), SubResource("stable_015"), SubResource("stable_016"), SubResource("stable_017"), SubResource("stable_018"), SubResource("stable_019"), SubResource("stable_020"), SubResource("stable_021")])
+warnings = PackedStringArray("Body is a grounded gameplay capsule fit to core extrema, not a full mesh containment guarantee at rounded caps.", "Dominant-bone segmentation cannot distinguish fused clothing/props/hair with shared weights; manual review required.", "Rest foot origin does not include animated presenter offsets/root travel; preserve approved presenter behavior when integrating.")
+provenance = {
+"core_vertices": 30448,
+"excluded_meshes": Array[String]([]),
+"influence_policy": "dominant positive weight; ties first slot",
+"pose": "imported skeleton rest (not animated Idle)",
+&"presenter": "res://scripts/witcheer_visual.gd",
+&"presenter_sha256": "06b50c206bf09d97fa003386918cc57989de6a6d93c50951b01beecaeba5ff74",
+"space": "body: scaled model rest minus foot_origin; hurtbox: native bone local",
+"surfaces": 1,
+"vertices": 69650
+}
+override_fields = PackedStringArray()

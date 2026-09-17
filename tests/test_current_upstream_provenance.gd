@@ -1,0 +1,34 @@
+extends SceneTree
+## Regression for the v0.2 raw assets, presenters and texture import contract.
+const Source = preload("res://scripts/core/presentation/teknium_swing_source.gd")
+var failures := 0
+func check(ok: bool, label: String) -> void:
+ if not ok:
+  failures += 1
+  print("FAIL: ", label)
+func _init() -> void:
+ var packed = ResourceLoader.load(Source.ASSET, "PackedScene", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
+ check(Source.source_content_authenticated(packed), "current upstream imported source authenticates")
+ var state = packed.get_state()
+ var changed = packed.duplicate(true)
+ var bundle: Dictionary = changed.get("_bundled").duplicate(true)
+ var variants: Array = Array(bundle.variants)
+ var mutated := false
+ for i in variants.size():
+  if variants[i] is ArrayMesh:
+   var mesh = variants[i].duplicate(true)
+   var material = mesh.surface_get_material(0).duplicate(true)
+   material.albedo_color = Color(0.1, 0.2, 0.3, 1.0)
+   mesh.surface_set_material(0, material)
+   variants[i] = mesh
+   mutated = true
+ bundle.variants = variants
+ changed.set("_bundled", bundle)
+ check(mutated and state.get_node_count() > 0, "actual serialized material mutation prerequisite")
+ check(not Source.source_content_authenticated(changed), "changed material remains rejected")
+ for id in ["doge_man", "ggb", "ice_mage", "mephisto", "teknium", "turbofit", "witcheer"]:
+  var p = load("res://data/collision/generated/%s.tres" % id)
+  check(p.source_sha256 == FileAccess.get_sha256(p.source_asset), id + " current raw source")
+  check(p.provenance.presenter_sha256 == FileAccess.get_sha256(p.provenance.presenter), id + " current presenter")
+ if failures == 0: print("PASS: current upstream provenance and material tamper rejection")
+ quit(1 if failures else 0)

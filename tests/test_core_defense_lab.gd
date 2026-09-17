@@ -1,0 +1,36 @@
+extends "res://tests/test_core_combat_lab.gd"
+func run() -> void:
+    var lab = load("res://scenes/combat_lab.tscn").instantiate()
+    root.add_child(lab)
+    lab.set_physics_process(false)
+    check(lab.simulation.defense_profile == null, "default sandbox delegates legacy")
+    check(lab.has_method("set_defense_enabled"), "explicit finite defense control exists")
+    if not lab.has_method("set_defense_enabled"):
+        lab.free()
+        quit(1)
+        return
+    var source = lab.sources[0]
+    var bindings: Dictionary = source.bindings.duplicate(true)
+    var match_owner = lab.simulation
+    lab.set_defense_enabled(true)
+    check(lab.simulation.defense_telemetry(1).state == "idle", "sandbox can explicitly select finite")
+    lab.reset_lab()
+    check(lab.simulation.defense_profile != null, "sandbox reset preserves choice")
+    lab.set_defense_enabled(false)
+    lab.start_stock_match()
+    check(lab.simulation.defense_profile != null, "stock entry enables finite by default")
+    lab.set_defense_enabled(false)
+    lab.rematch_lab()
+    check(lab.simulation.defense_profile == null, "rematch preserves opt out")
+    lab.enter_sandbox()
+    check(lab.simulation.defense_profile == null, "sandbox restores its separately chosen legacy policy")
+    lab.set_defense_enabled(true)
+    lab.start_stock_match()
+    lab.set_defense_enabled(false)
+    lab.enter_sandbox()
+    check(lab.simulation.defense_profile != null, "sandbox restores separately chosen finite policy")
+    check(lab.simulation == match_owner and lab.sources[0] == source and source.bindings == bindings, "mode swaps retain sole match and source binding owners")
+    check(not lab.actors[0].is_physics_processing(), "no actor physics writer added")
+    lab.free()
+    if failures == 0: print("PASS: defense lab explicit policy lifecycle")
+    quit(1 if failures else 0)
