@@ -1,10 +1,16 @@
-# NRCU Platform Fighter — v0.2
+# NRCU Platform Fighter — v0.3
 
-**Unfinished alpha playtest — this is not a finished game.** Public development snapshot for collaborative playtesting. See [v0.2 release notes](RELEASE_NOTES_v0.2.md) for changes, known issues, and the checks actually completed.
+**Unfinished alpha playtest — this is not a finished game.** New frontend by [Arts Bro](https://github.com/realartsbro), integrated with the current gameplay snapshot. See [v0.3 release notes](RELEASE_NOTES_v0.3.md) for changes, known issues, and the checks actually completed.
 
 ## Play
 
-Use the Windows ZIP in [Releases](../../releases). Extract everything and launch `NRCU.exe` beside `NRCU.pck`. See [TESTING.md](TESTING.md) for a short Bobo test pass and bug-report instructions. Release notes distinguish automated checks from actual release-window testing.
+[![Play Now — Download for Windows](https://img.shields.io/badge/PLAY_NOW-Download_for_Windows-267B52?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/123mikeyd/nrcu-platform-fighter/releases/download/v0.3/NRCU-v0.3-Windows.zip)
+
+**Windows 64-bit download, not a browser game.** [Download v0.3](https://github.com/123mikeyd/nrcu-platform-fighter/releases/download/v0.3/NRCU-v0.3-Windows.zip) · [Release notes and checksum](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3)
+
+Extract the complete ZIP, open `NRCU-Alpha`, and launch `NRCU.exe` beside `NRCU.pck`. Choose **PLAY** for a local match or **STORY MODE** for Bobo. P1: WASD move/aim, Space jump, F basic, G special, E shield. Escape pauses. See [TESTING.md](TESTING.md) for bug-report instructions.
+
+The freshly extracted Windows build was exercised with native keyboard/mouse inputs, including Story combat and pause. The final focused selection passed **35/35**; the broader inherited selection remains **142 passed / 48 failed**. This is a playable development snapshot, not all-green certification. Physical controllers and exhaustive matchups are not verified.
 
 ## Open the source
 
@@ -24,7 +30,8 @@ Install the matching Godot **4.7.2 export templates** and use the **Windows Play
 
 - Freeplay with local keyboard/gamepad slots and bots; no online multiplayer is claimed.
 - Story Mode contains a stationary 400-HP Bobo encounter. Bobo now attempts a slow two-part thrust/slash when an opponent is nearby.
-- Fighters and homepage remain in progress. Mephisto is unfinished and deferred from this test pass.
+- New title, home, character/stage selection, glove cursor, and shared pause/quit/back navigation from [PR #1](https://github.com/123mikeyd/nrcu-platform-fighter/pull/1). Unfinished VS presentation and VFX Lab are excluded.
+- Integrated tumble/contact fixes, Witcheer's native DefaultSwim and the paired-Mephisto starter. Character kits, dark stage readability and other polish remain in progress; later Mephisto experiments are not part of this snapshot.
 - Shared agent workflow: [Godot development and testing skill](skills/nous-game-dev-testing/SKILL.md).
 
 ## Collaborate
