@@ -50,9 +50,10 @@ const PauseOverlayScript = preload("res://scripts/frontend/pause_overlay.gd")
 const MATCH_FLOW_SCENE := "res://scenes/match_flow.tscn"
 const HOME_SCENE := "res://scenes/home.tscn"
 
-# Shipped Story HUD sentence (main.gd start_story), now built from the launch
-# config's Story payload: enemy identity + HP come from the snapshot.
-const STORY_CONTROLS_TEMPLATE := "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\n%s: %d HP, stationary, no attacks. Deplete his HP! · Esc: back to main"
+# Shipped Story HUD sentence (main.gd _begin_story_encounter), built from the
+# launch config's Story payload: enemy identity + HP come from the snapshot.
+# Bobo (v0.2) is stationary but attempts a slow two-hit claw attack up close.
+const STORY_CONTROLS_TEMPLATE := "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\n%s: %d HP · slow two-hit claws · punish his recovery! · Esc: back to main"
 
 # The immutable launch snapshot handed over by the MatchFlow router (Doc 02 §3).
 # Set before tree entry; null for every direct load.
