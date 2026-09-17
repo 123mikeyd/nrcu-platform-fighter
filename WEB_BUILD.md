@@ -35,7 +35,16 @@ The first measured full export contains:
 
 This is a large first download and requires substantially more RAM than the compressed assets alone. Localhost load time is not evidence of internet load time. No assets or roster members have been silently removed to make these numbers smaller.
 
-For GitHub Pages, build in Actions and upload the **export directory as a Pages artifact**, then deploy that artifact. Do **not** commit `.pck`, `.wasm`, `.godot`, template archives, caches, or export outputs to Git. Keep all exported filenames unchanged and all files at the same relative paths. Serve WASM as `application/wasm`, JavaScript as JavaScript, over HTTPS (localhost is exempt). Hosting, bandwidth, deployment and public-site verification are a separate release gate; this change does not deploy anything.
+For GitHub Pages, `.github/workflows/deploy-web.yml` downloads the fixed reviewed **v0.3-web.1** release archive, verifies its pinned SHA-256 and source tag, validates every manifest member and safe ZIP paths/types/size, uploads the exact export directory as a Pages artifact, and deploys it. It does not rebuild or silently replace the tested export. Dispatch only on `main`; the deployment environment is `github-pages`. No personal credentials, paid runners, or committed export binaries are required.
+
+- Reviewed export source: `52a6ccdd1553d3681137888ae13144c78fd6ec9a`.
+- Release archive: `NRCU-v0.3-web.1.zip` (348,113,612 bytes).
+- Archive SHA-256: `f1e93c6cbd40424ce5491c728da352ad564ff94ff13dd6ea94f2af37765aa2ff`.
+- Extracted site: 13 files, 492,776,142 bytes, including the relative-path-only manifest and third-party notices. `index.html` is at the archive root.
+
+Do **not** commit `.pck`, `.wasm`, `.godot`, template archives, caches, or export outputs to Git. Keep exported filenames and relative paths unchanged. WASM/PCK are served from Pages itself, not fetched from Releases at runtime. Serve WASM as `application/wasm` over HTTPS. The site is below Pages' 1 GB site limit, but the roughly 469.5 MiB startup download can consume the 100 GB/month soft bandwidth allowance quickly. Hosting success does not establish hosted gameplay compatibility.
+
+To repeat this deployment, run `gh workflow run deploy-web.yml --ref main`, then check the actual run and live site. Never overwrite the reviewed tag/archive: a changed export requires a new versioned release, new checksums, review, and a workflow update. Keep [Windows v0.3](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3) available. The README Play Now destination is a separate hosted-browser acceptance gate and is not changed by this workflow.
 
 ## Browser QA performed
 
