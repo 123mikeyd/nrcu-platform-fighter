@@ -1,7 +1,9 @@
 extends SceneTree
 var failures := 0
+var checks := 0
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
+	checks += 1
 	if not ok:
 		failures += 1
 		printerr("FAIL: " + message)
@@ -61,11 +63,27 @@ func run():
 			legacy.reset_fighter(Vector3.ZERO)
 			legacy.facing = -1
 			victim.reset_fighter(Vector3(20,0,0))
-			legacy.basic_attack(aim,airborne)
-			host.start_basic("basic-source",aim,airborne,-1)
+			# Ground remains public-dispatch parity. Air isolates the retained authored
+			# IceStrike helper, NOT v0.2 public air basics (see dispatch test/doc).
+			var direction := Vector3(legacy.facing,0,0)
+			if aim.y < -.1: direction = Vector3.UP
+			elif aim.y > .1: direction = Vector3.DOWN if airborne else Vector3(legacy.facing,-.25,0).normalized()
+			elif absf(aim.x) > .1:
+				legacy.facing = signf(aim.x)
+				direction = Vector3(legacy.facing,0,0)
+			if airborne: legacy._start_ice_attack("IceStrike",direction)
+			else: legacy.basic_attack(aim,airborne)
+			check(legacy.ice_attack_clip == "IceStrike", "authored source accepted IceStrike identity")
+			check(legacy.ice_attack_elapsed == 0, "authored source accepted at age zero")
+			check(legacy.attack_cooldown == .55, "authored source committed .55 duration")
+			check(legacy.ice_attack_direction == direction, "independently derived authored source direction")
+			check(host.start_basic("basic-source",aim,airborne,-1), "host accepts retained authored basic")
 			legacy._tick_character_move(1.0/60.0)
 			host.advance(false)
 			for i in 36:
+				check(host.snapshot().basic.clip == legacy.ice_attack_clip, "authored basic identity through expiry")
+				if not legacy.ice_attack_clip.is_empty():
+					check(host.snapshot().basic.elapsed == legacy.ice_attack_elapsed, "authored basic exact source clock parity")
 				check(host.locked()==(legacy.attack_cooldown>0), "source basic accepted action lock endpoint")
 				legacy.attack_cooldown = maxf(0,legacy.attack_cooldown-1.0/60.0)
 				legacy._tick_character_move(1.0/60.0)
@@ -98,5 +116,5 @@ func run():
 	legacy.free()
 	victim.free()
 	model.free()
-	if failures==0: print("PASS: immutable Ice assets, source clock comparison and freeze/shatter/immunity oracle")
+	if failures==0: print("PASS: Ice ground public dispatch / air authored IceStrike helper parity, immutable assets and special freeze clocks (%d checks); NOT v0.2 public air parity" % checks)
 	quit(1 if failures else 0)
