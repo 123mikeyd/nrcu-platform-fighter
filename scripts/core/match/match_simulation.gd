@@ -566,6 +566,34 @@ func _body_overlap_directions(ids: Array) -> Dictionary:
 			if not directions.has(ids[i]): directions[ids[i]] = -side
 			if not directions.has(ids[j]): directions[ids[j]] = side
 	return directions
+func _resolve_native_ledge_pressure(id: int, start: Transform3D) -> void:
+	# Native grounded wall/snap response can finish inside a rounded hanger.
+	# Recover only the live mover, before ledge occupancy is evaluated. Keep
+	# terrain, body masks and exceptions authoritative; never move the hanger.
+	if fighter_interaction_mode != "legacy_solid" or _ledge_attached(id): return
+	var actor = fighters[id].actor
+	if actor.runtime.states.status != "normal": return
+	var collider: CollisionShape3D = actor.get_node("CoreCapsule")
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = collider.shape
+	query.transform = collider.global_transform
+	query.collision_mask = actor.collision_mask & 2
+	query.margin = 0.0
+	var exclude: Array[RID] = [actor.get_rid()]
+	for body in actor.get_collision_exceptions():
+		if is_instance_valid(body): exclude.append(body.get_rid())
+	query.exclude = exclude
+	for contact in actor.get_world_3d().direct_space_state.intersect_shape(query):
+		for other in fighters:
+			if _ledge_attached(other) and contact.collider == fighters[other].actor:
+				query.transform = start * collider.transform
+				# Initial/release overlaps are not a pressure transaction. They
+				# remain owned by ordinary native overlap recovery / ledge rejection.
+				if not actor.get_world_3d().direct_space_state.intersect_shape(query).is_empty(): return
+				# Reject only this mover's newly penetrating native step, through
+				# a real reverse sweep (including terrain), not a transform restore.
+				actor.move_and_collide(start.origin - actor.global_position)
+				return
 func simulate(frames: Dictionary = {}) -> void:
 	if Engine.get_physics_frames() == _last_physics_tick: return
 	_last_physics_tick = Engine.get_physics_frames()
@@ -734,7 +762,9 @@ func simulate(frames: Dictionary = {}) -> void:
 		if _ledge_attached(id): command.ledge_hold = true
 		if overlap_directions.has(id): command.body_overlap_direction = overlap_directions[id]
 		var was_grounded: bool = actor.runtime.grounded
+		var motion_start: Transform3D = actor.global_transform
 		actor.simulate(command)
+		_resolve_native_ledge_pressure(id, motion_start)
 		if f.kit != null: f.kit.landed(actor.runtime.grounded)
 		if not was_grounded and actor.runtime.grounded: _ledge_landed[id] = true
 		_reconcile_defense_support(f)

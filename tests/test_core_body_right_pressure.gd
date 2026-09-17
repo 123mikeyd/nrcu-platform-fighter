@@ -1,6 +1,7 @@
 extends "res://tests/test_core_ledge_match.gd"
 const Source = preload("res://scripts/core/input/player_input_source.gd")
 const Stage = preload("res://scripts/core/stage/combat_lab_stage.gd")
+var registration_order := [1,2]
 func run():
 	for parsed in [false,true]:
 		for side in [1,-1]:
@@ -12,7 +13,7 @@ func route(side, release, parsed):
 	var terrain = body(Vector3(0,-0.4,0),Vector3(24,0.8,3))
 	var m = load("res://scripts/core/match/match_simulation.gd").new()
 	var sources = {}
-	for id in [1,2]:
+	for id in registration_order:
 		var actor = Actor.new(); root.add_child(actor); m.register_actor(id,actor,-1,"ice_mage")
 		var source = Source.new(); source.slot = id-1; sources[id] = source
 	m.configure_ledges(Stage.new().create_anchors(),LedgePolicy.new())
