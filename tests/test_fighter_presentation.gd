@@ -117,6 +117,13 @@ func _measured_silhouettes() -> void:
 			"%s measured half width %.3f matches the presentation table %.3f" % [id, (hi.x - lo.x) * 0.5, float(sil["half_width"])])
 		heights[id] = height
 		presence[id] = Factory.presence(id, Factory.PROFILE_PLAYER_BAY)
+		if id != "bobo":
+			# CSS configures LIVE_IDLE before spawning its candidate. This must
+			# begin from the same native t=0 pose as static-first view creation.
+			var direct_live := await _measure(id, true)
+			check(lo.distance_to(direct_live["lo"]) < 0.02 and hi.distance_to(direct_live["hi"]) < 0.02,
+				"%s direct LIVE_IDLE spawn uses the measured deterministic pose" % id)
+			direct_live["subject"].queue_free()
 		measured["subject"].queue_free()
 		await process_frame
 	check(heights.size() == _silhouette_ids().size(), "every subject produced a measurement")
@@ -133,12 +140,17 @@ func _measured_silhouettes() -> void:
 	check(lo_p >= 0.84, "every fighter's measured silhouette fills at least 84%% of its frame (worst %.3f)" % lo_p)
 	check(hi_p - lo_p <= 0.12, "optical presence spread stays within 0.12 (%.3f..%.3f)" % [lo_p, hi_p])
 
-func _measure(id: String) -> Dictionary:
-	# Same method as tools/silhouette_probe.gd: posed bounds of the built rig
-	# in fighter-local space (yaw neutral — the table is local-space).
-	var subject: Node3D = Factory.build_subject(id, 0)
-	root.add_child(subject)
-	Factory.prepare_subject(subject, id)
+func _measure(id: String, direct_live := false) -> Dictionary:
+	# Measure the actual UI STATIC_POSE, not an advancing gameplay animation.
+	# In particular the paired Mephisto starter and DefaultSwim are sought to
+	# t=0 by FighterRenderView; three unpaused frames are a different contract.
+	var rig := _make_view(BAY_AREA)
+	var view = rig["view"]
+	view.set_sway_enabled(false)
+	if direct_live:
+		view.set_presentation_mode(Factory.MODE_LIVE_IDLE)
+	view.set_subjects([id])
+	var subject: Node3D = view.subject_nodes()[0]
 	subject.rotation_degrees = Vector3.ZERO
 	for i in 3:
 		await process_frame
@@ -152,7 +164,7 @@ func _measure(id: String) -> Dictionary:
 		lo = lo.min(Vector3(entry.min[0], entry.min[1], entry.min[2]))
 		hi = hi.max(Vector3(entry.max[0], entry.max[1], entry.max[2]))
 		meshes += 1
-	return {"lo": lo, "hi": hi, "meshes": meshes, "subject": subject}
+	return {"lo": lo, "hi": hi, "meshes": meshes, "subject": rig["host"]}
 
 # --- 3. optical framing (pure math, no view) --------------------------------
 
@@ -162,7 +174,8 @@ func _optical_framing() -> void:
 	for raw_id in ids:
 		var id := str(raw_id)
 		var box := Factory.framed_box(id, Factory.PROFILE_PLAYER_BAY)
-		check(is_zero_approx(box.position.y), "%s full-body window sits on the floor line" % id)
+		check(is_equal_approx(box.position.y, float(Factory.silhouette(id)["sole"])),
+			"%s full-body window starts at its measured sole (including hovering poses)" % id)
 		check(box.size.x >= 1.5 - 0.001, "%s full-body window keeps the minimum width" % id)
 		var aspect := box.size.x / box.size.y
 		check(aspect >= 0.5 and aspect <= 2.4, "%s full-body window stays inside the crop tolerance" % id)
@@ -209,6 +222,24 @@ func _optical_framing() -> void:
 	check(Factory.fit_distance(box, bay_cfg, 1.0) >= Factory.fit_distance(box, bay_cfg, 1.83) - 0.0001,
 		"fit distance relaxes as the destination aspect widens")
 	check(is_equal_approx(Factory.camera_forward(bay_cfg).length(), 1.0), "camera forward is normalized")
+	# Perspective containment: near corners have less camera depth than the
+	# aim plane. Ignoring that depth cropped Bobo's feet despite a green AABB fit.
+	for id in ids:
+		for profile in [Factory.PROFILE_PLAYER_BAY, Factory.PROFILE_RESULTS_HERO, Factory.PROFILE_RESULTS_TEAM]:
+			var cfg := Factory.profile_config(profile)
+			var fitted := Factory.framed_box(str(id), profile)
+			var forward := Factory.camera_forward(cfg)
+			var right := Vector3.UP.cross(forward).normalized()
+			var up := forward.cross(right).normalized()
+			var tangent := tan(deg_to_rad(float(cfg["fov"])) * 0.5)
+			for destination_aspect in [267.0 / 296.0, 267.0 / 146.0]:
+				var distance := Factory.fit_distance(fitted, cfg, destination_aspect)
+				for corner_index in 8:
+					var offset := fitted.get_endpoint(corner_index) - Factory.aim_center(fitted, cfg)
+					var depth := distance - offset.dot(forward)
+					check(depth > 0.0 and absf(offset.dot(right)) <= depth * tangent * destination_aspect + 0.001
+						and absf(offset.dot(up)) <= depth * tangent + 0.001,
+						"%s %s perspective fit contains corner %d at aspect %.3f" % [id, profile, corner_index, destination_aspect])
 	check(Factory.profile_name("player_bay") == "PLAYER_BAY" and Factory.profile_name(0) == "PORTRAIT"
 			and Factory.profile_name("nonsense") == "",
 		"profile resolution keeps names, indices and rejects junk")

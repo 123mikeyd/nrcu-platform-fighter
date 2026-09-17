@@ -307,6 +307,10 @@ func _refresh_mode() -> void:
 		request_render()
 
 func _start_live() -> void:
+	# CSS can request LIVE_IDLE before spawning a subject. Start from the
+	# same measured t=0 native pose as static-first construction; pause alone
+	# retains a different rig-initialization pose (paired Mephisto/DefaultSwim).
+	_freeze_static_pose()
 	for i in _subjects.size():
 		var subject := _subjects[i]
 		if not is_instance_valid(subject):

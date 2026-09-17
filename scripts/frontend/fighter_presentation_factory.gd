@@ -55,18 +55,20 @@ const TEAM_SPACING := 1.7          # horizontal offset between team subjects
 # --- measured silhouettes (Doc 07 §6) ---------------------------------------
 # Posed silhouette bounds per subject in fighter-local units (x=half width,
 # y=sole..top), measured from the rendered build via the shared posed-bounds
-# method (tests/posed_character_bounds.gd; probe: tools/silhouette_probe.gd).
+# method (tests/posed_character_bounds.gd, via FighterRenderView STATIC_POSE).
+# Measure the presentation's paused t=0 pose, not advancing gameplay frames.
+# Current GGB hover, Witcheer DefaultSwim and paired Mephisto starter included.
 # These are the "own measured silhouette" the camera fits: each subject fills
 # the SAME share of the frame instead of sharing one AABB that over-frames
 # short fighters (GGB) and under-frames tall ones (TurboFit).
 const SILHOUETTE := {
 	"teknium": {"top": 1.896, "sole": 0.003, "half_width": 0.649},
 	"doge_man": {"top": 1.993, "sole": 0.077, "half_width": 0.637},
-	"ggb": {"top": 0.916, "sole": 0.010, "half_width": 0.676},
+	"ggb": {"top": 1.076, "sole": 0.170, "half_width": 0.676},
 	"turbofit": {"top": 2.381, "sole": 0.057, "half_width": 0.343},
 	"ice_mage": {"top": 2.335, "sole": 0.065, "half_width": 0.723},
-	"witcheer": {"top": 2.001, "sole": 0.058, "half_width": 0.618},
-	"mephisto": {"top": 2.118, "sole": 0.056, "half_width": 0.503},
+	"witcheer": {"top": 1.973, "sole": 0.211, "half_width": 0.655},
+	"mephisto": {"top": 2.656, "sole": 0.104, "half_width": 0.571},
 	"bobo": {"top": 2.730, "sole": 0.000, "half_width": 1.171},
 }
 # Fallback for ids with no measurement yet (future encounters): the canonical
@@ -78,7 +80,7 @@ const CANONICAL_SILHOUETTE := {"top": 2.79, "sole": 0.19, "half_width": 0.75}
 # derived from SILHOUETTE + the profile's "window" rule:
 #   bust  -> fixed bust height, the head top sits top_clearance of the window
 #            below the frame top (head clearance, Doc 07 §6);
-#   full  -> sole floor line..head top + head_clearance (consistent floor line);
+#   full  -> measured sole..head top + head_clearance (posed-body window);
 # every window is widened to min_width and kept inside [min_aspect, max_aspect]
 # (crop tolerance: a very wide box would waste frame, a very narrow one would
 # clip arms).
@@ -94,7 +96,7 @@ const PROFILES := {
 	},
 	PROFILE_PLAYER_BAY: {
 		"box": AABB(Vector3(-0.75, 0.15, -0.75), Vector3(1.5, 2.7, 1.5)),
-		"window": {"mode": "full", "floor": 0.0, "head_clearance": 0.14,
+		"window": {"mode": "full", "head_clearance": 0.14,
 			"min_width": 1.5, "min_aspect": 0.50, "max_aspect": 2.40},
 		"fit_margin": 1.12, "aim_offset_y": 0.07,
 		"angle_deg": 18.0, "elev_deg": 12.0, "fov": 32.0,
@@ -103,7 +105,7 @@ const PROFILES := {
 	},
 	PROFILE_RESULTS_HERO: {
 		"box": AABB(Vector3(-0.75, 0.15, -0.75), Vector3(1.5, 2.7, 1.5)),
-		"window": {"mode": "full", "floor": 0.0, "head_clearance": 0.14,
+		"window": {"mode": "full", "head_clearance": 0.14,
 			"min_width": 1.5, "min_aspect": 0.50, "max_aspect": 2.40},
 		"fit_margin": 1.04, "aim_offset_y": 0.07,
 		"angle_deg": 20.0, "elev_deg": 10.0, "fov": 30.0,
@@ -112,7 +114,7 @@ const PROFILES := {
 	},
 	PROFILE_RESULTS_TEAM: {
 		"box": AABB(Vector3(-0.75, 0.15, -0.75), Vector3(1.5, 2.7, 1.5)),
-		"window": {"mode": "full", "floor": 0.0, "head_clearance": 0.14,
+		"window": {"mode": "full", "head_clearance": 0.14,
 			"min_width": 1.5, "min_aspect": 0.50, "max_aspect": 2.40},
 		"fit_margin": 1.08, "aim_offset_y": 0.07,
 		"angle_deg": 10.0, "elev_deg": 10.0, "fov": 30.0,
@@ -379,7 +381,10 @@ static func framed_box(id: String, profile: String) -> AABB:
 		top = float(sil["top"]) + float(window["top_clearance"]) * height
 	else:
 		top = float(sil["top"]) + float(window["head_clearance"])
-		height = top - float(window["floor"])
+		# Fit the posed body, not empty space down to gameplay world zero.
+		# Hovering / bent-knee idles must retain comparable optical presence;
+		# only the camera window changes, never the approved model or pose.
+		height = top - float(sil["sole"])
 	var width := maxf(float(sil["half_width"]) * 2.0, float(window["min_width"]))
 	width = maxf(width, height * float(window["min_aspect"]))
 	width = minf(width, height * float(window["max_aspect"]))
@@ -429,20 +434,17 @@ static func fit_distance(box: AABB, cfg: Dictionary, aspect: float) -> float:
 	var forward := camera_forward(cfg)
 	var right := Vector3.UP.cross(forward).normalized()
 	var up := forward.cross(right).normalized()
-	var half_w := 0.0
-	var half_h := 0.0
-	for xi in 2:
-		for yi in 2:
-			for zi in 2:
-				var corner := box.position + Vector3(
-					box.size.x * xi, box.size.y * yi, box.size.z * zi)
-				var offset := corner - center
-				half_w = maxf(half_w, absf(offset.dot(right)))
-				half_h = maxf(half_h, absf(offset.dot(up)))
+	var distance := 0.0
+	var tangent := tan(vfov * 0.5)
 	var safe_aspect := maxf(aspect, 0.01)
-	var dist_v := half_h / tan(vfov * 0.5)
-	var dist_h := half_w / (tan(vfov * 0.5) * safe_aspect)
-	return maxf(dist_v, dist_h) * float(cfg["fit_margin"])
+	for corner_index in 8:
+		var offset := box.get_endpoint(corner_index) - center
+		# Perspective division uses each corner's own depth. Projecting only
+		# onto the aim plane underestimates near corners and crops deep rigs.
+		var plane_distance := maxf(absf(offset.dot(up)) / tangent,
+			absf(offset.dot(right)) / (tangent * safe_aspect))
+		distance = maxf(distance, offset.dot(forward) + plane_distance)
+	return distance * float(cfg["fit_margin"])
 
 static func presence(id: String, profile: String) -> float:
 	# Optical presence: the share of the framed window the subject's own

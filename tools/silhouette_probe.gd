@@ -30,22 +30,19 @@ func measure(actor: Node3D, tag: String) -> void:
 
 func run() -> void:
 	root.size = Vector2i(1280, 720)
-	var Roster = load("res://scripts/roster.gd")
-	for id in Roster.ids():
-		var f = load("res://scripts/fighter.gd").new()
-		f.character_id = str(id)
-		root.add_child(f)
-		f.global_position = Vector3.ZERO
-		f.set_physics_process(false)
+	var Factory = load("res://scripts/frontend/fighter_presentation_factory.gd")
+	var View = load("res://scripts/frontend/fighter_render_view.gd")
+	for id in Factory.all_ids():
+		var view = View.new()
+		view.size = Vector2(267, 296)
+		root.add_child(view)
+		view.set_profile(Factory.PROFILE_PLAYER_BAY)
+		view.set_subjects([id])
+		# Use the exact paused t=0 UI lifecycle, never gameplay's advancing idle.
+		var subject = view.subject_nodes()[0]
+		subject.rotation_degrees = Vector3.ZERO
 		for i in 3: await process_frame
-		measure(f, "roster:" + str(id))
-		f.queue_free()
+		measure(subject, "presentation:" + str(id))
+		view.queue_free()
 		await process_frame
-	var b = load("res://scripts/bobo_fighter.gd").new()
-	root.add_child(b)
-	b.global_position = Vector3.ZERO
-	b.set_physics_process(false)
-	for i in 3: await process_frame
-	measure(b, "encounter:bobo")
-	measure(b.find_child("BoboVisual", true, false), "bobo_visual_only")
 	quit(0)
