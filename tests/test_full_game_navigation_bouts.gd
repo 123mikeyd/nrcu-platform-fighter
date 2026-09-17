@@ -3,12 +3,20 @@ func run():
 	for kind in ["sparring_easy","repo_easy","repo_normal","repo_hard"]:
 		for character in ["teknium","turbofit"]:
 			await bout(kind,character)
-	if not failures: print("PASS: production full sessions all owners upper pursuit then real damage")
+	if not failures: print("PASS: full session debug-layout fixture all owners upper pursuit then real damage")
 	quit(1 if failures else 0)
 func bout(kind: String, character: String):
 	var session = load("res://scripts/experimental/full_game_session.gd").new()
 	session.input_owner = kind; session.selected_fighters = ["teknium",character]
 	root.add_child(session)
+	# Preserve this upper-pursuit integration contract on the authored debug
+	# fixture. Current upstream Toy Shelf deliberately has no upper supports.
+	session.stage.free()
+	session.stage = load("res://scripts/experimental/full_game_stage.gd").new()
+	session.stage.layout_id = "debug"
+	session.add_child(session.stage)
+	session.simulation.configure_ledges(session.stage.anchors(),load("res://scripts/core/stage/ledge_policy.gd").new())
+	session.reset_inputs()
 	check(session.error.is_empty(),"production session ready")
 	session.simulation.rules.stage.spawns = {1:Vector3(-1.4,6.25,0),2:Vector3(4,-0.01,0)}
 	check(session.simulation.reset_with_collision_profiles({1:Vector3(-1.4,6.25,0),2:Vector3(4,-0.01,0)},{1:fitted("teknium"),2:fitted(character)},"grounded_jostle"),"initial actual upper fixture")

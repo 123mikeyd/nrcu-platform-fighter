@@ -10,9 +10,10 @@ func run():
 			var toward = KEY_D if side == -1 else KEY_A
 			key(away,true)
 			var offstage := false
-			for i in 160:
+			# Current authored shelf is wider than the obsolete 18-unit fixture.
+			for i in 240:
 				await frames(1)
-				if actor.position.x*side > 10.0 and actor.position.y < -0.5: offstage = true; break
+				if actor.position.x*side > absf(session.stage.ai_bounds().right)+1.0 and actor.position.y < -0.5: offstage = true; break
 			key(away,false)
 			assert(offstage,"real run off Toy Shelf edge prerequisite")
 			var before: float = actor.position.y
@@ -24,7 +25,7 @@ func run():
 			var returned := false
 			for i in 150:
 				await frames(1)
-				if actor.runtime.grounded and absf(actor.position.x)<9: returned = true; break
+				if actor.runtime.grounded and actor.position.x > session.stage.ai_bounds().left and actor.position.x < session.stage.ai_bounds().right: returned = true; break
 			key(toward,false)
 			assert(returned,"recovery returns to actual main support "+fighter)
 			assert(session.simulation.fighters[1].stocks == 3)

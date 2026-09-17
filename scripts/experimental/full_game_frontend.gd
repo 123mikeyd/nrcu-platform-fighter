@@ -105,7 +105,7 @@ func show_select():
 		device.item_selected.connect(func(i): selected_devices[slot] = device.get_item_metadata(i))
 		row.add_child(device)
 		device_choices.append(device)
-	label("Toy Shelf / Bedroom · original four platforms. Other stages: Original Game.")
+	label("Toy Shelf / Bedroom · authored wide combat shelf. Other stages: Original Game.")
 	var opponents := OptionButton.new()
 	opponents.name = "OpponentOwner"
 	opponents.custom_minimum_size.y = 42
@@ -117,7 +117,7 @@ func show_select():
 	opponents.select(ids.find(input_owner))
 	column.add_child(opponents)
 	opponents.item_selected.connect(func(i): input_owner = ids[i]; device_choices[1].disabled = input_owner != "human")
-	label("P1: A/D move · Space jump · WASD aim · F basic · G special · E shield\nP2: arrows move/aim · Enter jump · K basic · L special · O shield\nPad: left stick move/aim · A jump · X basic · B special · LB shield · Start pause\nUp + special: recovery · Teknium neutral special: grab · shield + move: dodge\nDown drops through upper platforms · Esc pauses · B backs out of selection",14)
+	label("P1: A/D move · Space jump · WASD aim · F basic · G special · E shield\nP2: arrows move/aim · Enter jump · K basic · L special · O shield\nPad: left stick move/aim · A jump · X basic · B special · LB shield · Start pause\nUp + special: recovery · Teknium neutral special: grab · shield + move: dodge\nToy Shelf is solid (no drop-through platforms) · Esc pauses · B backs out of selection",14)
 	button("StartMatch","START 3-STOCK MATCH",start_match)
 	button("BackMenu","Back to menu",show_menu)
 func start_match():

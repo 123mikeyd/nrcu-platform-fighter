@@ -90,7 +90,7 @@ func _ready():
 	set_physics_process(true)
 func refresh_navigation() -> bool:
 	var surfaces: Array = stage.navigation_surfaces()
-	if surfaces.size() != 4 or not inputs.configure_navigation(surfaces):
+	if surfaces.is_empty() or not inputs.configure_navigation(surfaces):
 		error = "Stage navigation unavailable: " + stage.navigation_error
 		if not has_node("NavigationError"):
 			var overlay := CanvasLayer.new(); overlay.name = "NavigationError"; overlay.layer = 100

@@ -12,10 +12,13 @@ func run():
 		await frames(4)
 		var help_text := ""
 		for item in app.find_children("*","Label",true,false): help_text += item.text
-		for required in ["LB shield","neutral special","Down drops","shield + move"]:
+		for required in ["LB shield","neutral special","Toy Shelf is solid (no drop-through platforms)","shield + move"]:
 			if not help_text.contains(required):
 				printerr("FAIL: missing playable controls ",required)
 				failures += 1
+		if help_text.contains("Down drops"):
+			printerr("FAIL: solid authored shelf advertises obsolete drop-through controls")
+			failures += 1
 		for id in ["Fighter1","Fighter2","OpponentOwner","StartMatch","BackMenu"]:
 			var rect: Rect2 = app.find_child(id,true,false).get_global_rect()
 			if not Rect2(Vector2.ZERO,Vector2(size)).encloses(rect):

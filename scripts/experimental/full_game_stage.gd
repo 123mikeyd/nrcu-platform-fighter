@@ -1,12 +1,15 @@
 extends Node3D
-## Toy Shelf: exact original four collider dimensions, adapted group only.
+## Toy Shelf adapter: consume the same authored layout as upstream art.
+const Layout = preload("res://scripts/stage_layouts.gd")
+var layout_id := "toy_room"
+var support_ids: Array[String] = []
 var main_support: CollisionShape3D
 var navigation_error := ""
 
 func navigation_surfaces() -> Array:
 	navigation_error = ""
 	var surfaces := []
-	for id in ["MainPlatform","Platform1","Platform2","Platform3"]:
+	for id in support_ids:
 		var body = get_node_or_null(id)
 		if not body is StaticBody3D or body.collision_layer & 1 == 0:
 			navigation_error = "Unsupported navigation support: " + id
@@ -46,10 +49,11 @@ func _ready():
 	add_child(camera)
 	camera.look_at(Vector3(0,3,0))
 	camera.current = true
-	var geometry = [[Vector3(0,-0.55,0),Vector3(18,1,5)], [Vector3(-5.2,3,0),Vector3(5,0.45,3.8)], [Vector3(5.2,3,0),Vector3(5,0.45,3.8)], [Vector3(0,6,0),Vector3(4.5,0.4,3.4)]]
+	var geometry: Array = Layout.surfaces(layout_id)
 	for i in geometry.size():
 		var body := StaticBody3D.new()
 		body.name = "MainPlatform" if i == 0 else "Platform%d" % i
+		support_ids.append(str(body.name))
 		body.position = geometry[i][0]
 		# Core terrain (including one-way) is bit 1; bit 2 is fighters.
 		# The actor's existing group/foot-plane exceptions own ascent and drop.
@@ -65,7 +69,7 @@ func _ready():
 			body.add_to_group("core_pass_through")
 			body.set_meta("top_y", body.position.y + shape.shape.size.y * 0.5)
 	var theme_node = preload("res://scripts/stage_theme.gd").new()
-	theme_node.level_id = "toy_room"
+	theme_node.level_id = layout_id
 	add_child(theme_node)
 func ai_bounds() -> Dictionary:
 	var half: Vector3 = main_support.shape.size * 0.5

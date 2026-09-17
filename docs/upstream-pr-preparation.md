@@ -51,10 +51,10 @@ fighter; the original bot bytes and executable decision comparisons are retained
 
 ## Review boundaries
 
-The curated source manifest contains 1,704 files: 590 current upstream paths and
-1,114 additive paths, including legitimate import/UID dependencies. The five
-post-review additions are two regression scripts, their Godot-generated UID
-sidecars, and the optional Ice compatibility disclosure. It is a review
+The curated source manifest contains 1,706 files: 590 current upstream paths and
+1,116 additive paths, including legitimate import/UID dependencies. The latest
+addition is the stage visual-geometry regression and its Godot-generated UID
+sidecar; the pressure/dispatch regressions and optional Ice disclosure remain. It is a review
 and portable-source inventory, not a runtime-pack allowlist or blanket staging
 command. Existing literal resource dependencies are included; dynamic original
 roster assets, generated profiles, overrides, external textures and raw JSON are
@@ -107,7 +107,11 @@ clarification (retained evidence; not the final candidate result):
   The initial combined-tree full sweep reproduced every inherited result and
   every exact error-signature set.
 
-## Post-fix candidate verification (uncommitted)
+## Historical pressure-fix snapshot verification (before stage correction)
+
+These results belong to the preserved previous PCK/source inventory, not the
+current stage-correction candidate. In particular, its upper-support browser
+route exercised obsolete invisible colliders and is not visual-stage acceptance.
 
 - Exact 1,704-path source inventory and dependency closure validated;
   a cache-free reimport of the recovered disposable stage passed strict complete
@@ -134,9 +138,91 @@ clarification (retained evidence; not the final candidate result):
   software-rendered functional acceptance, not physical-device, performance,
   human-feel or full-roster approval. No live build was published.
 
-The pressure fix still requires independent review. Optional Ice's public aerial
+Optional Ice's public aerial
 migration remains an explicit compatibility gap, not a production fix; see
 [the narrow oracle contract](OPTIONAL_ICE_COMPATIBILITY.md).
+
+## Current authored-stage correction (exported; acceptance gates remain)
+
+The v0.2 Toy Shelf has **one solid 24-unit-wide combat shelf**, centered at
+`(0,-0.55,0)`, size `(24,1,5)`, with top at `y=-0.05` and ends at `x=±12`.
+Both presentation and native supports now use `stage_layouts.surfaces(layout_id)`.
+The old 18-unit collider and three invisible upper supports were wrong for the
+current art. Bedroom floor/rug and collector shelf remain noncolliding scenery;
+no art was shortened and no upper platforms were invented. AI floor bounds and
+ledge anchors derive from the installed shelf; movement/combat/AI policy is unchanged.
+Historical multi-platform navigation/drop-through regressions use the separately
+named authored `debug` fixture, not the production Toy Shelf.
+
+Fresh stage-fix evidence in `.verification/core/stage-visual-fix/` records 16/16
+selected runners and smoke PASS, plus rendered native checks at 1280x720 and
+960x540: both kits double-jump back to the real floor, retain support to both
+visible edges, leave the floor, catch and climb with actual parsed input. Its
+RED runs reproduce floating landings and early floor ends; the old four-platform
+collision-only test passed the visibly broken baseline. That historical PASS is
+not acceptance of the corrected authored layout.
+
+Export acceptance is a **new candidate**, not inherited from the previous PCK.
+The exact source pins, strict cold import/export logs, actual output-only raw
+identity probe, fresh suite results and current browser screenshots are recorded
+separately in `.verification/core/stage-export-acceptance/`. Consult that report
+for completed checks; do not treat the 611-run historical sweep or old browser
+upper-platform pursuit as current-candidate evidence. Current browser acceptance
+requires actual shelf landings, both visible endpoints/catch/climb and a playable
+Sparring/Easy stock-results-rematch route at both viewports. There is no production
+upper-platform pursuit gate on this flat layout.
+
+Historical pre-fixture-migration acceptance of the stage-correction snapshot
+is recorded separately (fresh fixture GREEN follows below):
+
+- Complete root sweep: **612 runners, 563 PASS / 49 FAIL**, smoke PASS. The 47
+  retained inherited failures have identical outcomes and exact error sets to
+  the previous baseline-compared snapshot. Two additional stale frontend
+  fixtures remain FAIL: `test_full_game_layout` still demands `Down drops`, and
+  `test_full_game_selectors:39` still requires obsolete `-9/+9` stage bounds.
+  The latter assertion times out; it is not silently waived. All 51 relevant
+  full-game/stage-navigation/repo-AI/Sparring runners were exercised: 49 PASS,
+  these two FAIL. The 18 frontend runners are 16 PASS / two FAIL.
+- Cold export-stage focused sweep: 48 PASS / three FAIL, smoke PASS. In addition
+  to those same two stale fixtures, `test_full_game_config:17` requires the
+  original home main scene; the disposable exporter intentionally selects the
+  experimental scene. That check passes in the unchanged-entry root source.
+  Both complete sweeps retained stable source hashes and hit no log-size cap.
+- Strict cache-free Godot 4.7.2 import and the new Web export pass. The actual
+  output-only PCK authenticates all 28 raw inputs and generated hosts/overrides.
+  All 26 Python tooling tests pass. These are current checks, not transferred
+  historical script-compilation or browser claims.
+- Actual browser input at 1280x720 and 960x540 verifies both kits double-jumping
+  back to the visible shelf, wider support and real walkoffs, Sparring/Easy
+  damage, three-stock results, rematch READY with 0%/three stocks, and return to
+  Original Game. Strict console/page/network errors are empty. **Browser ledge
+  catch/climb is not accepted**: mistimed attempts are retained, not counted by
+  screenshot filename. Rendered native runs of this exact exported PCK do pass
+  both kits and mirrored endpoints/catches/climbs at both sizes; those are
+  separate evidence, not browser acceptance.
+
+The new player artifact is local-only and not published. Its report names the
+exact PCK/source hashes; previous PCK/source/browser evidence remains immutable.
+The historical sweep counts above remain unchanged: they describe the pre-fixture
+migration snapshot, not a new full sweep. A separate fresh root run after the
+test-only migration passes **18/18 full-game runners plus project smoke**, including
+fresh GREEN for both previously failing fixtures. Layout now requires the actual
+solid-shelf help and rejects obsolete `Down drops`; selectors compare all five
+owners with independent `stage_layouts.gd` authored endpoints (`-12/+12`) and top.
+The root original-entry config assertion remains intact and passes; its retained
+cold-stage failure is an intentional export-main-scene mismatch, not a gameplay
+failure. No runtime source or already-exported player byte was changed. See
+`fixture-green/logs/report.json` and `FINAL_HANDOFF.md` in the acceptance directory.
+Browser catch/climb coverage still requires explicit parent disposition before
+claiming all requested acceptance gates complete.
+Review Markdown is excluded and explicitly probed absent from the actual PCK;
+these final evidence notes do not change the already tested player bytes.
+
+**Open diagnostic, not fixed here:** repo Hard Teknium did not establish flat-shelf
+pursuit contact/arrival in two diagnostic arrangements; seven other owner/kit
+combinations succeeded. Retained failed logs and the flat diagnostic fixture are
+listed in the stage-fix report. Passing debug upper-platform navigation neither
+resolves this finding nor establishes universal AI reliability.
 
 Portable commands (Python 3.11+, materialized Git LFS, Godot
 `4.7.2.stable.official.ed1daf0bf`):

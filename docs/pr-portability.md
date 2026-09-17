@@ -20,8 +20,10 @@ python3 ../nrcu-review-source/tools/run_all_tests.py \
 ```
 
 The curated manifest includes current upstream dependencies and all retained
-regressions, including the pressure transaction and v0.2 public Ice dispatch
-characterizations. [Optional Ice compatibility](OPTIONAL_ICE_COMPATIBILITY.md)
+regressions, including the pressure transaction, v0.2 public Ice dispatch and
+authored stage visual-geometry regression with its Godot-generated UID. The
+current Toy Shelf is the shared v0.2 single 24-unit solid shelf, not the old
+three-invisible-upper-platform layout; debug multi-platform fixtures are separate. [Optional Ice compatibility](OPTIONAL_ICE_COMPATIBILITY.md)
 is explicitly incomplete; its authored-helper oracle is not a production parity
 fix. The original home scene remains the default. Select the opt-in
 frontend explicitly:

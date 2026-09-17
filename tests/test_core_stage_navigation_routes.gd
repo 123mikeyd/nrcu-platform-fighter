@@ -9,7 +9,11 @@ func run():
 	if not failures: print("PASS: both owners characters interaction modes actual four-platform routes")
 	quit(1 if failures else 0)
 func journey(kind: String,id: String,mode: String,trip: String):
-	var stage = load("res://scripts/experimental/full_game_stage.gd").new(); root.add_child(stage)
+	var stage = load("res://scripts/experimental/full_game_stage.gd").new()
+	# v0.2 Toy Shelf is flat; retain multi-support policy coverage on the
+	# unchanged authored debug layout, not invisible Toy Shelf geometry.
+	stage.layout_id = "debug"
+	root.add_child(stage)
 	var m = Match.new(); var a = Actor.new(); var b = Actor.new()
 	root.add_child(a); root.add_child(b)
 	m.register_actor(1,a,-1,"teknium"); m.register_actor(2,b,-1,id)

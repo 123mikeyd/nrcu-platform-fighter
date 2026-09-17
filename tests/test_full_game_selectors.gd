@@ -1,4 +1,5 @@
 extends "res://tests/test_full_game_flow.gd"
+const AUTHORED_LAYOUTS = preload("res://scripts/stage_layouts.gd")
 func menu_key(code):
 	for down in [true,false]:
 		var event = InputEventKey.new()
@@ -36,8 +37,15 @@ func run():
 		assert(app.session.simulation.fighters[1].kit_id == "turbofit")
 		assert(app.session.simulation.fighters[2].kit_id == "teknium")
 		assert(app.session.inputs.enabled == (input_owner != "human"))
-		assert(app.session.inputs.stage_bounds.left == -9.0 and app.session.inputs.stage_bounds.right == 9.0)
-		assert(is_equal_approx(app.session.inputs.stage_bounds.top,-0.05))
+		var authored_surfaces: Array = AUTHORED_LAYOUTS.surfaces("toy_room")
+		assert(authored_surfaces.size() == 1)
+		var center: Vector3 = authored_surfaces[0][0]
+		var size: Vector3 = authored_surfaces[0][1]
+		assert(is_equal_approx(center.x - size.x * 0.5, -12.0))
+		assert(is_equal_approx(center.x + size.x * 0.5, 12.0))
+		assert(is_equal_approx(app.session.inputs.stage_bounds.left, center.x - size.x * 0.5))
+		assert(is_equal_approx(app.session.inputs.stage_bounds.right, center.x + size.x * 0.5))
+		assert(is_equal_approx(app.session.inputs.stage_bounds.top, center.y + size.y * 0.5))
 		await frames(45)
 		key(KEY_SPACE,true); key(KEY_ENTER,true)
 		await frames(6)

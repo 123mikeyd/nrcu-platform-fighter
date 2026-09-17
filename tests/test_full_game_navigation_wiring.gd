@@ -3,13 +3,13 @@ func run():
 	var session = load("res://scripts/experimental/full_game_session.gd").new()
 	root.add_child(session); session.set_physics_process(false)
 	check(session.error.is_empty(),"session initializes")
-	check(session.inputs._navigation_surfaces.size()==4,"production session configures all four support surfaces")
+	check(session.inputs._navigation_surfaces.size()==load("res://scripts/stage_layouts.gd").surfaces("toy_room").size(),"production session configures current authored support inventory")
 	check(session.stage.has_method("navigation_surfaces"),"stage owns actual geometry extraction")
 	if not session.stage.has_method("navigation_surfaces"):
 		session.free(); quit(1); return
 	var expected := geometry(session.stage)
 	check(session.inputs._navigation_surfaces==expected,"same authored geometry rather than constants")
-	var shape = session.stage.get_node("Platform1").get_child(0)
+	var shape = session.stage.main_support
 	shape.position.x += 0.2
 	session.reset_inputs()
 	check(session.inputs._navigation_surfaces==geometry(session.stage),"reset refreshes actual geometry")

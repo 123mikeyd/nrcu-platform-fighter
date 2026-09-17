@@ -13,7 +13,11 @@ func run():
 	var owner = load("res://scripts/core/input/repo_ai_match_input.gd").new()
 	check(owner.has_method("configure_navigation"),"wrapper opt-in navigation seam exists")
 	if failures: quit(1); return
-	var stage = load("res://scripts/experimental/full_game_stage.gd").new(); root.add_child(stage)
+	var stage = load("res://scripts/experimental/full_game_stage.gd").new()
+	# v0.2 Toy Shelf is flat; retain multi-support policy coverage on the
+	# unchanged authored debug layout, not invisible Toy Shelf geometry.
+	stage.layout_id = "debug"
+	root.add_child(stage)
 	var m = Match.new(); var a = Actor.new(); var b = Actor.new()
 	root.add_child(a); root.add_child(b)
 	m.register_actor(1,a,-1,"teknium"); m.register_actor(2,b,-1,"turbofit")
