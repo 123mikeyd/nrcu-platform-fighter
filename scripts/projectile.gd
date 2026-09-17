@@ -57,7 +57,7 @@ func _try_absorb(target: Node3D) -> bool:
 func _hit_target(target: Node3D) -> void:
     if _try_absorb(target): return
     var blocked: bool = target.shielding
-    preload("res://scripts/body_hurtboxes.gd").deliver(target, payload_damage(), Vector3(direction, 0.2, 0), 1.0 if freeze_bolt else 4.5, contact_hit)
+    preload("res://scripts/body_hurtboxes.gd").deliver(target, payload_damage(), Vector3(direction, 0.2, 0), 1.0 if freeze_bolt else 4.5, contact_hit, source)
     if freeze_bolt and not blocked:
         target.apply_freeze(source)
 

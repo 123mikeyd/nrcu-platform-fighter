@@ -45,7 +45,7 @@ static func entries() -> Array:
 			"stage_mode": "host_selected",
 			"stage_id": "debug",
 			"objective": "Defeat Bobo.",
-			"rules": ["You have 3 stocks.", "Bobo does not attack."],
+			"rules": ["You have 3 stocks.", "Bobo uses slow two-hit claws."],
 			"flavor": "A big goofball, and a very sturdy punching bag.",
 			"allowed_fighter_ids": ["teknium", "doge_man", "ggb", "turbofit", "witcheer", "mephisto"],
 			"teams_enabled": false,

@@ -222,7 +222,7 @@ func _build_enemy() -> void:
     _enemy_health.text = "400 HP"
     _objective.text = "Defeat Bobo."
     _rule_stocks.text = "You have 3 stocks."
-    _rule_behavior.text = "Bobo does not attack."
+    _rule_behavior.text = "Bobo uses slow two-hit claws."
     _flavor.text = "A big goofball, and a very sturdy punching bag."
     var view = RenderViewScript.new()
     view.name = "EnemyRender"

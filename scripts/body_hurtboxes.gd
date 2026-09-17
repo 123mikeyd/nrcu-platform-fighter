@@ -111,7 +111,8 @@ func _process(_delta: float) -> void:
 
 static func resolve(collider):
     return collider.get_meta("hurtbox_actor",collider) if is_instance_valid(collider) else collider
-static func deliver(target, amount, direction, push, contact := {}) -> void:
+static func deliver(target, amount, direction, push, contact := {}, source: Node = null) -> void:
+    target.hit_source = source
     # Only real query witnesses select fitted presentation. Actor-only sinks
     # retain native alternates; damage/acceptance remain in receive_hit.
     if contact.has("position") and target.has_method("receive_contact_hit"):
@@ -123,7 +124,8 @@ static func deliver(target, amount, direction, push, contact := {}) -> void:
         target.receive_contact_hit(amount, direction, push, contact.position, region)
     else:
         target.receive_hit(amount, direction, push)
-static func deliver_capsule(target, amount, direction, push, shape, axis_point, attack_point) -> void:
+static func deliver_capsule(target, amount, direction, push, shape, axis_point, attack_point, source: Node = null) -> void:
+    target.hit_source = source
     # The same closest-axis witness that accepted this overlap selects a
     # receiving surface point. It never changes radius, timing or hit ledger.
     var radius = shape.shape.radius * maxf(shape.global_basis.x.length(), shape.global_basis.z.length())

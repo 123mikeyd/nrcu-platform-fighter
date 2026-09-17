@@ -180,7 +180,7 @@ func after_move() -> void:
                     break
             if contact:
                 targets.append(target) # Latch before receive_hit can re-enter combat.
-                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,14,Vector3(rush_facing*0.2,1,0),lerpf(5,8,power),other,witness[1],witness[0])
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,14,Vector3(rush_facing*0.2,1,0),lerpf(5,8,power),other,witness[1],witness[0], actor)
                 break
     for i in actor.get_slide_collision_count():
         var collision: KinematicCollision3D = actor.get_slide_collision(i)

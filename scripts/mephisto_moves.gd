@@ -1,233 +1,144 @@
 extends Node
-# Provisional gameplay tuning; one owner and one combat clock.
+# A single actor owns both leads: no damage/stocks are copied or reset on switching.
 const Kit=preload("res://scripts/mephisto_kit.gd")
 var actor
-var impulse_done := false
-func route(aim: Vector2, airborne: bool, special: bool) -> String:
-    return Kit.route(aim,airborne,special)
-func start_kit(id: String, direction: float):
-    if id=="RubberGuillotine":start_side(direction);return
-    if id=="ShadowUppercut":start_down();return
-    if id=="CinderToss" and actor.recovery_spent:return
-    if id=="CloseTraverse" and not actor.is_grounded() and actor.tackle_spent:return
-    cancel()
-    move=id
-    facing=direction
-    actor.facing=direction
-    actor.last_move=Kit.MOVES[id].label
-    actor.attack_cooldown=Kit.duration(id)
-    impulse_done=false
-    # Reserve immediately; interrupted startup never refunds airtime resources.
-    if id=="CinderToss":actor.recovery_spent=true;actor.jumps_used=2
-    if id=="CloseTraverse" and not actor.is_grounded():actor.tackle_spent=true
-    tick(0)
-var toss_phase := ""
-var toss_clock := 0.0
-var toss_left_floor := false
-func tick_toss(delta: float):
-    toss_clock+=delta
-    var v=view()
-    var c=v.get_node("CompanionFacing/ShadowCompanion")
-    if toss_phase=="away":
-        if not actor.is_grounded():toss_left_floor=true
-        var hide=smoothstep(.10,.30,toss_clock)
-        c._set_form(0,lerpf(.14,1.25,hide),hide)
-        if toss_left_floor and actor.is_grounded() and actor.velocity.y<=0:
-            toss_phase="reform";toss_clock=0
-            v.restore_toss_anchor()
-            v.shadow_pose("ShadowUppercut",0,actor.facing)
-            c._set_form(0,1.25,1)
-    elif toss_phase=="reform":
-        var reveal=smoothstep(0,.24,toss_clock)
-        c._set_form(0,lerpf(1.25,.14,reveal),1.0-reveal)
-        if toss_clock>=.24:cancel()
-func tick_kit():
-    var d=Kit.MOVES[move]
-    if move=="CinderToss":
-        actor.recovery_spent=true;actor.jumps_used=2
-        if not impulse_done:
-            view().toss_pose(elapsed,facing)
-            if elapsed>=.16 and not view().get_node("CompanionFacing").top_level:view().anchor_toss()
-            if elapsed>=.18 and elapsed<d.startup:actor.velocity.y=3.0
-            if elapsed>=d.startup:
-                impulse_done=true
-                actor.velocity.y=13.0
-                view().anchor_toss()
-                toss_phase="away";toss_clock=0;toss_left_floor=not actor.is_grounded()
-        return
-    view().kit_pose(move,elapsed,facing)
-    # Compact jab closes with an actual short girl-owned step, never a larger hitbox.
-    if move=="PactJab" and actor.is_grounded() and elapsed>=.08 and elapsed<=d.startup+d.active:
-        actor.velocity.x=facing*2.5
-    if elapsed>=d.startup and not impulse_done:
-        impulse_done=true
-        if move=="UmberPlunge":actor.velocity.y=minf(actor.velocity.y,-12.0)
-    if elapsed>=d.startup and elapsed<=d.startup+d.active:
-        if move=="CloseTraverse":actor.velocity.x=facing*7.0
-        var direction: Vector3=d.launch
-        direction.x*=facing
-        query_hand(view().kit_hand(d.hand),.28,d.damage,direction,d.kb)
-        if d.get("both",false):query_hand(view().kit_hand("RightHand"),.28,d.damage,direction,d.kb)
-var move := ""
-var elapsed := 0.0
-var facing := 1.0
-var targets: Array = []
-var surface := Vector3.ZERO
-var valid_surface := false
-var effect: Node3D
-var fist: Node3D
-var patch_mesh: MeshInstance3D
-const FORWARD_DISTANCE := 2.8
-const SIDE_DURATION := 1.15
-func side_source_time(time: float) -> float:
-    # Feedback revision: retain every pose, not the four-second lock.
-    if time<=.42:return lerpf(0.0,(38.0-.8)/24.0,time/.42)
-    if time<=.67:return (38.0-.8)/24.0+(time-.42)
-    return lerpf((44.0-.8)/24.0,119.0/30.0,clampf((time-.67)/.48,0,1))
-func terrain_surface() -> Dictionary:
-    var exclude: Array[RID] = []
-    for f in get_tree().get_nodes_in_group("fighters"): exclude.append(f.get_rid())
-    var start: Vector3=actor.global_position+Vector3.UP*.5
-    var finish: Vector3=start+Vector3(facing*FORWARD_DISTANCE,0,0)
-    var q=PhysicsRayQueryParameters3D.create(start,finish)
-    q.exclude=exclude
-    q.collision_mask=3 # Companion placement sees terrain, not receiving regions.
-    var space=actor.get_world_3d().direct_space_state
-    if not space.intersect_ray(q).is_empty():return {}
-    q.from=finish+Vector3.UP*.1
-    q.to=finish-Vector3.UP*1.4
-    var hit=space.intersect_ray(q)
-    if hit.is_empty() or hit.normal.y<.8:return {}
-    return hit
-func start_down():
-    cancel()
-    move="ShadowUppercut"
-    facing=actor.facing
-    actor.last_move="SHADOW UPPERCUT"
-    actor.attack_cooldown=1.3
-    var hit=terrain_surface()
-    valid_surface=not hit.is_empty()
-    if valid_surface:
-        surface=hit.position
-        effect=Node3D.new()
-        actor.get_parent().add_child(effect)
-        effect.global_position=surface
-        patch_mesh=make_patch(effect,Vector3(0,.016,0),.52)
-        make_patch(effect,actor.global_position-surface+Vector3(facing*1.0,.017,-.45),.38)
-        fist=preload("res://assets/mephisto/shadow_uppercut_hand.glb").instantiate()
-        effect.add_child(fist)
-        fist.scale=Vector3.ONE*1.4
-        fist.rotation.y=facing*PI/2
-        var mat=ShaderMaterial.new()
-        mat.shader=preload("res://scripts/mephisto_uppercut.gdshader")
-        mat.set_shader_parameter("height_min",-.396)
-        mat.set_shader_parameter("height_span",.718)
-        mat.set_shader_parameter("surface_y",surface.y)
-        for mesh in fist.find_children("*","MeshInstance3D",true,false):mesh.material_override=mat
-        fist.visible=false
-    tick(0)
-func make_patch(parent: Node3D, pos: Vector3, radius: float) -> MeshInstance3D:
-    var mesh=MeshInstance3D.new()
-    var disk=CylinderMesh.new()
-    disk.top_radius=radius;disk.bottom_radius=radius;disk.height=.012;disk.radial_segments=48
-    mesh.mesh=disk
-    var mat=StandardMaterial3D.new()
-    mat.albedo_color=Color(.022,.006,.009)
-    mat.roughness=1.0
-    mesh.material_override=mat
-    parent.add_child(mesh);mesh.position=pos
-    return mesh
-func _ready(): actor=get_parent()
-func view(): return actor.get_node_or_null("VisualRoot/MephistoVisual")
-func start_side(direction: float):
-    cancel()
-    move="RubberGuillotine"
-    facing=direction
-    actor.facing=facing
-    actor.last_move="RUBBER GUILLOTINE"
-    actor.attack_cooldown=SIDE_DURATION
-    tick(0)
+var demon_form=false
+var move=""
+var elapsed=0.0
+var facing=1.0
+var targets=[]
+var contacts=[]
+var impulse_done=false
+var serial=0
+var power=0.0
+var effect:Node3D
+var smoke_origin=Vector3.ZERO
+const BASIC={
+ "RightSwipe":{"start":109.0,"end":204.0,"hit":148.0,"duration":.82,"bone":"DEF-hand.R","damage":8.0,"kb":3.6},
+ "FrontKick":{"start":1.0,"end":108.0,"hit":47.0,"duration":.94,"bone":"DEF-foot.R","damage":10.0,"kb":4.1},
+ "RisingForearm":{"start":205.0,"end":300.0,"hit":244.0,"duration":.86,"bone":"DEF-forearm.R","damage":9.0,"kb":4.2},
+ "Stomp":{"start":301.0,"end":396.0,"hit":347.0,"duration":.90,"bone":"DEF-foot.R","damage":10.0,"kb":3.8}}
+func _ready():actor=get_parent()
+func view():return actor.get_node_or_null("VisualRoot/MephistoVisual")
+func route(aim:Vector2,air:bool,special:bool)->String:
+ if special and aim.y>.1:return "SwitchToGirl" if demon_form else "SwitchToDemon"
+ if demon_form:
+  if special:return "CinderToss" if aim.y<-.1 else ("SmokeCharge" if absf(aim.x)>.1 else "RightSwipe")
+  if aim.y<-.1:return "RisingForearm"
+  if aim.y>.1:return "Stomp"
+  return "FrontKick" if absf(aim.x)>.1 else "RightSwipe"
+ return Kit.route(aim,air,special)
+func start_kit(id:String,direction:float):
+ if id=="CinderToss" and actor.recovery_spent:return
+ if id.begins_with("Switch") and not actor.is_grounded():return
+ cancel();move=id;facing=direction;actor.facing=direction;serial+=1
+ actor.last_move=id;elapsed=0;contacts.clear();impulse_done=false
+ if id=="SmokeCharge":actor.charging=true;actor.charge_time=0
+ if id=="CinderToss":actor.recovery_spent=true;actor.jumps_used=2
+ actor.attack_cooldown=duration();present()
+func duration()->float:
+ if move=="SmokeCharge":return 100000.0
+ if move=="SmokeRelease":return 1.2
+ if move=="SwitchToDemon":return 1.4
+ if move=="SwitchToGirl":return 1.7
+ if BASIC.has(move):return BASIC[move].duration
+ return Kit.duration(move) if Kit.MOVES.has(move) else .8
+func present():
+ if not view():return
+ view().shadow_move=move
+ if move=="SwitchToDemon":view().pose_frame(lerpf(733,816,clampf(elapsed/duration(),0,1)),facing)
+ elif move=="SwitchToGirl":view().pose_frame(lerpf(577,704,clampf(elapsed/duration(),0,1)),facing)
+ elif BASIC.has(move):
+  var d=BASIC[move];view().pose_frame(lerpf(d.start,d.end,clampf(elapsed/d.duration,0,1)),facing)
+ elif move=="SmokeCharge":view().pose_frame(lerpf(397,444,clampf(elapsed/.45,0,1)),facing)
+ elif move=="SmokeRelease":view().pose_frame(lerpf(444,576,clampf(elapsed/1.2,0,1)),facing)
+ elif move=="CinderToss" and demon_form:view().pose_frame(1,facing)
+ elif not move.is_empty():view().girl_pose(elapsed,facing)
+func release():
+ if move!="SmokeCharge":return
+ power=clampf(actor.charge_time/1.5,0,1)
+ actor.charging=false;actor.charge_time=0
+ move="SmokeRelease";elapsed=0;actor.attack_cooldown=duration();actor.last_move="ORANGE SMOKE"
+ present()
 func cancel():
-    toss_phase="";toss_clock=0;toss_left_floor=false
-    if actor and view():view().restore_toss_anchor()
-    if is_instance_valid(effect):
-        effect.visible=false
-        effect.queue_free()
-    effect=null
-    fist=null
-    patch_mesh=null
-    valid_surface=false
-    move=""
-    elapsed=0
-    targets.clear()
-    if actor and view(): view().end_shadow_move()
-func tick(delta: float):
-    if move.is_empty() and toss_phase.is_empty():return
-    if not actor.controls_enabled or actor.stocks<=0 or actor.hitstun>0 or actor.freeze_remaining>0 or is_instance_valid(actor.caught_by):
-        cancel()
-        return
-    if not toss_phase.is_empty():tick_toss(delta)
-    if move.is_empty():return
-    elapsed+=delta
-    if move in ["VeilCross","AirSwat","CrownHook","FallingClaw","UmberPlunge"] and actor.is_grounded():
-        cancel()
-        actor.landing_lag=maxf(actor.landing_lag,.12)
-        return
-    if elapsed>=Kit.duration(move):
-        if move=="CinderToss" and not toss_phase.is_empty():
-            move="";targets.clear()
-        else:cancel()
-        return
-    var v=view()
-    if not v:return
-    if move not in ["RubberGuillotine","ShadowUppercut"]:
-        tick_kit()
-        return
-    v.shadow_pose(move,side_source_time(elapsed) if move=="RubberGuillotine" else elapsed,facing)
-    if move=="ShadowUppercut":
-        if valid_surface and is_instance_valid(fist):
-            fist.visible=elapsed>=.48 and elapsed<1.13
-            var rise=smoothstep(.48,.80,elapsed)
-            var fall=smoothstep(.90,1.13,elapsed)
-            fist.position.y=lerpf(-.65,1.15,rise)-fall*1.8
-            if elapsed>=.60 and elapsed<=.82:
-                query_hand(fist.global_position+Vector3.UP*.12,.29,13.0,Vector3(facing*.15,1,0),5.2)
-        return
-    # Approved review frame 40 is the stretched contact pose.
-    if elapsed >= .42 and elapsed <= .67:
-        var hand: Vector3=v.shadow_hand()
-        if absf(hand.x-actor.global_position.x)>5.0:return
-        query_hand(hand,.32,11.0,Vector3(facing,.32,0),4.4)
-        # The visible elastic forearm crosses close opponents while its wrist
-        # is already far beyond them. Test that finite segment, not a big orb.
-        query_side_forearm(v.kit_wrist("RightForeArm"),hand)
-func query_side_forearm(from: Vector3, to: Vector3):
-    for target in get_tree().get_nodes_in_group("fighters"):
-        if target in targets or not actor.can_hit(target):continue
-        if (target.global_position.x-actor.global_position.x)*facing<=0:continue
-        for child in target.get_hurtbox_shapes():
-            if not child is CollisionShape3D or child.disabled or not child.shape is CapsuleShape3D:continue
-            var capsule: CapsuleShape3D=child.shape
-            var transform: Transform3D=child.global_transform
-            var half=maxf(0,capsule.height*.5-capsule.radius)
-            var a=transform*Vector3(0,-half,0)
-            var b=transform*Vector3(0,half,0)
-            var radius=capsule.radius*maxf(transform.basis.x.length(),transform.basis.z.length())
-            var points=Geometry3D.get_closest_points_between_segments(from,to,a,b)
-            if points[0].distance_to(points[1])<=radius+.18:
-                targets.append(target)
-                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,11.0,Vector3(facing,.32,0),4.4,child,points[1],points[0])
-                break
-func query_hand(hand: Vector3, radius: float, damage: float, direction: Vector3, knockback: float):
-        for target in get_tree().get_nodes_in_group("fighters"):
-            if target in targets or not actor.can_hit(target):continue
-            for shape in target.get_hurtbox_shapes():
-                if not shape is CollisionShape3D or not shape.shape is CapsuleShape3D or shape.disabled: continue
-                var half: float=maxf(0,shape.shape.height*.5-shape.shape.radius)
-                var transform: Transform3D=shape.global_transform
-                var nearest=Geometry3D.get_closest_point_to_segment(hand,transform*Vector3(0,-half,0),transform*Vector3(0,half,0))
-                var body_radius: float=shape.shape.radius*maxf(transform.basis.x.length(),transform.basis.z.length())
-                if hand.distance_to(nearest)<=body_radius+radius:
-                    targets.append(target)
-                    preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,damage,direction,knockback,shape,nearest,hand)
-                    break
+ if actor:
+  actor.charging=false;actor.charge_time=0
+  if not move.is_empty():actor.attack_cooldown=0
+ if is_instance_valid(effect):effect.queue_free()
+ effect=null
+ move="";elapsed=0;targets.clear();impulse_done=false
+ if actor and view():view().end_shadow_move()
+func tick(delta:float):
+ if move.is_empty():return
+ if not actor.controls_enabled or actor.stocks<=0 or actor.hitstun>0 or actor.freeze_remaining>0 or actor.magic_locked() or actor._read_raw_controls(0).shield:
+  cancel();actor.attack_cooldown=0;return
+ var previous=elapsed
+ elapsed+=delta;present()
+ if BASIC.has(move):
+  var d=BASIC[move]
+  var impact=(d.hit-d.start)/(d.end-d.start)*d.duration
+  if elapsed>=impact-.07 and previous<=impact+.09:
+   var launch=Vector3(facing,.25,0)
+   if move=="RisingForearm":launch=Vector3(facing*.2,1,0)
+   query_hand(view().demon_point(d.bone),.19,d.damage,launch,d.kb)
+   if move=="RightSwipe" or move=="RisingForearm":query_hand(view().demon_point("DEF-hand.R"),.19,d.damage,launch,d.kb)
+  if move=="Stomp" and elapsed>=impact and previous<=impact+.055 and actor.is_grounded():
+   # A short visible ground-dust footprint makes the planted stomp usable.
+   # No body-range sink: only actual lower receiving anatomy inside this disk.
+   if not impulse_done:
+    impulse_done=true;smoke_origin=view().demon_point("DEF-foot.R");smoke_origin.y=actor.global_position.y+.035
+    effect=preload("res://scripts/mephisto_orange_smoke.gd").new();effect.ground_dust=true;effect.reach=1.15
+    actor.get_parent().add_child(effect);effect.global_position=smoke_origin
+   query_stomp()
+ elif move=="SmokeRelease":
+  if elapsed>=.12 and not impulse_done:
+   impulse_done=true;smoke_origin=view().demon_point("DEF-hand.R")
+   effect=preload("res://scripts/mephisto_orange_smoke.gd").new()
+   effect.direction=facing;effect.reach=lerpf(1.2,2.0,power)
+   actor.get_parent().add_child(effect);effect.global_position=smoke_origin
+  if elapsed>=.12 and elapsed<=.38:
+   for i in 9:
+    var u=float(i)/8
+    query_hand(smoke_origin+Vector3(facing*lerpf(1.2,2.0,power)*u,0,0),lerpf(.12,.34,u),lerpf(6,13,power),Vector3(facing,.2,0),lerpf(3,4.8,power),true)
+ elif move=="CinderToss":
+  if elapsed>=.36 and not impulse_done:impulse_done=true;actor.velocity.y=13.0
+ elif Kit.MOVES.has(move):
+  var d=Kit.MOVES[move]
+  if elapsed>=d.startup and elapsed<=d.startup+d.active:
+   query_hand(view().girl_point("RightHand"),.16,d.damage,Vector3(facing,.3,0),d.kb)
+ if elapsed>=duration():
+  if move=="SwitchToDemon":demon_form=true
+  elif move=="SwitchToGirl":demon_form=false
+  cancel();actor.attack_cooldown=0
+  actor._update_move_visuals()
+func query_hand(point:Vector3,radius:float,damage:float,direction:Vector3,kb:float,forward_only=false):
+ for target in get_tree().get_nodes_in_group("fighters"):
+  if target in targets or not actor.can_hit(target):continue
+  if forward_only and (target.global_position.x-actor.global_position.x)*facing<=0:continue
+  for shape in target.get_hurtbox_shapes():
+   if not shape is CollisionShape3D or shape.disabled or not shape.shape is CapsuleShape3D:continue
+   var half=maxf(0,shape.shape.height*.5-shape.shape.radius)
+   var xf:Transform3D=shape.global_transform
+   var nearest=Geometry3D.get_closest_point_to_segment(point,xf*Vector3(0,-half,0),xf*Vector3(0,half,0))
+   var body_radius=shape.shape.radius*maxf(xf.basis.x.length(),xf.basis.z.length())
+   if point.distance_to(nearest)<=body_radius+radius:
+    targets.append(target)
+    contacts.append({"move":move,"elapsed":elapsed,"source_frame":view().source_frame,"point":str(point),"target":target.character_id,"damage":damage})
+    preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,damage,direction,kb,shape,nearest,point,actor)
+    break
+func query_stomp():
+ for target in get_tree().get_nodes_in_group("fighters"):
+  if target in targets or not actor.can_hit(target) or not target.is_grounded():continue
+  for shape in target.get_hurtbox_shapes():
+   if not shape is CollisionShape3D or shape.disabled or not shape.shape is CapsuleShape3D:continue
+   var half=maxf(0,shape.shape.height*.5-shape.shape.radius)
+   var xf:Transform3D=shape.global_transform
+   var low=xf*Vector3(0,-half,0)
+   var other_end=xf*Vector3(0,half,0)
+   if other_end.y<low.y:low=other_end
+   var r=shape.shape.radius*maxf(xf.basis.x.length(),xf.basis.z.length())
+   if low.y-r>smoke_origin.y+.3:continue
+   if Vector2(low.x-smoke_origin.x,low.z-smoke_origin.z).length()<=1.15+r:
+    targets.append(target);contacts.append({"move":"Stomp","elapsed":elapsed,"source_frame":view().source_frame,"radius":1.15,"target":target.character_id,"damage":10.0,"kind":"visible ground dust"})
+    preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,10.0,Vector3(facing,.25,0),3.8,shape,low,smoke_origin,actor)
+    break

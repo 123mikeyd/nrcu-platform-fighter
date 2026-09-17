@@ -6,20 +6,20 @@ static func configure(arena):
     for i in 4:
         var row=arena.setup.rows[i]
         row.character.select(config.CHARACTERS.find("mephisto" if i==0 else "doge_man"))
-        row.kind.select(0 if i==0 else (1 if i==1 else 2))
+        row.kind.select(0 if i<2 else 2)
         row.difficulty.select(0)
         row.team.select(i%2)
         row.device.select(0)
     arena.setup._refresh()
-    arena.setup.error_label.text="Mephisto: girl only. Idle / Run / provisional Block8 reaction. Generic combat; demon & smoke later."
+    arena.setup.error_label.text="PAIRED STARTER: S+G switches lead. Demon: F swipe, A/D+F kick, W+F forearm, S+F stomp. Hold A/D+G, release G: orange smoke."
 func _initialize():call_deferred("run")
 func run():
     var arena=load("res://scenes/main.tscn").instantiate()
     root.add_child(arena)
     await process_frame
     configure(arena)
-    DisplayServer.window_set_title("NRCU — Mephisto Girl / Ready to Start")
-    print("READY: Mephisto girl. Click START MATCH. A/D move, Space jump, F generic basic, G hold/release generic charge, A/D+G placeholder bolt, W+G generic recovery, E shield. S+G unassigned. No dedicated attack/jump clips or demon powers. Esc returns to safe setup.")
+    DisplayServer.window_set_title("NRCU — Demon2 + Girl / Ready to Start")
+    print("READY_PAIRED: Click START MATCH. P1 A/D move, Space jump, F basic, G special, E shield. S+G changes lead. Demon: F swipe, A/D+F kick, W+F forearm, S+F stomp; hold A/D+G then release G for orange smoke. P2 arrows/Enter/K/L/O. Esc setup. Shared health; visual roughness accepted.")
     if "--smoke" in OS.get_cmdline_user_args():
         arena.setup._start()
         if arena.fighters.size()!=2 or arena.fighters[0].character_id!="mephisto":

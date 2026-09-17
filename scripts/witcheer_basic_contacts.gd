@@ -26,6 +26,6 @@ static func sample(actor,from_time:float,to_time:float)->void:
    actor.witcheer_basic_targets.append(target);actor.witcheer_struck=true
    var contact=HURT.shape_contact(space,query,hit,hits)
    var direction:float=-actor.witcheer_facing if actor.witcheer_clip=="TurnaroundKick" else actor.witcheer_facing
-   HURT.deliver(target,float(move.damage),Vector3(direction,.35,0),3.8,contact)
+   HURT.deliver(target,float(move.damage),Vector3(direction,.35,0),3.8,contact, actor)
   if t>=end-.000001:break
   t=minf(t+1.0/240.0,end)

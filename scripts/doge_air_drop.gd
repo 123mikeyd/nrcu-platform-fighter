@@ -64,7 +64,7 @@ func query(point:Vector3,radius:float,time:float):
   if actor.can_hit(target) and target not in targets:
    targets.append(target)
    contacts.append({"time":time,"source_frame":27+time*30,"point":str(point),"radius":radius,"target":target.character_id,"collider":str(hit.collider.name),"shape":hit.shape,"receiver":"fitted anatomy" if hit.collider.has_meta("hurtbox_actor") else "existing movement capsule"})
-   hit.position=point;HURT.deliver(target,8.0,Vector3(direction,0,0),3.8,hit)
+   hit.position=point;HURT.deliver(target,8.0,Vector3(direction,0,0),3.8,hit, actor)
 func after_tick(delta:float):
  if not active:return
  if actor.is_grounded() or not actor.controls_enabled or actor.hitstun>0 or actor.freeze_remaining>0 or actor.magic_locked():cancel();return

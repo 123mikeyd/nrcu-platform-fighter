@@ -84,7 +84,7 @@ func query(point:Vector3,radius:float,time:float):
   if actor.can_hit(target) and target not in targets and (move!="down" or target.global_position.y<actor.global_position.y):
    targets.append(target)
    contacts.append({"time":time,"source_time":source_time(time),"source_frame":(33 if move=="up" else (4 if move=="down" else 36))+source_time(time)*30,"point":str(point),"radius":radius,"target":target.character_id,"collider":str(hit.collider.name),"shape":hit.shape,"receiver":"fitted anatomy" if hit.collider.has_meta("hurtbox_actor") else "existing movement capsule"})
-   hit.position=point;HURT.deliver(target,8.0 if move=="up" else 14.0,Vector3.DOWN if move=="down" else Vector3(direction,0 if move=="up" else .35,0),3.8 if move=="up" else 5.5,hit)
+   hit.position=point;HURT.deliver(target,8.0 if move=="up" else 14.0,Vector3.DOWN if move=="down" else Vector3(direction,0 if move=="up" else .35,0),3.8 if move=="up" else 5.5,hit, actor)
 func source_time(t:float)->float:
  return air_up_source_time(t) if move=="up" else t
 const AIR_UP_SPEED := 2.0

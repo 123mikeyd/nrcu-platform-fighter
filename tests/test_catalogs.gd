@@ -207,7 +207,7 @@ func _encounter_catalog() -> void:
 	check(str(e["stage_mode"]) == "host_selected", "the shipped story launch left the level to the host (recorded provenance)")
 	var briefing_source := _source("res://scripts/frontend/story_briefing.gd")
 	check(str(e["objective"]) == "Defeat Bobo.", "objective matches the briefing exactly")
-	check(e["rules"] == ["You have 3 stocks.", "Bobo does not attack."], "rules match the briefing exactly")
+	check(e["rules"] == ["You have 3 stocks.", "Bobo uses slow two-hit claws."], "rules match the briefing exactly")
 	check(str(e["flavor"]) == "A big goofball, and a very sturdy punching bag.", "flavor matches the briefing exactly")
 	check(briefing_source.contains('"%s"' % str(e["objective"])), "objective literal still in story_briefing.gd")
 	for rule in e["rules"]:

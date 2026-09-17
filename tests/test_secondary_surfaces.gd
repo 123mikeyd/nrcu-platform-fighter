@@ -254,7 +254,7 @@ func _story_briefing_surface() -> void:
     check(joined.find("BOBO") != -1 and joined.find("400 HP") != -1, "the enemy is identified as BOBO with 400 HP")
     check(joined.find("ENCOUNTER 01") != -1, "the header names ENCOUNTER 01")
     check(str(story.objective_label().text).find("Bobo") != -1, "an objective names the enemy")
-    check(joined.find("3 stocks") != -1 and joined.find("does not attack") != -1, "the rules state the stock count and Bobo's behavior")
+    check(joined.find("3 stocks") != -1 and joined.find("slow two-hit claws") != -1 and joined.find("does not attack") == -1, "the rules state the stock count and Bobo's behavior")
     var Roster = load("res://scripts/roster.gd")
     var expected: Array = Roster.ids()
     expected.erase("ice_mage")

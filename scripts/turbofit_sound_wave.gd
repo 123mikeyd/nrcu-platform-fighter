@@ -112,7 +112,7 @@ func _sweep_wave(motion: Vector3) -> bool:
         if source.can_hit(target) and damage_active():
             if _try_absorb(target): return true
             if not target.shielding:
-                preload("res://scripts/body_hurtboxes.gd").deliver(target,11.0, Vector3(direction,0.2,0),4.5,hit.contact)
+                preload("res://scripts/body_hurtboxes.gd").deliver(target,11.0, Vector3(direction,0.2,0),4.5,hit.contact, source)
             return true
     return true
 
