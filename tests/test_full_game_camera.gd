@@ -9,13 +9,24 @@ func run():
 		app.show_select(); app.start_match()
 		await frames(4)
 		var camera: Camera3D = view.get_camera_3d()
-		var safe := Rect2(12,app.hud.get_global_rect().end.y+12,size.x-24,0)
+		var safe := Rect2(12,maxf(65,app.hud.get_global_rect().end.y)+12,size.x-24,0)
 		safe.end.y = size.y-44
+		# Use the actual outer stage-theme contrast panels, not only HUD text.
+		for panel in app.session.stage.find_children("*","ColorRect",true,false):
+			if not panel.get_parent() is CanvasLayer: continue
+			var rect: Rect2 = panel.get_global_rect()
+			if rect.position.y == 0: safe.position.y = maxf(safe.position.y,rect.end.y+12)
+			elif rect.position.y < size.y: safe.end.y = minf(safe.end.y,rect.position.y-12)
 		for actor in app.session.actors:
 			var collider: CollisionShape3D = actor.get_node("CoreCapsule")
 			var shape: CapsuleShape3D = collider.shape
 			var snapshot = {"body":{"radius":shape.radius,"height":shape.height,"center":collider.position}}
-			var points := [Vector3(0,6.2,0),Vector3(-5.2,3.225,0),Vector3(5.2,3.225,0)]
+			# Current Toy Shelf has no y=6.2 top or +/-5.2 upper platforms.
+			# Cover its real floor plus a conservative full+air-jump apex instead.
+			var bounds: Dictionary = app.session.stage.ai_bounds()
+			var profile = actor.profile
+			var jump_apex: float = bounds.top + (profile.full_jump_speed*profile.full_jump_speed + profile.air_jump_speed*profile.air_jump_speed)/(2.0*profile.gravity)
+			var points := [Vector3(0,jump_apex,0),Vector3(bounds.left,jump_apex,0),Vector3(bounds.right,jump_apex,0),Vector3(bounds.left,bounds.top,0),Vector3(bounds.right,bounds.top,0)]
 			for anchor in app.session.stage.anchors():
 				points.append_array([anchor.hang(snapshot),Vector3(anchor.hang(snapshot).x,anchor.climb(snapshot).y,0),anchor.climb(snapshot)])
 			for origin in points:
@@ -29,5 +40,5 @@ func run():
 		print("CAMERA ",size," full actual collider route bounds PASS")
 		app.free(); view.free()
 	await frames(2)
-	print("PASS: full game camera actual full colliders top platform ledge routes at 1280 and 960")
+	print("PASS: full game camera actual full colliders floor jump apex ledge routes at 1280 and 960")
 	quit()

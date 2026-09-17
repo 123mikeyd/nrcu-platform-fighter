@@ -32,23 +32,7 @@ func navigation_surfaces() -> Array:
 	return surfaces
 
 func _ready():
-	var world := WorldEnvironment.new()
-	world.environment = Environment.new()
-	world.environment.background_mode = Environment.BG_COLOR
-	world.environment.background_color = Color("273a37")
-	world.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	world.environment.ambient_light_energy = 0.8
-	add_child(world)
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-35,-25,0)
-	add_child(light)
-	var camera := Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 17
-	camera.position = Vector3(0,6,28)
-	add_child(camera)
-	camera.look_at(Vector3(0,3,0))
-	camera.current = true
+	preload("res://scripts/experimental/full_game_presentation.gd").install(self)
 	var geometry: Array = Layout.surfaces(layout_id)
 	for i in geometry.size():
 		var body := StaticBody3D.new()
