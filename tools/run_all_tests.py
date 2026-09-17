@@ -66,6 +66,20 @@ def classify(name, returncode, stdout, log, timed_out):
             'success_contract_met': marker, 'errors': errors}
 
 
+def prepare_evidence(project):
+    """Prepare reviewed literal output paths without a warm evidence tree."""
+    verification = (project / '.verification').resolve()
+    verification.mkdir(parents=True, exist_ok=True)
+    (verification / '.gdignore').touch()
+    for folder in ['tests', 'tools']:
+        for script in (project / folder).glob('*.gd'):
+            for literal in re.findall(r"[\"'](res://\.verification/[^\"']*)[\"']", script.read_text(encoding='utf-8')):
+                target = (project / literal.removeprefix('res://')).resolve()
+                if not target.is_relative_to(verification):
+                    raise ValueError('Unsafe evidence path: ' + literal)
+                (target if literal.endswith('/') else target.parent).mkdir(parents=True, exist_ok=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--engine', required=True, help='Godot console executable')
@@ -100,15 +114,10 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     verification.mkdir(exist_ok=True)
     (verification / '.gdignore').touch()
-    # Literal output destinations are reviewed res:// paths. Both direct file
-    # paths and OUT directory constants are created, including inherited tests.
-    for folder in ['tests', 'tools']:
-        for script in (project / folder).glob('*.gd'):
-            for literal in re.findall(r'''["'](res://\.verification/evidence/[^"']*)["']''', script.read_text(encoding='utf-8')):
-                target = (project / literal.removeprefix('res://')).resolve()
-                if not target.is_relative_to(verification / 'evidence'):
-                    parser.error('Unsafe evidence path: ' + literal)
-                (target if literal.endswith('/') else target.parent).mkdir(parents=True, exist_ok=True)
+    try:
+        prepare_evidence(project)
+    except ValueError as error:
+        parser.error(str(error))
     os.chdir(project)
     def command(name, extra):
         return [str(engine), '--headless', '--path', str(project), '--log-file',
