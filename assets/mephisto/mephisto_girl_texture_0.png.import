@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://b44efmcysblvk"
 path.s3tc="res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.s3tc.ctex"
+path.etc2="res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/mephisto/mephisto_girl_texture_0.png"
-dest_files=["res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.s3tc.ctex"]
+dest_files=["res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.s3tc.ctex", "res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.etc2.ctex"]
 
 [params]
 

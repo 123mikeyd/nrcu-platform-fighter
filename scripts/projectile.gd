@@ -48,7 +48,7 @@ func payload_damage() -> float:
 func _try_absorb(target: Node3D) -> bool:
     if is_queued_for_deletion(): return true
     if lifetime <= 0 or not visible or not is_instance_valid(source): return false
-    if target.absorb_witcheer_projectile(source, payload_damage()):
+    if (target.doge_counter and target.doge_counter.intercept(payload_damage(),source)) or target.absorb_witcheer_projectile(source, payload_damage()):
         hide()
         queue_free()
         return true

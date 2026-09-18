@@ -6,9 +6,9 @@
 
 [![Play Now — In Your Browser](https://img.shields.io/badge/PLAY_NOW-In_Your_Browser-267B52?style=for-the-badge)](https://123mikeyd.github.io/nrcu-platform-fighter/)
 
-**[Play in your browser](https://123mikeyd.github.io/nrcu-platform-fighter/)** — no installer or manual ZIP download. Click Play Now on the launch page and keep the tab open while it loads. The full game's first-load data is approximately **470 MiB**, so use a desktop computer and a good connection. Chrome on Windows was tested; mobile/touch, other browsers and physical controllers are not certified.
+**[Play in your browser](https://123mikeyd.github.io/nrcu-platform-fighter/)** — no installer or manual ZIP download. Click Play Now on the launch page and keep the tab open while it loads. The full game's first-load data is approximately **657.50 MiB**, so use a good connection; phone memory/GPU viability is not certified. The combined browser update adds touch controls, static menus, Doge's counter and Tek's revised kit. Chrome desktop touch emulation was tested, not physical phones. See [combined browser release notes and known failures](RELEASE_NOTES_v0.3-web.3.md).
 
-The public HTTPS build was checked through title/home, Story selection, movement, attack damage and pause with no captured browser errors. Local browser testing also covered a natural Bobo victory, replay and animated Sky Temple. This remains the same unfinished alpha, not a fix for every inherited gameplay issue. See [Web build details](WEB_BUILD.md) and the [Web release](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3-web.1).
+Earlier public HTTPS builds were checked through title/home, Story selection, movement, attack damage and pause. The combined update's local verification and remaining failures are recorded in its release notes; hosted checks are a separate deployment gate. This is not a fix for every inherited gameplay issue. See [Web build details](WEB_BUILD.md) and the [Web release](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3-web.3).
 
 **Prefer native Windows?** [Download v0.3 for Windows](https://github.com/123mikeyd/nrcu-platform-fighter/releases/download/v0.3/NRCU-v0.3-Windows.zip) · [Windows release notes and checksum](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3)
 

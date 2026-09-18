@@ -115,7 +115,7 @@ var p2_spawn := Vector3(4.0, 1.0, 0.0)
 
 func _ready() -> void:
     DisplayServer.window_set_title("NRCU — Friend Demo")
-    get_window().min_size = Vector2i(800,450)
+    get_window().min_size = Vector2i.ZERO if OS.has_feature("web") else Vector2i(800,450)
     _build_environment()
     _build_stage()
     var backdrop_start := get_child_count()
@@ -169,6 +169,13 @@ func _build_debug_setup() -> void:
     setup.back_requested.connect(back_to_menu)
 
 func _process(_delta: float) -> void:
+    var mobile = get_node_or_null("/root/MobileTouch")
+    var touch_hud: bool = mobile != null and mobile.touch_mode
+    hud_controls.visible = not touch_hud
+    for i in hud_labels.size():
+        hud_labels[i].position.y = 80 if touch_hud else 605
+        hud_labels[i].add_theme_font_size_override("font_size", 22 if touch_hud else 18)
+    bobo_health_bar.position.y = 140 if touch_hud else 653
     for i in range(fighters.size()):
         var fighter = fighters[i]
         var side: String = "  TEAM %s" % ("A" if fighter.team_id == 0 else "B") if teams_enabled else ""
@@ -214,6 +221,7 @@ func _on_pause_toggle() -> void:
         return
     if not _pause_overlay.open(_story_encounter):
         return
+    for fighter in fighters: fighter.hide()
     FrontendInput.set_scope(FrontendInput.SCOPE_FRONTEND)
     get_tree().paused = true
     _pause_overlay.focus_default()
@@ -223,6 +231,8 @@ func _clear_pause_input_consumed() -> void:
     _pause_input_consumed = false
 
 func _resume_from_pause() -> void:
+    for fighter in fighters:
+        if fighter.stocks > 0: fighter.show()
     get_tree().paused = false
     FrontendInput.set_scope(FrontendInput.SCOPE_GAMEPLAY)
     call_deferred("_clear_pause_input_consumed")
@@ -296,6 +306,8 @@ func _stand_down_match() -> void:
     for fighter in fighters:
         fighter.controls_enabled = false
         fighter._clear_move_state()
+        fighter.hide()
+        fighter.process_mode = Node.PROCESS_MODE_DISABLED
     for projectile in get_tree().get_nodes_in_group("projectiles") + get_tree().get_nodes_in_group("goo_puddles"):
         projectile.queue_free()
     # The match is abandoned, not resolved: batch identity and the snapshot seal
@@ -679,6 +691,8 @@ func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
     for fighter in fighters:
         fighter.controls_enabled = false
         fighter._clear_move_state()
+        fighter.hide()
+        fighter.process_mode = Node.PROCESS_MODE_DISABLED
     for projectile in get_tree().get_nodes_in_group("projectiles") + get_tree().get_nodes_in_group("goo_puddles"):
         projectile.queue_free()
     if story_state == "playing":

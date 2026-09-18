@@ -26,7 +26,7 @@ func receive_contact_hit(amount: float, direction: Vector3, push: float, point: 
     var accepted = controls_enabled and stocks > 0 and not shielding and not is_knockdown_protected() and amount > 0
     var role = region if region in ["head", "body"] else (fitted_reaction.classify(point) if fitted_reaction else "")
     receive_hit(amount, direction, push)
-    if accepted and fitted_reaction and controls_enabled and stocks > 0:
+    if accepted and not counter_blocked_hit and fitted_reaction and controls_enabled and stocks > 0:
         fitted_reaction.begin(role, signf(direction.x))
 
 func is_knockdown_protected() -> bool:
@@ -178,6 +178,7 @@ func _tick_witcheer(delta: float) -> void:
     if witcheer_source_time() >= float(move.duration): _cancel_witcheer()
 
 var teknium_magic
+var teknium_specials
 var caught_by
 var grab_immunity := 0.0
 var electrocution_presentation = preload("res://scripts/electrocution_presentation.gd").new()
@@ -186,6 +187,8 @@ func magic_locked() -> bool:
     return is_instance_valid(caught_by) or (teknium_magic != null and teknium_magic.phase != "idle")
 
 func cancel_magic() -> void:
+    if doge_counter: doge_counter.cancel()
+    if teknium_specials: teknium_specials.cancel()
     if humanoid_air_basic: humanoid_air_basic.cancel()
     if humanoid_air_side: humanoid_air_side.cancel()
     if doge_air_drop: doge_air_drop.cancel()
@@ -198,9 +201,13 @@ func cancel_magic() -> void:
     if teknium_magic: teknium_magic.cancel()
 
 func _exit_tree() -> void:
+    if teknium_specials: teknium_specials.clear()
     cancel_magic()
 
 func cancel_for_grab() -> void:
+    if doge_counter: doge_counter.cancel()
+    clear_counter_hitstop()
+    if teknium_specials: teknium_specials.cancel()
     if humanoid_air_basic: humanoid_air_basic.cancel()
     if humanoid_air_side: humanoid_air_side.cancel()
     if doge_air_drop: doge_air_drop.cancel()
@@ -426,6 +433,24 @@ var doge_combo_next := 1
 var doge_tyson_followup := false
 var doge_punch_buffered := false
 var doge_buffer_branch := ""
+var doge_counter
+var counter_hitstop := 0.0
+var _counter_paused_players: Array = []
+
+func begin_counter_hitstop(seconds: float) -> void:
+    if counter_hitstop <= 0 and _visual_root:
+        for player in _visual_root.find_children("*", "AnimationPlayer", true, false):
+            _counter_paused_players.append([player,player.speed_scale])
+            player.speed_scale = 0
+    counter_hitstop = maxf(counter_hitstop,seconds)
+
+func clear_counter_hitstop() -> void:
+    counter_hitstop = 0
+    for pair in _counter_paused_players:
+        if is_instance_valid(pair[0]): pair[0].speed_scale = pair[1]
+    _counter_paused_players.clear()
+
+var counter_blocked_hit := false
 var doge_ground_rush
 var doge_ground_basic
 var doge_air_drop
@@ -473,6 +498,8 @@ var controls_enabled := true:
             if not value: _cancel_witcheer()
             else: _latch_witcheer_inputs()
         if not value:
+            clear_counter_hitstop()
+            if teknium_specials: teknium_specials.clear()
             if tumble: tumble.clear()
             if character_id == "doge_man":
                 charging = false
@@ -594,6 +621,9 @@ func _ready() -> void:
         add_to_group("fighters")
     _build_visuals()
     if character_id == "doge_man":
+        doge_counter = preload("res://scripts/doge_counter.gd").new()
+        doge_counter.name = "DogeCounter"
+        add_child(doge_counter)
         doge_ground_basic = preload("res://scripts/doge_ground_basic.gd").new()
         doge_ground_basic.name = "DogeGroundBasic"
         add_child(doge_ground_basic)
@@ -635,8 +665,15 @@ func _ready() -> void:
         teknium_magic = preload("res://scripts/teknium_magic.gd").new()
         teknium_magic.name = "TekniumMagic"
         add_child(teknium_magic)
+        teknium_specials = preload("res://scripts/teknium_specials.gd").new()
+        teknium_specials.name = "TekniumSpecials"
+        add_child(teknium_specials)
 
 func _physics_process(delta: float) -> void:
+    if counter_hitstop > 0:
+        counter_hitstop = maxf(0,counter_hitstop-delta)
+        if counter_hitstop <= 0: clear_counter_hitstop()
+        return
     if tumble and tumble.tick(delta): return
     if doge_ground_basic: doge_ground_basic.before_tick()
     if humanoid_air_basic: humanoid_air_basic.before_tick()
@@ -707,6 +744,10 @@ func _physics_process(delta: float) -> void:
         velocity.x = move_toward(velocity.x, 0, GROUND_ACCELERATION * delta)
     elif hitstun > 0.0:
         hitstun -= delta
+    elif doge_counter and doge_counter.phase != "idle":
+        velocity.x = 0
+    elif teknium_specials and teknium_specials.phase != "idle":
+        shielding = false
     else:
         var move_axis := float(int(right_down) - int(left_down))
         if mephisto_moves and not mephisto_moves.move.is_empty(): move_axis = 0
@@ -722,9 +763,13 @@ func _physics_process(delta: float) -> void:
                 _visual_root.scale.x = facing
 
         if charging:
-            advance_charge(delta)
-            if not special_down:
-                release_special()
+            if teknium_specials and (input.shield or (input.jump and not _jump_was_down)):
+                teknium_specials.store()
+                if input.jump: try_jump()
+            else:
+                advance_charge(delta)
+                if not special_down:
+                    release_special()
         elif not shielding and not (doge_ground_rush and doge_ground_rush.phase != "idle"):
             # Attack chords take priority over tap-up jumping.
             if attack_down and not _attack_was_down:
@@ -751,6 +796,7 @@ func _physics_process(delta: float) -> void:
     if humanoid_air_side: humanoid_air_side.before_move()
     if doge_air_drop: doge_air_drop.before_move()
     if doge_ground_basic: doge_ground_basic.before_move()
+    if teknium_specials: teknium_specials.before_move(delta, input)
     _update_platform_collisions(delta)
     _apply_head_slip()
     move_and_slide()
@@ -792,6 +838,10 @@ func _physics_process(delta: float) -> void:
     if humanoid_air_side: humanoid_air_side.after_tick(delta)
     if doge_air_drop: doge_air_drop.after_tick(delta)
     if doge_ground_basic: doge_ground_basic.after_tick(delta)
+    if teknium_specials: teknium_specials.after_move(delta)
+    if doge_counter:
+        doge_counter.tick(delta)
+        doge_counter.present()
     global_position.z = 0.0
     if global_position.y < -8.0 or absf(global_position.x) > 16.0 or global_position.y > 15.0:
         _handle_blast_zone()
@@ -828,7 +878,29 @@ func _read_raw_controls(delta: float) -> Dictionary:
         var names := ["left", "right", "up", "down", "jump", "attack", "special", "shield"]
         for i in keys.size():
             result[names[i]] = Input.is_key_pressed(keys[i])
+    # Merge P1 touch before the existing aim/edge/charge/recovery filters.
+    var touch = get_node_or_null("/root/MobileTouch")
+    if player_index == 1 and touch and touch.gameplay_enabled:
+        var mobile: Dictionary = touch.controls()
+        for key in mobile:
+            result[key] = result[key] or mobile[key]
     return result
+
+func cancel_touch_charge() -> void:
+    if teknium_specials and charging:
+        teknium_specials.store()
+        return
+    # Losing a touch is not an intentional charge release. Cancel only the
+    # pending charge; do not refund jumps, clear burn/hitstun, or reset the kit.
+    if not charging: return
+    if doge_ground_rush and doge_ground_rush.phase == "charge": doge_ground_rush.cancel()
+    if mephisto_moves and mephisto_moves.move in ["SmokeCharge", "EmberHold"]: mephisto_moves.cancel()
+    if character_id == "turbofit" and _visual_root:
+        var view = _visual_root.get_node_or_null("TurboFitVisual")
+        if view: view.cancel_power_chord()
+    charging = false
+    charge_time = 0.0
+    last_move = ""
 
 func _update_platform_collisions(delta: float) -> void:
     _drop_time = maxf(0, _drop_time - delta)
@@ -872,6 +944,8 @@ func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -
     var collateral = collateral_hit
     hit_source = null
     collateral_hit = false
+    counter_blocked_hit = doge_counter != null and doge_counter.intercept(hit_damage,source)
+    if counter_blocked_hit: return
     if is_knockdown_protected(): return
     if mephisto_moves and mephisto_moves.girl_magic and mephisto_moves.girl_magic.protected_window(): return
     last_damage_source = source
@@ -933,6 +1007,7 @@ func reset_fighter(new_spawn: Vector3, reset_stocks := false) -> void:
     state_changed.emit()
 
 func reset_air_resources() -> void:
+    if teknium_specials and teknium_specials.phase in ["rise_charge", "rise_burst"]: return
     # Grounded Cinder startup already reserved this recovery. Ordinary terrain
     # contact must not refund its jumps before the lift leaves the floor.
     if mephisto_moves and (mephisto_moves.move in ["PairTeleport","PairVanish"] or (mephisto_moves.move=="CinderToss" and not mephisto_moves.impulse_done)):return
@@ -945,6 +1020,9 @@ func reset_air_resources() -> void:
     recovery_targets.clear()
 
 func _clear_move_state() -> void:
+    clear_counter_hitstop()
+    counter_blocked_hit = false
+    if teknium_specials: teknium_specials.clear()
     if tumble: tumble.clear()
     hit_source = null
     last_damage_source = null
@@ -975,6 +1053,8 @@ func _clear_move_state() -> void:
     _attack_was_down = false
     _special_was_down = false
     _latch_witcheer_inputs()
+    if character_id == "teknium" and is_inside_tree():
+        _special_was_down = _read_raw_controls(0).special
     drop_committed = false
     torpedo_phase = "idle"
     torpedo_time = 0
@@ -1005,6 +1085,7 @@ func ground_speed_multiplier() -> float:
     return multiplier
 
 func try_jump() -> bool:
+    if doge_counter and doge_counter.phase != "idle": return false
     if tumble and tumble.active: return false
     if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return false
     if mephisto_moves and not mephisto_moves.move.is_empty(): return false
@@ -1031,7 +1112,8 @@ func try_jump() -> bool:
     return true
 
 func start_special(aim: Vector2) -> void:
-    if tumble and tumble.active: return
+    if doge_counter and doge_counter.phase != "idle": return
+    if tumble and tumble.active: return 
     if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return
     if doge_ground_rush and doge_ground_rush.phase != "idle": return
     if magic_locked(): return
@@ -1056,6 +1138,9 @@ func start_special(aim: Vector2) -> void:
     if character_id == "mephisto":
         if not mephisto_moves.move.is_empty(): return
         mephisto_moves.start_kit(mephisto_moves.route(aim,not is_grounded(),true),signf(aim.x) if absf(aim.x)>.1 else facing)
+        return
+    if teknium_specials:
+        teknium_specials.start(aim)
         return
     if character_id == "witcheer":
         if absf(aim.x) > 0.1: facing = signf(aim.x)
@@ -1112,7 +1197,7 @@ func start_special(aim: Vector2) -> void:
             _tick_sound_orb(0.0)
             _update_move_visuals()
         elif character_id == "doge_man":
-            doge_ground_rush.start()
+            doge_counter.start()
         elif character_id == "ggb":
             drop_committed = true
             _ggb_impact_pending = true
@@ -1174,6 +1259,9 @@ func advance_charge(delta: float) -> void:
         charge_time = minf(doge_ground_rush.MAX_CHARGE if doge_ground_rush and doge_ground_rush.phase == "charge" else MAX_CHARGE_TIME, charge_time + delta)
 
 func release_special() -> void:
+    if teknium_specials:
+        teknium_specials.release()
+        return
     if mephisto_moves and mephisto_moves.move in ["SmokeCharge","EmberHold"]:
         mephisto_moves.release()
         return
@@ -1253,7 +1341,9 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
             _visual_root.scale = Vector3.ONE
             _visual_root.rotation = Vector3.ZERO
             var attack_duration := float(doge_attack_timings[doge_attack_clip].duration) if not doge_attack_clip.is_empty() else 1.0
-            if doge_ground_basic and not doge_ground_basic.clip.is_empty():
+            if doge_counter and doge_counter.phase != "idle":
+                doge_counter.present()
+            elif doge_ground_basic and not doge_ground_basic.clip.is_empty():
                 doge_ground_basic.present(doge_ground_basic.elapsed)
             elif doge_ground_rush and doge_ground_rush.phase != "idle":
                 doge_ground_rush.present(doge_visual,delta)
@@ -1291,6 +1381,7 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
             var teknium_move := last_move if charging or attack_cooldown > 0.0 else ""
             teknium_visual.sync_pose((is_grounded() and velocity.y <= 0) or not controls_enabled or interrupted, velocity, hitstun > 0.0, shielding, teknium_move, facing, delta)
             if teknium_magic: teknium_magic.present()
+            if teknium_specials: teknium_specials.present()
 
         var ice_mage_visual = _visual_root.get_node_or_null("IceMageVisual")
         if ice_mage_visual:
@@ -1314,13 +1405,19 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
     if mephisto_moves:
         _move_status.text = ("DEMON LEAD" if mephisto_moves.demon_form else "GIRL LEAD") + "\n" + _move_status.text
         if _attack_flash: _attack_flash.visible = false
+    if teknium_specials:
+        if teknium_specials.stored_charge > 0 and not charging:
+            _move_status.text += "\nSTORED %d%%" % roundi(teknium_specials.stored_charge / MAX_CHARGE_TIME * 100)
+        if is_instance_valid(teknium_specials.grenade): _move_status.text += "\nREMOTE READY"
     # Match the approved preview: the primitive flash must not hide the hands.
     if character_id == "turbofit" and (charging or last_move == "POWER CHORD") and _attack_flash:
         _attack_flash.visible = false
 
 
 func basic_attack(aim: Vector2, airborne: bool) -> void:
-    if tumble and tumble.active: return
+    if doge_counter and doge_counter.phase != "idle": return
+    if teknium_specials and teknium_specials.phase != "idle": return
+    if tumble and tumble.active: return 
     if reaction_recovery:
         if not reaction_recovery.knockdown_phase.is_empty(): return
         if not airborne and reaction_recovery.side_continue(aim): return
