@@ -1,4 +1,15 @@
-# NRCU v0.3 browser build
+# NRCU browser build
+
+## Current combined prerelease: v0.3-web.3
+
+See [combined release notes](RELEASE_NOTES_v0.3-web.3.md) for mobile controls, static menus, Doge counter, Tek kit, verification and exact legacy failures. Godot 4.7.2 Compatibility remains single-threaded; this update enables desktop **and mobile** compressed textures. The PCK is 649,474,048 bytes and WASM 39,514,754 bytes; the public payload is approximately 657.50 MiB. Physical phones are not certified.
+
+The existing deployment workflow pins `v0.3-web.3`, its source commit and archive SHA-256, verifies all members/bytes/hashes and safe paths, then deploys the exact reviewed archive. `build.json` contains the real source commit and `manifest.json` lists the relative artifact hashes. The release archive excludes private evidence and the local handoff manifest. Prior releases remain available. Runtime source matches the tested candidate byte-for-byte; metadata is added outside its unchanged PCK.
+
+## Historical v0.3-web.1 build report
+
+The report below documents the original export only; its sizes, desktop-only input limits, hashes and local verification are not claims about v0.3-web.3. For the current reviewed archive pins, use `.github/workflows/deploy-web.yml` and the new prerelease assets.
+
 
 This exports the **published v0.3 game**, not a JavaScript recreation or a reduced roster. All gameplay scripts, scenes, fighter assets and native settings remain unchanged. The existing Windows release remains available as the fallback.
 

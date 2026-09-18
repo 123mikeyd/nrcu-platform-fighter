@@ -76,11 +76,13 @@ const BASICS_GROUPS: Array = [
 # the two universal moves are shown instead of invented specifics.
 const MOVE_LISTS: Dictionary = {
     "teknium": [
-        {"name": "FORCE PUSH", "input": "LEFT / RIGHT + SPECIAL"},
-        {"name": "ELECTRIC GRAB", "input": "SPECIAL (CLOSE)"},
+        {"name": "CHARGE SHOT", "input": "HOLD / RELEASE SPECIAL; JUMP / SHIELD STORES"},
+        {"name": "SHADOW KICK", "input": "LEFT / RIGHT + SPECIAL"},
+        {"name": "AIMED RECOVERY", "input": "UP + SPECIAL; AIM DURING CHARGE"},
+        {"name": "HOLY GRENADE", "input": "DOWN + SPECIAL; PRESS AGAIN TO DETONATE"},
     ],
     "doge_man": [
-        {"name": "GROUND RUSH", "input": "HOLD DOWN + SPECIAL, RELEASE"},
+        {"name": "TYSON COUNTER", "input": "DOWN + SPECIAL; COUNTER AN INCOMING HIT"},
         {"name": "FLYING TACKLE", "input": "LEFT / RIGHT + SPECIAL"},
         {"name": "SUPERMAN PUNCH", "input": "JUMP, THEN BASIC"},
     ],

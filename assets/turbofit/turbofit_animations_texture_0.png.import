@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dyoqrc55qraeu"
 path.s3tc="res://.godot/imported/turbofit_animations_texture_0.png-6adcf902e2ab40f98fa009e9cdf80ac7.s3tc.ctex"
+path.etc2="res://.godot/imported/turbofit_animations_texture_0.png-6adcf902e2ab40f98fa009e9cdf80ac7.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/turbofit/turbofit_animations_texture_0.png"
-dest_files=["res://.godot/imported/turbofit_animations_texture_0.png-6adcf902e2ab40f98fa009e9cdf80ac7.s3tc.ctex"]
+dest_files=["res://.godot/imported/turbofit_animations_texture_0.png-6adcf902e2ab40f98fa009e9cdf80ac7.s3tc.ctex", "res://.godot/imported/turbofit_animations_texture_0.png-6adcf902e2ab40f98fa009e9cdf80ac7.etc2.ctex"]
 
 [params]
 

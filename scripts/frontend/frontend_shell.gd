@@ -37,7 +37,7 @@ func set_window_policy() -> void:
     # Application-level window policy (Doc 09 §23) — screens do not own it.
     var win := get_window()
     if win != null:
-        win.min_size = MIN_WINDOW
+        win.min_size = Vector2i.ZERO if OS.has_feature("web") else MIN_WINDOW
 
 func hold_frame() -> void:
     var vp := get_viewport()

@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bhmicf07t1b7a"
 path.s3tc="res://.godot/imported/ice_mage_combat_base_color.jpg-0662cd9663e3955a95669fe357a294c8.s3tc.ctex"
+path.etc2="res://.godot/imported/ice_mage_combat_base_color.jpg-0662cd9663e3955a95669fe357a294c8.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/ice_mage/ice_mage_combat_base_color.jpg"
-dest_files=["res://.godot/imported/ice_mage_combat_base_color.jpg-0662cd9663e3955a95669fe357a294c8.s3tc.ctex"]
+dest_files=["res://.godot/imported/ice_mage_combat_base_color.jpg-0662cd9663e3955a95669fe357a294c8.s3tc.ctex", "res://.godot/imported/ice_mage_combat_base_color.jpg-0662cd9663e3955a95669fe357a294c8.etc2.ctex"]
 
 [params]
 
