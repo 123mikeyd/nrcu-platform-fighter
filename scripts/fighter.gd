@@ -603,6 +603,11 @@ func _ready() -> void:
     if character_id in preload("res://scripts/humanoid_air_side.gd").VIEWS:
         humanoid_air_side = preload("res://scripts/humanoid_air_side.gd").new()
         humanoid_air_basic = preload("res://scripts/humanoid_air_basic.gd").new()
+        if character_id == "mephisto":
+            humanoid_air_side.free()
+            humanoid_air_basic.free()
+            humanoid_air_side = preload("res://scripts/mephisto_air_side.gd").new()
+            humanoid_air_basic = preload("res://scripts/mephisto_air_basic.gd").new()
         humanoid_air_basic.name = "HumanoidAirBasic"
         add_child(humanoid_air_basic)
         humanoid_air_side.name = "HumanoidAirSide"
@@ -868,6 +873,7 @@ func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -
     hit_source = null
     collateral_hit = false
     if is_knockdown_protected(): return
+    if mephisto_moves and mephisto_moves.girl_magic and mephisto_moves.girl_magic.protected_window(): return
     last_damage_source = source
     var episode = reaction_recovery != null and not reaction_recovery.knockdown_phase.is_empty()
     var old_reaction_facing = reaction_recovery.reaction_facing if reaction_recovery else facing
@@ -929,7 +935,7 @@ func reset_fighter(new_spawn: Vector3, reset_stocks := false) -> void:
 func reset_air_resources() -> void:
     # Grounded Cinder startup already reserved this recovery. Ordinary terrain
     # contact must not refund its jumps before the lift leaves the floor.
-    if mephisto_moves and mephisto_moves.move=="CinderToss" and not mephisto_moves.impulse_done:return
+    if mephisto_moves and (mephisto_moves.move in ["PairTeleport","PairVanish"] or (mephisto_moves.move=="CinderToss" and not mephisto_moves.impulse_done)):return
     _land_character_move()
     tackle_spent = false
     float_remaining = 1.2
@@ -1168,7 +1174,7 @@ func advance_charge(delta: float) -> void:
         charge_time = minf(doge_ground_rush.MAX_CHARGE if doge_ground_rush and doge_ground_rush.phase == "charge" else MAX_CHARGE_TIME, charge_time + delta)
 
 func release_special() -> void:
-    if mephisto_moves and mephisto_moves.move == "SmokeCharge":
+    if mephisto_moves and mephisto_moves.move in ["SmokeCharge","EmberHold"]:
         mephisto_moves.release()
         return
     if doge_ground_rush and doge_ground_rush.phase == "charge":
