@@ -2,10 +2,10 @@ extends RefCounted
 # Editable provisional native-rig choreography. Seconds, not frame-rate ticks.
 # These are animation-only pose derivatives: no rest, vertex or weight edits.
 const MOVES = {
- "PactJab": {"label":"PACT JAB", "startup":.16,"active":.12,"recovery":.24,"damage":6.0,"kb":2.8,"hand":"LeftHand","from":Vector3(.08,1.50,.10),"to":Vector3(.65,1.42,.02),"launch":Vector3(1,.15,0)},
- "RubberGuillotine": {"label":"RUBBER GUILLOTINE", "startup":.42,"active":.25,"recovery":.48,"damage":11.0,"kb":4.4},
- "CinderLift": {"label":"CINDER LIFT", "startup":.23,"active":.15,"recovery":.30,"damage":9.0,"kb":4.2,"hand":"LeftHand","from":Vector3(.20,1.70,.04),"to":Vector3(.38,2.64,.04),"launch":Vector3(.18,1,0)},
- "AnkleRake": {"label":"ANKLE RAKE", "startup":.24,"active":.16,"recovery":.32,"damage":8.0,"kb":3.4,"hand":"LeftHand","from":Vector3(.0,1.32,.08),"to":Vector3(.52,1.15,.03),"launch":Vector3(1,.20,0)},
+ "PactJab": {"label":"PACT PALM", "startup":.27,"active":.15,"recovery":.33,"damage":6.0,"kb":2.8,"hand":"LeftHand","launch":Vector3(1,.15,0)},
+ "RubberGuillotine": {"label":"EMBER CROSS", "startup":.43,"active":.17,"recovery":.4416667,"damage":11.0,"kb":4.4,"hand":"RightHand"},
+ "CinderLift": {"label":"CINDER LIFT", "startup":.40,"active":.16,"recovery":.3983333,"damage":9.0,"kb":4.2,"hand":"LeftHand","launch":Vector3(.18,1,0)},
+ "AnkleRake": {"label":"GOALKEEPER KICK", "startup":.18+23.0/30.0,"active":2.0/30.0,"recovery":34.0/30.0+.24,"damage":8.0,"kb":3.4,"hand":"RightFoot","launch":Vector3(1,.20,0)},
  "VeilCross": {"label":"VEIL CROSS", "startup":.15,"active":.17,"recovery":.30,"damage":7.0,"kb":3.2,"hand":"LeftHand","from":Vector3(.34,1.86,-.28),"to":Vector3(.59,1.58,.26),"launch":Vector3(1,.35,0)},
  "AirSwat": {"label":"AIR SWAT", "startup":.22,"active":.16,"recovery":.32,"damage":9.0,"kb":4.0,"hand":"LeftHand","from":Vector3(.05,2.2,.15),"to":Vector3(.65,1.80,.02),"launch":Vector3(1,.25,0)},
  "CrownHook": {"label":"CROWN HOOK", "startup":.18,"active":.16,"recovery":.29,"damage":8.0,"kb":3.8,"hand":"LeftHand","from":Vector3(.55,2.10,.02),"to":Vector3(.0,2.72,.02),"launch":Vector3(.12,1,0)},
