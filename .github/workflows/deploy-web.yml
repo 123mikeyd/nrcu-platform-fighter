@@ -1,0 +1,88 @@
+name: Deploy reviewed Web archive
+on:
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+env:
+  RELEASE_TAG: v0.3-web.2
+  SOURCE_SHA: df141bdd483a4704b303308684fbe7b07b4cdce9
+  ARCHIVE: NRCU-v0.3-web.2.zip
+  ARCHIVE_SHA256: a848f7d5c443dba02f2521e6d120c5932416812e839c3ac68bed6604cdfd1648
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Download fixed reviewed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')" = "$SOURCE_SHA"
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$ARCHIVE" --dir "$RUNNER_TEMP/download"
+          cd "$RUNNER_TEMP/download"
+          printf '%s  %s\n' "$ARCHIVE_SHA256" "$ARCHIVE" | sha256sum --check --strict
+      - name: Validate and extract exact site
+        shell: python
+        run: |
+          import hashlib, json, os, stat, zipfile
+          from pathlib import Path, PurePosixPath
+          root = Path(os.environ['RUNNER_TEMP'])
+          archive = root / 'download' / os.environ['ARCHIVE']
+          site = root / 'site'
+          with zipfile.ZipFile(archive) as z:
+              infos = z.infolist()
+              names = [i.filename for i in infos]
+              assert len(names) == len(set(names)) == 14, 'Unexpected or duplicate members'
+              assert sum(i.file_size for i in infos) == 496473886, 'Unexpected site size'
+              for i in infos:
+                  p = PurePosixPath(i.filename)
+                  assert not p.is_absolute() and '..' not in p.parts
+                  assert '\\' not in i.filename and ':' not in i.filename
+                  assert not i.is_dir() and stat.S_ISREG(i.external_attr >> 16), 'Non-regular member'
+                  assert 0 <= i.file_size < 1_000_000_000
+              manifest = json.loads(z.read('manifest.json'))
+              assert set(manifest) == {'engine', 'preset', 'threaded', 'files', 'total_bytes'}
+              assert manifest['threaded'] is False
+              assert json.loads(z.read('build.json'))['source_commit'] == os.environ['SOURCE_SHA']
+              entries = manifest['files']
+              assert len(entries) == 13
+              assert set(names) == {e['file'] for e in entries} | {'manifest.json'}
+              assert sum(e['bytes'] for e in entries) == manifest['total_bytes'] == 496471663
+              for e in entries:
+                  data = z.read(e['file'])
+                  assert len(data) == e['bytes']
+                  assert hashlib.sha256(data).hexdigest() == e['sha256'], e['file']
+              assert {'index.html', 'index.wasm', 'index.pck', 'index.js'} <= set(names)
+              site.mkdir()
+              z.extractall(site)
+          print('Verified 14 files, 496473886 bytes; exact reviewed archive and manifest hashes.')
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: ${{ runner.temp }}/site
+          retention-days: 1
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -19,7 +19,6 @@ func install(target: Node3D) -> void:
     for i in 4:
         rows[i].kind.disabled = true
         if i > 0: rows[i].character.disabled = true
-    arena.setup.find_child("StoryModeButton", true, false).hide()
     arena.setup.find_child("StartMatchButton", true, false).text = "START FIRE OPPONENT TEST"
     for label in arena.setup.find_children("*", "Label", true, false):
         if label.text == "NRCU  /  SET UP YOUR MATCH": label.text = "FIRE MAGE / PROTOTYPE OPPONENT TEST"

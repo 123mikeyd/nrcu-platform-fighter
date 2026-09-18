@@ -211,7 +211,7 @@ provenance = {
 "influence_policy": "dominant positive weight; ties first slot",
 "pose": "imported skeleton rest (not animated Idle)",
 &"presenter": "res://scripts/mephisto_visual.gd",
-&"presenter_sha256": "e89b3d2e840a5d5fe6c2743e9af52fd62c57215bb83f47daefa3f5fd7e1c900a",
+&"presenter_sha256": "53d690aa511a90abe20b84e075d2d7a2124ab5a3f5435be290874ef7c6ede02c",
 "space": "body: scaled model rest minus foot_origin; hurtbox: native bone local",
 "surfaces": 1,
 "vertices": 7322

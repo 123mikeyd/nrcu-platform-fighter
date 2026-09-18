@@ -11,6 +11,15 @@ var reaction_recovery
 var humanoid_air_basic
 var humanoid_air_side
 var fitted_reaction
+var tumble
+var hit_source: Node
+var last_damage_source: Node
+var collateral_hit := false
+
+func receive_hit_from(amount: float, direction: Vector3, push: float, source: Node, collateral := false) -> void:
+    hit_source = source
+    collateral_hit = collateral
+    receive_hit(amount, direction, push)
 
 # Contact routing affects presentation only; the native damage sink remains authoritative.
 func receive_contact_hit(amount: float, direction: Vector3, push: float, point: Vector3, region := "") -> void:
@@ -164,7 +173,7 @@ func _tick_witcheer(delta: float) -> void:
                     var direction := Vector3(facing,0.35,0)
                     if witcheer_clear: direction = Vector3(signf(offset.x),0.5,0)
                     if witcheer_clip == "SpinRise": direction = Vector3(facing*0.2,1,0)
-                    target.receive_hit(7.0 if witcheer_clear else float(move.damage),direction,5.0 if witcheer_clear else 3.8)
+                    target.receive_hit_from(7.0 if witcheer_clear else float(move.damage),direction,5.0 if witcheer_clear else 3.8, self)
         attack_flash_time = 0
     if witcheer_source_time() >= float(move.duration): _cancel_witcheer()
 
@@ -464,6 +473,7 @@ var controls_enabled := true:
             if not value: _cancel_witcheer()
             else: _latch_witcheer_inputs()
         if not value:
+            if tumble: tumble.clear()
             if character_id == "doge_man":
                 charging = false
                 charge_time = 0.0
@@ -562,6 +572,9 @@ func get_hurtbox_shapes() -> Array:
     return get_children()
 
 func _ready() -> void:
+    tumble = preload("res://scripts/launch_tumble.gd").new()
+    tumble.name = "LaunchTumble"
+    add_child(tumble)
     if character_id == "witcheer":
         witcheer_moves = JSON.parse_string(FileAccess.get_file_as_string("res://assets/witcheer/move_manifest.json")).moves
     if character_id == "turbofit":
@@ -590,6 +603,11 @@ func _ready() -> void:
     if character_id in preload("res://scripts/humanoid_air_side.gd").VIEWS:
         humanoid_air_side = preload("res://scripts/humanoid_air_side.gd").new()
         humanoid_air_basic = preload("res://scripts/humanoid_air_basic.gd").new()
+        if character_id == "mephisto":
+            humanoid_air_side.free()
+            humanoid_air_basic.free()
+            humanoid_air_side = preload("res://scripts/mephisto_air_side.gd").new()
+            humanoid_air_basic = preload("res://scripts/mephisto_air_basic.gd").new()
         humanoid_air_basic.name = "HumanoidAirBasic"
         add_child(humanoid_air_basic)
         humanoid_air_side.name = "HumanoidAirSide"
@@ -610,12 +628,16 @@ func _ready() -> void:
         mephisto_moves = preload("res://scripts/mephisto_moves.gd").new()
         mephisto_moves.name = "MephistoMoves"
         add_child(mephisto_moves)
+        var paired_hurtboxes = preload("res://scripts/mephisto_paired_hurtboxes.gd").new()
+        paired_hurtboxes.name = "BodyHurtboxes"
+        add_child(paired_hurtboxes)
     if character_id == "teknium":
         teknium_magic = preload("res://scripts/teknium_magic.gd").new()
         teknium_magic.name = "TekniumMagic"
         add_child(teknium_magic)
 
 func _physics_process(delta: float) -> void:
+    if tumble and tumble.tick(delta): return
     if doge_ground_basic: doge_ground_basic.before_tick()
     if humanoid_air_basic: humanoid_air_basic.before_tick()
     if humanoid_air_side: humanoid_air_side.before_tick()
@@ -823,6 +845,7 @@ func _update_platform_collisions(delta: float) -> void:
             _ignored_platforms.erase(platform)
 
 func try_drop_through() -> bool:
+    if tumble and tumble.active: return false
     if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return false
     if doge_ground_rush and doge_ground_rush.phase != "idle": return false
     if magic_locked(): return false
@@ -845,7 +868,13 @@ func try_drop_through() -> bool:
     return false
 
 func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -> void:
+    var source = hit_source
+    var collateral = collateral_hit
+    hit_source = null
+    collateral_hit = false
     if is_knockdown_protected(): return
+    if mephisto_moves and mephisto_moves.girl_magic and mephisto_moves.girl_magic.protected_window(): return
+    last_damage_source = source
     var episode = reaction_recovery != null and not reaction_recovery.knockdown_phase.is_empty()
     var old_reaction_facing = reaction_recovery.reaction_facing if reaction_recovery else facing
     cancel_magic()
@@ -869,8 +898,11 @@ func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -
     var knockback_scale := 0.28 if shielding else 1.0
     damage_percent = CombatMathScript.apply_damage(damage_percent, hit_damage * damage_scale)
     var strength: float = CombatMathScript.knockback_strength(damage_percent, hit_damage, base_knockback) * knockback_scale
+    if mephisto_moves and mephisto_moves.demon_form: strength *= 0.80
+    if collateral: strength = minf(strength, 4.0)
     velocity = direction.normalized() * strength
     hitstun = 0.08 + strength * 0.025
+    if tumble: tumble.begin(source, collateral)
     if character_id == "doge_man" and _visual_root:
         _visual_root.get_node("DogeVisual").begin_hit()
     _update_move_visuals()
@@ -903,7 +935,7 @@ func reset_fighter(new_spawn: Vector3, reset_stocks := false) -> void:
 func reset_air_resources() -> void:
     # Grounded Cinder startup already reserved this recovery. Ordinary terrain
     # contact must not refund its jumps before the lift leaves the floor.
-    if mephisto_moves and mephisto_moves.move=="CinderToss" and not mephisto_moves.impulse_done:return
+    if mephisto_moves and (mephisto_moves.move in ["PairTeleport","PairVanish"] or (mephisto_moves.move=="CinderToss" and not mephisto_moves.impulse_done)):return
     _land_character_move()
     tackle_spent = false
     float_remaining = 1.2
@@ -913,6 +945,10 @@ func reset_air_resources() -> void:
     recovery_targets.clear()
 
 func _clear_move_state() -> void:
+    if tumble: tumble.clear()
+    hit_source = null
+    last_damage_source = null
+    collateral_hit = false
     if burn: burn.clear()
     _head_slip_direction = 0
     _floor_contacts_valid = false
@@ -961,7 +997,7 @@ func _clear_move_state() -> void:
     _update_move_visuals(0, true)
 
 func ground_speed_multiplier() -> float:
-    var multiplier := 1.0
+    var multiplier := 0.58 if mephisto_moves and mephisto_moves.demon_form else 1.0
     if not is_inside_tree(): return multiplier
     for puddle in get_tree().get_nodes_in_group("goo_puddles"):
         if puddle.affects(self):
@@ -969,6 +1005,7 @@ func ground_speed_multiplier() -> float:
     return multiplier
 
 func try_jump() -> bool:
+    if tumble and tumble.active: return false
     if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return false
     if mephisto_moves and not mephisto_moves.move.is_empty(): return false
     if doge_ground_rush and doge_ground_rush.phase != "idle": return false
@@ -994,6 +1031,7 @@ func try_jump() -> bool:
     return true
 
 func start_special(aim: Vector2) -> void:
+    if tumble and tumble.active: return
     if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return
     if doge_ground_rush and doge_ground_rush.phase != "idle": return
     if magic_locked(): return
@@ -1136,6 +1174,9 @@ func advance_charge(delta: float) -> void:
         charge_time = minf(doge_ground_rush.MAX_CHARGE if doge_ground_rush and doge_ground_rush.phase == "charge" else MAX_CHARGE_TIME, charge_time + delta)
 
 func release_special() -> void:
+    if mephisto_moves and mephisto_moves.move in ["SmokeCharge","EmberHold"]:
+        mephisto_moves.release()
+        return
     if doge_ground_rush and doge_ground_rush.phase == "charge":
         doge_ground_rush.release()
         return
@@ -1168,7 +1209,7 @@ func _tick_recovery(delta: float) -> void:
         var offset: Vector3 = target.global_position - global_position
         if absf(offset.x) < 1.3 and absf(offset.z) < 1.0 and offset.y > -0.4 and offset.y < 2.6:
             recovery_targets.append(target)
-            target.receive_hit(12.0, Vector3(facing * 0.2, 1, 0), 5.5)
+            target.receive_hit_from(12.0, Vector3(facing * 0.2, 1, 0), 5.5, self)
 
 func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
     if character_id == "turbofit" and _visual_root and (interrupted or hitstun > 0 or freeze_remaining > 0 or magic_locked() or not controls_enabled or stocks <= 0):
@@ -1270,12 +1311,16 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
         _attack_flash.visible = not (doge_ground_rush and doge_ground_rush.phase == "charge")
         _attack_flash.position = Vector3(facing * 0.9, 1.2, 0)
         _attack_flash.scale = Vector3.ONE * lerpf(0.3, 1.2, charge_time / MAX_CHARGE_TIME)
+    if mephisto_moves:
+        _move_status.text = ("DEMON LEAD" if mephisto_moves.demon_form else "GIRL LEAD") + "\n" + _move_status.text
+        if _attack_flash: _attack_flash.visible = false
     # Match the approved preview: the primitive flash must not hide the hands.
     if character_id == "turbofit" and (charging or last_move == "POWER CHORD") and _attack_flash:
         _attack_flash.visible = false
 
 
 func basic_attack(aim: Vector2, airborne: bool) -> void:
+    if tumble and tumble.active: return
     if reaction_recovery:
         if not reaction_recovery.knockdown_phase.is_empty(): return
         if not airborne and reaction_recovery.side_continue(aim): return
@@ -1312,6 +1357,10 @@ func basic_attack(aim: Vector2, airborne: bool) -> void:
         return
     if character_id == "witcheer" and absf(aim.y) <= 0.1 and aim.x * facing < -0.1:
         _start_witcheer("TurnaroundKick")
+        return
+    # The paired brute never consumes libraries bound to the girl's skeleton.
+    if mephisto_moves and mephisto_moves.demon_form:
+        if mephisto_moves.move.is_empty(): mephisto_moves.start_kit(mephisto_moves.route(aim,airborne,false),signf(aim.x) if absf(aim.x)>.1 else facing)
         return
     # Doge-only neutral air shares the existing native-limb Superman route.
     # Horizontal-only air basic uses the approved edited Drop Kick below.
@@ -1483,7 +1532,7 @@ func _query_air_side_kick() -> void:
             if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                 _air_kick_targets.append(target)
                 var timing: Dictionary = turbofit_attack_timings.AirSideKick
-                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(timing.damage), Vector3(turbofit_attack_facing, 0.35, 0), float(timing.knockback),child,nearest,center)
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(timing.damage), Vector3(turbofit_attack_facing, 0.35, 0), float(timing.knockback),child,nearest,center, self)
                 break
 
 func _query_air_down_kick() -> void:
@@ -1518,7 +1567,7 @@ func _query_air_down_kick() -> void:
             var nearest := Geometry3D.get_closest_point_to_segment(center, a, b)
             if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                 _air_down_targets.append(target)
-                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(timing.damage), Vector3.DOWN, float(timing.knockback),child,nearest,center)
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(timing.damage), Vector3.DOWN, float(timing.knockback),child,nearest,center, self)
                 break
 
 func _tick_sound_orb(delta: float) -> void:
@@ -1532,7 +1581,7 @@ func _tick_sound_orb(delta: float) -> void:
         if offset.length() <= SOUND_ORB_RADIUS:
             _sound_orb_targets.append(target)
             var push_direction := offset.normalized() if offset.length() > 0.001 else Vector3(facing, 0.25, 0).normalized()
-            target.receive_hit(0.0, push_direction, SOUND_ORB_KNOCKBACK)
+            target.receive_hit_from(0.0, push_direction, SOUND_ORB_KNOCKBACK, self)
     for projectile in get_tree().get_nodes_in_group("projectiles"):
         if not is_instance_valid(projectile) or projectile.source == self or projectile in _sound_orb_projectiles:
             continue
@@ -1601,7 +1650,7 @@ func _tick_doge_attack(delta: float) -> void:
                     continue
                 var offset: Vector3 = target.global_position - global_position
                 if offset.length() <= 2.5 and absf(offset.z) < 1.5 and offset.x * facing >= -0.2 and offset.x * facing <= 1.8 and offset.y >= -0.25:
-                    target.receive_hit(8.0, Vector3.UP, 3.8)
+                    target.receive_hit_from(8.0, Vector3.UP, 3.8, self)
         else:
             _directional_hit(8.0, 3.8, 2.5, Vector3(facing, 0, 0), maxf(0, float(timing.duration) - doge_attack_elapsed))
         # Imported fist motion is the cue; the prototype sphere obscures it.
@@ -1662,7 +1711,7 @@ func _query_doge_two_piece() -> void:
                 var nearest := Geometry3D.get_closest_point_to_segment(center, a, b)
                 if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                     var lift := 0.25 if _doge_two_piece_event == 2 else 0.0
-                    preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(event.damage), Vector3(doge_attack_facing, lift, 0), float(event.knockback),child,nearest,center)
+                    preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(event.damage), Vector3(doge_attack_facing, lift, 0), float(event.knockback),child,nearest,center, self)
                     if _doge_two_piece_event == 1:
                         # Setup jab retains ordinary damage/shield/hitstun, but
                         # must not push its victim out of the following right.
@@ -1698,7 +1747,7 @@ func _query_doge_air_karate() -> void:
             var nearest := Geometry3D.get_closest_point_to_segment(center, a, b)
             if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                 _doge_karate_targets.append(target)
-                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(timing.damage), Vector3(doge_attack_facing * cos(deg_to_rad(30)), -0.5, 0), float(timing.knockback),child,nearest,center)
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,float(timing.damage), Vector3(doge_attack_facing * cos(deg_to_rad(30)), -0.5, 0), float(timing.knockback),child,nearest,center, self)
                 break
 
 func _query_doge_goalkeeper() -> void:
@@ -1723,7 +1772,7 @@ func _query_doge_goalkeeper() -> void:
             var nearest := Geometry3D.get_closest_point_to_segment(center, a, b)
             if center.distance_squared_to(nearest) <= pow(radius + body_radius, 2):
                 _doge_goalkeeper_targets.append(target)
-                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,lerpf(10, 26, doge_goalkeeper_power), Vector3(doge_attack_facing, 0.25, 0), lerpf(4, 9, doge_goalkeeper_power),child,nearest,center)
+                preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,lerpf(10, 26, doge_goalkeeper_power), Vector3(doge_attack_facing, 0.25, 0), lerpf(4, 9, doge_goalkeeper_power),child,nearest,center, self)
                 break
 
 func _query_doge_superman() -> void:
@@ -1788,7 +1837,7 @@ func _tick_torpedo(delta: float) -> void:
             for target in get_tree().get_nodes_in_group("fighters"):
                 if can_hit(target) and target not in tackle_targets and global_position.distance_to(target.global_position) < 2.0:
                     tackle_targets.append(target)
-                    target.receive_hit(14.0, Vector3(facing, 0.3, 0), 5.5)
+                    target.receive_hit_from(14.0, Vector3(facing, 0.3, 0), 5.5, self)
             tackle_active = maxf(0, tackle_active - delta)
             if tackle_active <= 0:
                 torpedo_phase = "fall"
@@ -1831,7 +1880,7 @@ func _land_character_move() -> void:
     _update_move_visuals()
     for target in get_tree().get_nodes_in_group("fighters"):
         if can_hit(target) and global_position.distance_to(target.global_position) < 2.8:
-            target.receive_hit(18.0, Vector3(signf(target.global_position.x - global_position.x), 0.8, 0), 6.0)
+            target.receive_hit_from(18.0, Vector3(signf(target.global_position.x - global_position.x), 0.8, 0), 6.0, self)
 
 func _directional_hit(hit_damage: float, base_knockback: float, attack_range: float, direction: Vector3, cooldown: float) -> void:
     attack_cooldown = cooldown
@@ -1847,7 +1896,7 @@ func _directional_hit(hit_damage: float, base_knockback: float, attack_range: fl
             var launch := direction
             if absf(direction.y) < 0.5:
                 launch.y = 0.35
-            target.receive_hit(hit_damage, launch, base_knockback)
+            target.receive_hit_from(hit_damage, launch, base_knockback, self)
 
 func _handle_blast_zone() -> void:
     lose_stock()

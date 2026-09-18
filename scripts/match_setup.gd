@@ -1,16 +1,37 @@
 extends Control
+# Debug Match Setup (Doc 02 §9) — the arena's developer launcher screen.
+#
+# Wired by main.gd on the explicit Debug/F10 route ONLY (WP-0 step 8): a
+# production arena constructed from a MatchLaunchConfig never builds it, never
+# shows it and never reads a field on it, so it is not production state storage.
+# The VS route validates through MatchFlowState in the router before a launch
+# config exists (Doc 02 §2), so this screen never surfaces player-facing errors
+# during VS.
+#
+# It consumes the shared catalogs (Doc 02 §8): the level list, card captions and
+# thumbnails come from StageCatalog — there is no private stage array any more.
+# The in-arena stage page it used to open was removed with WP-0 steps 7-8; the
+# cards select their stage directly and LEVEL is a regular value row.
 
 const Config = preload("res://scripts/match_config.gd")
+const StageCatalog = preload("res://scripts/catalogs/stage_catalog.gd")
 signal start_requested(slots: Array, teams: bool)
-signal story_requested
 signal back_requested
 const Style = preload("res://scripts/demo_style.gd")
+const MenuOptions = preload("res://scripts/menu_options.gd")
 var help_page: Control
 var rows: Array = []
 var mode: OptionButton
+# The stage model. Item texts come from StageCatalog (dropdown_text), so this
+# OptionButton is only the debug screen's own selection index over the shared
+# catalog list (the hidden-model cleanup is WP-7's "remove hidden production
+# OptionButton models" step).
 var level: OptionButton
-const LEVEL_IDS = ["debug", "toy_room", "sky"]
 var error_label: Label
+var main_menu: Control
+var player_menu: Control
+var _player_index := -1
+var _menu_host: VBoxContainer = VBoxContainer.new()
 
 func _ready() -> void:
     theme = Style.make()
@@ -56,36 +77,40 @@ func _ready() -> void:
     var level_label := Label.new()
     level_label.text = "    LEVEL    "
     mode_row.add_child(level_label)
-    level = _choice(mode_row, ["Debug Arena (original)", "Toy Shelf / Bedroom", "Sky Sanctuary"], 300)
+    level = _choice(mode_row, _level_texts(), 300)
     level.name = "LevelSelect"
     var stages := HBoxContainer.new()
     stages.add_theme_constant_override("separation", 18)
     column.add_child(stages)
-    for i in LEVEL_IDS.size():
+    # Cards + hidden dropdown both read the shared catalog (Doc 02 §8).
+    var entries: Array = StageCatalog.entries()
+    for i in entries.size():
+        var entry: Dictionary = entries[i]
         var card := Button.new()
         card.name = "StageCard" + str(i)
         card.custom_minimum_size = Vector2(260,126)
-        card.tooltip_text = level.get_item_text(i)
+        card.tooltip_text = str(entry.get("dropdown_text", ""))
         stages.add_child(card)
         var picture := TextureRect.new()
         picture.name = "StageThumbnail" + str(i)
         picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        picture.texture = load("res://assets/menu/stage_" + LEVEL_IDS[i] + ".png")
+        picture.texture = load(str(entry.get("thumbnail", "")))
         picture.position = Vector2(5,5)
         picture.size = Vector2(250,96)
         picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
         picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card.add_child(picture)
         var caption := Label.new()
-        caption.text = ["Debug Arena", "Toy Shelf", "Sky Sanctuary"][i]
+        caption.text = str(entry.get("caption", ""))
         caption.position = Vector2(5,100)
         caption.size.x = 250
         caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         caption.add_theme_font_size_override("font_size",16)
         caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card.add_child(caption)
-        card.pressed.connect(func(): level.select(i))
+        card.pressed.connect(_on_stage_card_pressed.bind(i))
     var defaults := Config.default_slots()
+    var player_row_containers: Array = []
     for i in range(4):
         var row := HBoxContainer.new()
         row.add_theme_constant_override("separation", 12)
@@ -110,6 +135,7 @@ func _ready() -> void:
         if i >= 2 and device.item_count > 1:
             device.select(mini(i - 1, device.item_count - 1))
         rows.append({"kind": kind, "character": character, "difficulty": difficulty, "team": team, "device": device})
+        player_row_containers.append(row)
         kind.item_selected.connect(func(_index): _refresh())
     mode.item_selected.connect(func(_index): _refresh())
     var controls := Label.new()
@@ -130,12 +156,6 @@ func _ready() -> void:
     column.add_child(actions)
     start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     actions.add_child(start)
-    var story := Button.new()
-    story.name = "StoryModeButton"
-    story.text = "Story Mode"
-    story.custom_minimum_size = Vector2(400, 48)
-    story.pressed.connect(func(): story_requested.emit())
-    actions.add_child(story)
     var navigation := HBoxContainer.new()
     column.add_child(navigation)
     var back := Button.new()
@@ -151,7 +171,157 @@ func _ready() -> void:
     help_button.pressed.connect(func(): help_page = Style.help(self, func(): help_button.grab_focus()))
     navigation.add_child(help_button)
     _refresh()
-    start.grab_focus()
+    # The options list owns the keyboard; a focused button would swallow Enter
+    # before it reaches the list (Doc 01: the cursor is the input owner).
+    # Melee-style presentation layer (Doc 01 §5.3 Rules-Muster): the dropdown
+    # form stays as the hidden state model; the options lists drive it.
+    mode_row.visible = false
+    for r in player_row_containers:
+        r.visible = false
+    column.add_child(_menu_host)
+    column.move_child(_menu_host, 2)
+    main_menu = MenuOptions.new()
+    _menu_host.add_child(main_menu)
+    player_menu = MenuOptions.new()
+    player_menu.visible = false
+    _menu_host.add_child(player_menu)
+    main_menu.changed.connect(_on_main_changed)
+    main_menu.confirmed.connect(_on_main_confirmed)
+    main_menu.back_requested.connect(func() -> void: back_requested.emit())
+    player_menu.changed.connect(_on_player_changed)
+    player_menu.confirmed.connect(_on_player_confirmed)
+    _sync_menus()
+    _register_hand(main_menu)
+    visibility_changed.connect(_on_visibility_changed)
+
+func _select_level(index: int) -> void:
+    level.select(index)
+    var f: int = main_menu.focus
+    _sync_menus()
+    main_menu.set_focus(f)
+
+func _level_texts() -> Array:
+    # The level list is the shared StageCatalog (Doc 02 §8), never a private
+    # setup array.
+    var values: Array = []
+    for entry in StageCatalog.entries():
+        values.append(str(entry.get("dropdown_text", entry.get("display_name", ""))))
+    return values
+
+func _on_stage_card_pressed(index: int) -> void:
+    # The cards are the debug stage picker: they select their stage directly
+    # (the in-arena stage page was removed with WP-0 steps 7-8; the production
+    # SSS lives in the MatchFlow host).
+    _select_level(index)
+
+func select_level_by_id(id: String) -> void:
+    var index: int = StageCatalog.ids().find(id)
+    if index < 0:
+        return
+    _select_level(index)
+
+func _texts_of(choice: OptionButton) -> Array:
+    var values: Array = []
+    for i in choice.item_count:
+        values.append(choice.get_item_text(i))
+    return values
+
+func _sync_menus() -> void:
+    # LEVEL is a regular value row over the catalog's stage list (the stage page
+    # it used to open was removed with WP-0 steps 7-8; the cards below offer the
+    # same list directly).
+    var defs: Array = [
+        {"label": "MATCH MODE", "kind": "value", "values": _texts_of(mode), "value": mode.selected, "enabled": true},
+        {"label": "LEVEL", "kind": "value", "values": _texts_of(level), "value": level.selected, "enabled": true},
+    ]
+    for i in range(4):
+        var model: Dictionary = rows[i]
+        defs.append({"label": "PLAYER %d   %s" % [i + 1, model.character.get_item_text(model.character.selected)], "kind": "action", "enabled": true})
+    main_menu.build(defs)
+    if _player_index >= 0 and player_menu.visible:
+        _build_player_defs()
+
+func _build_player_defs() -> void:
+    var model: Dictionary = rows[_player_index]
+    player_menu.build([
+        {"label": "KIND", "kind": "value", "values": _texts_of(model.kind), "value": model.kind.selected, "enabled": true},
+        {"label": "FIGHTER", "kind": "value", "values": _texts_of(model.character), "value": model.character.selected, "enabled": not model.character.disabled},
+        {"label": "LEVEL", "kind": "value", "values": _texts_of(model.difficulty), "value": model.difficulty.selected, "enabled": not model.difficulty.disabled},
+        {"label": "TEAM", "kind": "value", "values": _texts_of(model.team), "value": model.team.selected, "enabled": not model.team.disabled},
+        {"label": "INPUT", "kind": "value", "values": _texts_of(model.device), "value": model.device.selected, "enabled": not model.device.disabled},
+        {"label": "BACK", "kind": "action", "enabled": true},
+    ])
+    _register_hand(player_menu)
+
+func _on_main_changed(row: int, value: int) -> void:
+    if row == 0:
+        mode.select(value)
+    elif row == 1:
+        level.select(value)
+    _refresh()
+
+func _on_main_confirmed(row: int) -> void:
+    if row >= 2:
+        _open_player(row - 2)
+
+func _open_player(index: int) -> void:
+    _player_index = index
+    main_menu.play_exit(_enter_player_page)
+
+func _enter_player_page() -> void:
+    main_menu.visible = false
+    _build_player_defs()
+    player_menu.visible = true
+    player_menu.play_enter()
+
+func _on_player_changed(row: int, value: int) -> void:
+    if _player_index < 0:
+        return
+    var model: Dictionary = rows[_player_index]
+    match row:
+        0: model.kind.select(value)
+        1: model.character.select(value)
+        2: model.difficulty.select(value)
+        3: model.team.select(value)
+        4: model.device.select(value)
+    _refresh()
+    if player_menu.visible:
+        var f: int = player_menu.focus
+        _build_player_defs()
+        player_menu.set_focus(f)
+
+func _on_player_confirmed(row: int) -> void:
+    if row == 5:
+        _close_player()
+
+func _close_player() -> void:
+    player_menu.play_exit(_return_to_main)
+
+func _return_to_main() -> void:
+    # Reference rule (Doc 01 §3.5): back lands on the option we entered from.
+    player_menu.visible = false
+    main_menu.visible = true
+    _sync_menus()
+    main_menu.play_enter()
+    main_menu.set_focus(_player_index + 2)
+
+func _on_visibility_changed() -> void:
+    if not visible:
+        return
+    _player_index = -1
+    player_menu.visible = false
+    main_menu.visible = true
+    _sync_menus()
+    main_menu.lock_start()
+    main_menu.play_enter()
+    _register_hand(main_menu)
+
+func _register_hand(menu: Control) -> void:
+    var cursor = get_node_or_null("/root/Cursor")
+    if cursor == null or cursor.hand == null:
+        return
+    for button in menu.row_buttons():
+        cursor.hand.add_target(button)
 
 func close_help() -> bool:
     if is_instance_valid(help_page) and not help_page.is_queued_for_deletion():
@@ -185,4 +355,8 @@ func _start() -> void:
         start_requested.emit(slots, mode.selected == 1)
 
 func selected_level() -> String:
-    return LEVEL_IDS[level.selected]
+    # The debug launcher's selected stage, resolved through the shared catalog.
+    var ids: Array = StageCatalog.ids()
+    if level == null or level.item_count == 0 or level.selected < 0 or level.selected >= ids.size():
+        return "debug"
+    return str(ids[level.selected])

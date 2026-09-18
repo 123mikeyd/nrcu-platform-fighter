@@ -110,10 +110,13 @@ func query_thrust_contacts() -> void:
             if (target.global_position.x - global_position.x) * thrust_facing <= 0: continue
             thrust_targets[hit].append(target)
             var contact = preload("res://scripts/body_hurtboxes.gd").shape_contact(space,query,result,hits)
-            preload("res://scripts/body_hurtboxes.gd").deliver(target,float(event.damage), Vector3(thrust_facing,0,0), float(event.knockback),contact)
+            preload("res://scripts/body_hurtboxes.gd").deliver(target,float(event.damage), Vector3(thrust_facing,0,0), float(event.knockback),contact, self)
             # Light setup contact: retains damage, shield and hitstun, avoids
             # shared percent-derived launch defeating the second slow swipe.
-            if hit == 0: target.velocity = target.velocity.limit_length(0.15)
+            if hit == 0:
+                target.velocity = target.velocity.limit_length(0.15)
+                # Keep this deliberately light setup swipe out of strong flight.
+                if target.tumble: target.tumble.clear()
 func basic_attack(aim: Vector2, airborne: bool) -> void:
     if airborne or absf(aim.x) < 0.5 or absf(aim.y) > 0.5: return
     begin_thrust_slash(aim.x)
@@ -124,6 +127,9 @@ func receive_hit(amount: float, direction: Vector3, base_knockback: float) -> vo
     if health <= 0 or not controls_enabled or amount < 0: return
     var blocked := shielding
     super.receive_hit(amount, direction, base_knockback)
+    # Stationary health encounter: preserve native Hit/Block, never a flying hazard.
+    # Shared reception can cross the threshold before our zero-velocity override.
+    if tumble: tumble.clear()
     health = clampf(health - amount * (0.35 if blocked else 1.0), 0, MAX_HEALTH)
     damage_percent = 0
     velocity = Vector3.ZERO

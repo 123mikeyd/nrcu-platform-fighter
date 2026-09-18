@@ -1,0 +1,30 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/frontend/back_action.gd" id="1_back"]
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="2_anchor"]
+
+[node name="BackAction" type="Button"]
+layout_mode = 2
+focus_mode = 2
+text = "BACK"
+alignment = 2
+script = ExtResource("1_back")
+
+[node name="CursorAnchor" type="Control" parent="."]
+layout_mode = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+x_ratio = 0.8
+y_ratio = 0.72
+
+[node name="BackRail" type="Panel" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -3.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2

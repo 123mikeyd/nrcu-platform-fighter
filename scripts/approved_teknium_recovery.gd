@@ -346,11 +346,11 @@ func lab_query(point: Vector3, sample_time: float) -> void:
    hit.position=point # Actual sampled hand/forearm query, not target-origin aim.
    if lab_move=="side_basic":
     # Eight total across three fresh presses, once per target per strike.
-    HURT.deliver(target,[2.5,2.5,3.0][side_step],Vector3(lab_facing,0,0),3.8,hit)
+    HURT.deliver(target,[2.5,2.5,3.0][side_step],Vector3(lab_facing,0,0),3.8,hit, actor)
    elif lab_move in ["air_up"]:
-    HURT.deliver(target,8.0,Vector3(lab_facing,0,0),3.8,hit)
+    HURT.deliver(target,8.0,Vector3(lab_facing,0,0),3.8,hit, actor)
    else:
-    HURT.deliver(target,10.0 if lab_move=="uppercut" else 8.0,Vector3(lab_facing*.2,1,0) if lab_move=="uppercut" else Vector3(lab_facing,0 if lab_move=="jab" else .12,0),6.0 if lab_move=="uppercut" else (3.8 if lab_move in ["crouch_kick","jab"] else 2.0),hit)
+    HURT.deliver(target,10.0 if lab_move=="uppercut" else 8.0,Vector3(lab_facing*.2,1,0) if lab_move=="uppercut" else Vector3(lab_facing,0 if lab_move=="jab" else .12,0),6.0 if lab_move=="uppercut" else (3.8 if lab_move in ["crouch_kick","jab"] else 2.0),hit, actor)
    if reaction_allowed and target.has_method("begin_uppercut_reaction"):target.begin_uppercut_reaction()
 
 func lab_tick(delta: float) -> void:

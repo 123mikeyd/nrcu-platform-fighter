@@ -13,3 +13,6 @@
 /scripts/doge_visual.gd text eol=lf
 /scripts/mephisto_visual.gd text eol=lf
 /scripts/witcheer_visual.gd text eol=lf
+
+*.import text eol=lf
+*.godot text eol=lf

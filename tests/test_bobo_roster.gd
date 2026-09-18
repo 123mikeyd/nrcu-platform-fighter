@@ -1,27 +1,47 @@
 extends SceneTree
+# Bobo roster contract — every playable Story fighter launches the encounter
+# through the TWO-STEP MatchFlow story route: the Story Fighter Select commits
+# the fighter, Continue steps into the Briefing, and the frontend freezes the
+# config.
 var failures := 0
+var story
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
     if not ok:
         failures += 1
         printerr("FAIL: " + message)
-func frames(n):
+func frames(n: int):
     for i in n: await physics_frame
     await process_frame
-func key(code,down):
+func key(code: int,down: bool):
     var e := InputEventKey.new()
     e.keycode = code
     e.pressed = down
     Input.parse_input_event(e)
     Input.flush_buffered_events()
 func run():
-    var arena = load("res://scenes/main.tscn").instantiate()
-    root.add_child(arena)
-    await process_frame
-    arena.open_story()
-    for index in arena.story_character.item_count:
-        arena.story_character.select(index)
-        arena.story_action.pressed.emit()
+    root.size = Vector2i(1280, 720)
+    story = load("res://tests/fixtures/story_route.gd").new()
+    var roster = load("res://scripts/roster.gd")
+    var encounter = load("res://scripts/catalogs/story_encounter_catalog.gd")
+    var playable: Array = []
+    for id in encounter.allowed_fighter_ids("story_01"):
+        playable.append(str(id))
+    var expected: Array = []
+    for id in roster.ids():
+        if str(id) != "ice_mage":
+            expected.append(str(id))
+    check(playable == expected, "the encounter catalogue owns the playable roster (prototype excluded)")
+    for id in playable:
+        var chosen := str(id)
+        var host = await story.enter(self, chosen)
+        var select = host.story_select()
+        check(select.selected_fighter_id() == chosen, "the Story Select opens on the roster choice " + chosen)
+        var arena = await story.start_encounter(self, host)
+        if arena == null:
+            check(false, "the encounter launches for " + chosen)
+            continue
+        check(arena.player_one.character_id == chosen, "the story launch uses " + chosen)
         await frames(120)
         var hero = arena.player_one
         var bobo = arena.player_two
@@ -43,7 +63,8 @@ func run():
         bobo.release_special()
         await frames(60)
         check(hero.damage_percent == hp, "Bobo direct attack APIs remain harmless")
-    arena.queue_free()
+        arena.queue_free()
+        await story.free_hosts(self)
     await process_frame
     print("BOBO_ROSTER failures=",failures)
     quit(1 if failures else 0)

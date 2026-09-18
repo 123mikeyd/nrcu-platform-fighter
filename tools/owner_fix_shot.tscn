@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tools/owner_fix_shot.gd" id="1_owner"]
+
+[node name="OwnerFixShot" type="Node"]
+script = ExtResource("1_owner")

@@ -10,7 +10,11 @@ class LegacyOrb:
 class Victim:
 	extends Node3D
 	var hits := 0
+	var last_source: Node
 	func receive_hit(_damage: float, _direction: Vector3, _knockback: float) -> void: hits += 1
+	func receive_hit_from(damage: float, direction: Vector3, knockback: float, source: Node, _collateral := false) -> void:
+		last_source = source
+		receive_hit(damage, direction, knockback)
 
 func check(ok: bool, label: String) -> void:
 	if not ok: failures += 1; printerr("FAIL: ", label)
@@ -42,6 +46,7 @@ func run() -> void:
 		var effects: Array = kit.collect(1, Vector3.ZERO, targets, shots)
 		old._tick_sound_orb(1.0 / 60.0)
 		check(victim.hits == expected, "source final interval query")
+		check(victim.last_source == (old if expected else null), "v0.3 source attribution accompanies only real contact")
 		check(effects.size() == expected * 2, "late target and reflection before decrement at " + str(elapsed))
 		check(kit.collect(1, Vector3.ZERO, targets, shots).is_empty(), "final interval ledgers forbid rehit and rereflect")
 		check(absf(kit.cooldown - (.75 - elapsed)) < 1e-12, "expiry does not retune cooldown")

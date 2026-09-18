@@ -1,0 +1,219 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/frontend/story_result.gd" id="1_result"]
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="2_anchor"]
+[ext_resource type="PackedScene" path="res://scenes/components/BackAction.tscn" id="3_back"]
+
+[node name="StoryResult" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_result")
+
+[node name="Field" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ReferenceFrame" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -640.0
+offset_top = -360.0
+offset_right = 640.0
+offset_bottom = 360.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Header" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 96.0
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 30.0
+offset_right = 360.0
+offset_bottom = 72.0
+theme_override_font_sizes/font_size = 30
+text = "STORY MODE"
+
+[node name="StepLabel" type="Label" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_left = 380.0
+offset_top = 42.0
+offset_right = 720.0
+offset_bottom = 68.0
+theme_override_font_sizes/font_size = 20
+text = "ENCOUNTER RESULT"
+vertical_alignment = 1
+
+[node name="TitleRule" type="Panel" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 80.0
+offset_right = 296.0
+offset_bottom = 82.0
+mouse_filter = 2
+
+[node name="BackAction" parent="ReferenceFrame/Header" instance=ExtResource("3_back")]
+layout_mode = 0
+offset_left = 1060.0
+offset_top = 30.0
+offset_right = 1224.0
+offset_bottom = 70.0
+
+[node name="ResultBody" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_top = 120.0
+offset_right = 1280.0
+offset_bottom = 560.0
+mouse_filter = 2
+
+[node name="VerdictRule" type="Panel" parent="ReferenceFrame/ResultBody"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 48.0
+offset_right = 1224.0
+offset_bottom = 50.0
+mouse_filter = 2
+
+[node name="Verdict" type="Label" parent="ReferenceFrame/ResultBody"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 70.0
+offset_right = 760.0
+offset_bottom = 138.0
+theme_override_font_sizes/font_size = 42
+text = "YOU'RE PRETTY COOL"
+
+[node name="Detail" type="Label" parent="ReferenceFrame/ResultBody"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 148.0
+offset_right = 760.0
+offset_bottom = 188.0
+theme_override_font_sizes/font_size = 22
+text = "BOBO DEFEATED"
+
+[node name="FighterLabel" type="Label" parent="ReferenceFrame/ResultBody"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 222.0
+offset_right = 480.0
+offset_bottom = 254.0
+theme_override_font_sizes/font_size = 20
+text = "TURBOFIT"
+
+[node name="RenderHolder" type="Control" parent="ReferenceFrame/ResultBody"]
+layout_mode = 0
+offset_left = 440.0
+offset_top = 28.0
+offset_right = 760.0
+offset_bottom = 360.0
+mouse_filter = 2
+
+[node name="ReplayButton" type="Button" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 820.0
+offset_top = 416.0
+offset_right = 1224.0
+offset_bottom = 468.0
+theme_override_font_sizes/font_size = 22
+text = "REPLAY"
+
+[node name="CursorAnchor" type="Control" parent="ReferenceFrame/ReplayButton"]
+layout_mode = 1
+anchors_preset = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+
+[node name="ReplayRule" type="Panel" parent="ReferenceFrame"]
+visible = false
+layout_mode = 0
+offset_left = 820.0
+offset_top = 414.0
+offset_right = 1224.0
+offset_bottom = 416.0
+mouse_filter = 2
+
+[node name="ChangeFighterButton" type="Button" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 820.0
+offset_top = 480.0
+offset_right = 1224.0
+offset_bottom = 532.0
+theme_override_font_sizes/font_size = 22
+text = "CHANGE FIGHTER"
+
+[node name="CursorAnchor" type="Control" parent="ReferenceFrame/ChangeFighterButton"]
+layout_mode = 1
+anchors_preset = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+
+[node name="ChangeRule" type="Panel" parent="ReferenceFrame"]
+visible = false
+layout_mode = 0
+offset_left = 820.0
+offset_top = 478.0
+offset_right = 1224.0
+offset_bottom = 480.0
+mouse_filter = 2
+
+[node name="MenuButton" type="Button" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 820.0
+offset_top = 544.0
+offset_right = 1224.0
+offset_bottom = 596.0
+theme_override_font_sizes/font_size = 22
+text = "MAIN MENU"
+
+[node name="CursorAnchor" type="Control" parent="ReferenceFrame/MenuButton"]
+layout_mode = 1
+anchors_preset = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+
+[node name="MenuRule" type="Panel" parent="ReferenceFrame"]
+visible = false
+layout_mode = 0
+offset_left = 820.0
+offset_top = 542.0
+offset_right = 1224.0
+offset_bottom = 544.0
+mouse_filter = 2
+
+[node name="AnchorReplay" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+host_path = NodePath("../ReplayButton")
+
+[node name="AnchorChangeFighter" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+host_path = NodePath("../ChangeFighterButton")
+
+[node name="AnchorMenu" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+host_path = NodePath("../MenuButton")

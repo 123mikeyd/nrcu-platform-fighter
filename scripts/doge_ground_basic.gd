@@ -104,5 +104,5 @@ func query_contact(t:float):
    targets.append(target)
    var damage=10.0 if clip=="Roundhouse25_42" else 8.0
    contacts.append({"clip":clip,"serial":serial,"time":t,"limb":limb,"point":str(pair[0]),"receiver_axis":str(pair[1]),"radius":radius,"receiver_radius":body_radius,"distance":pair[0].distance_to(pair[1]),"target":target.character_id,"region":str(shape.name),"actor_position":str(actor.global_position),"target_position":str(target.global_position),"damage":damage})
-   preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,damage,Vector3(direction,.1,0),4.2 if clip=="Roundhouse25_42" else 1.0,shape,pair[1],pair[0])
+   preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,damage,Vector3(direction,.1,0),4.2 if clip=="Roundhouse25_42" else 1.0,shape,pair[1],pair[0], actor)
    break

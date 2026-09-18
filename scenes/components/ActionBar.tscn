@@ -1,0 +1,88 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="1_anchor"]
+
+[node name="ActionBar" type="Control"]
+offset_right = 1168.0
+offset_bottom = 88.0
+mouse_filter = 2
+
+[node name="TopRule" type="Panel" parent="."]
+offset_right = 1168.0
+offset_bottom = 1.0
+mouse_filter = 2
+
+[node name="Rematch" type="Button" parent="."]
+offset_top = 26.0
+offset_right = 176.0
+offset_bottom = 78.0
+text = "REMATCH"
+alignment = 0
+
+[node name="Underline" type="Panel" parent="Rematch"]
+visible = false
+offset_top = 50.0
+offset_right = 112.0
+offset_bottom = 53.0
+mouse_filter = 2
+
+[node name="CursorAnchor" type="Control" parent="Rematch"]
+mouse_filter = 2
+script = ExtResource("1_anchor")
+
+[node name="ChangeFighters" type="Button" parent="."]
+offset_left = 200.0
+offset_top = 26.0
+offset_right = 432.0
+offset_bottom = 78.0
+text = "CHANGE FIGHTERS"
+alignment = 0
+
+[node name="Underline" type="Panel" parent="ChangeFighters"]
+visible = false
+offset_top = 50.0
+offset_right = 190.0
+offset_bottom = 53.0
+mouse_filter = 2
+
+[node name="CursorAnchor" type="Control" parent="ChangeFighters"]
+mouse_filter = 2
+script = ExtResource("1_anchor")
+
+[node name="ChangeStage" type="Button" parent="."]
+offset_left = 456.0
+offset_top = 26.0
+offset_right = 624.0
+offset_bottom = 78.0
+text = "CHANGE STAGE"
+alignment = 0
+
+[node name="Underline" type="Panel" parent="ChangeStage"]
+visible = false
+offset_top = 50.0
+offset_right = 150.0
+offset_bottom = 53.0
+mouse_filter = 2
+
+[node name="CursorAnchor" type="Control" parent="ChangeStage"]
+mouse_filter = 2
+script = ExtResource("1_anchor")
+
+[node name="MainMenu" type="Button" parent="."]
+offset_left = 680.0
+offset_top = 26.0
+offset_right = 848.0
+offset_bottom = 78.0
+text = "MAIN MENU"
+alignment = 0
+
+[node name="Underline" type="Panel" parent="MainMenu"]
+visible = false
+offset_top = 50.0
+offset_right = 128.0
+offset_bottom = 53.0
+mouse_filter = 2
+
+[node name="CursorAnchor" type="Control" parent="MainMenu"]
+mouse_filter = 2
+script = ExtResource("1_anchor")

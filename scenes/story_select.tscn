@@ -1,0 +1,210 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/frontend/story_select.gd" id="1_select"]
+[ext_resource type="Script" path="res://scripts/frontend/cursor_anchor.gd" id="2_anchor"]
+[ext_resource type="PackedScene" path="res://scenes/components/BackAction.tscn" id="3_back"]
+
+[node name="StorySelect" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_select")
+
+[node name="Field" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ReferenceFrame" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -640.0
+offset_top = -360.0
+offset_right = 640.0
+offset_bottom = 360.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Header" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 96.0
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 30.0
+offset_right = 360.0
+offset_bottom = 72.0
+theme_override_font_sizes/font_size = 30
+text = "STORY MODE"
+
+[node name="StepLabel" type="Label" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_left = 380.0
+offset_top = 42.0
+offset_right = 720.0
+offset_bottom = 68.0
+theme_override_font_sizes/font_size = 20
+text = "CHOOSE YOUR FIGHTER"
+vertical_alignment = 1
+
+[node name="TitleRule" type="Panel" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 80.0
+offset_right = 296.0
+offset_bottom = 82.0
+mouse_filter = 2
+
+[node name="BackAction" parent="ReferenceFrame/Header" instance=ExtResource("3_back")]
+layout_mode = 0
+offset_left = 1060.0
+offset_top = 30.0
+offset_right = 1224.0
+offset_bottom = 70.0
+
+[node name="SelectBody" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_top = 120.0
+offset_right = 1280.0
+offset_bottom = 660.0
+mouse_filter = 2
+
+[node name="RuleTop" type="Panel" parent="ReferenceFrame/SelectBody"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 54.0
+offset_right = 1224.0
+offset_bottom = 55.0
+mouse_filter = 2
+
+[node name="RosterZone" type="Control" parent="ReferenceFrame/SelectBody"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 72.0
+offset_right = 704.0
+offset_bottom = 360.0
+mouse_filter = 2
+
+[node name="RosterLabel" type="Label" parent="ReferenceFrame/SelectBody/RosterZone"]
+layout_mode = 0
+offset_right = 300.0
+offset_bottom = 24.0
+theme_override_font_sizes/font_size = 14
+text = "STORY FIGHTERS"
+
+[node name="RosterStrip" type="Control" parent="ReferenceFrame/SelectBody/RosterZone"]
+layout_mode = 0
+offset_top = 34.0
+offset_right = 640.0
+offset_bottom = 140.0
+mouse_filter = 2
+
+[node name="RuleMiddle" type="Panel" parent="ReferenceFrame/SelectBody"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 252.0
+offset_right = 704.0
+offset_bottom = 253.0
+mouse_filter = 2
+
+[node name="PreviewZone" type="Control" parent="ReferenceFrame/SelectBody"]
+layout_mode = 0
+offset_left = 744.0
+offset_top = 72.0
+offset_right = 1224.0
+offset_bottom = 430.0
+mouse_filter = 2
+
+[node name="PreviewLabel" type="Label" parent="ReferenceFrame/SelectBody/PreviewZone"]
+layout_mode = 0
+offset_right = 300.0
+offset_bottom = 24.0
+theme_override_font_sizes/font_size = 14
+text = "SELECTED FIGHTER"
+
+[node name="FighterName" type="Label" parent="ReferenceFrame/SelectBody/PreviewZone"]
+layout_mode = 0
+offset_top = 30.0
+offset_right = 480.0
+offset_bottom = 76.0
+theme_override_font_sizes/font_size = 30
+text = "TURBOFIT"
+
+[node name="RenderHolder" type="Control" parent="ReferenceFrame/SelectBody/PreviewZone"]
+layout_mode = 0
+offset_top = 86.0
+offset_right = 360.0
+offset_bottom = 386.0
+mouse_filter = 2
+
+[node name="BriefingZone" type="Control" parent="ReferenceFrame/SelectBody"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 392.0
+offset_right = 704.0
+offset_bottom = 520.0
+mouse_filter = 2
+
+[node name="Encounter" type="Label" parent="ReferenceFrame/SelectBody/BriefingZone"]
+layout_mode = 0
+offset_right = 320.0
+offset_bottom = 26.0
+theme_override_font_sizes/font_size = 18
+text = "ENCOUNTER 01 / BOBO"
+
+[node name="Copy" type="Label" parent="ReferenceFrame/SelectBody/BriefingZone"]
+layout_mode = 0
+offset_top = 34.0
+offset_right = 640.0
+offset_bottom = 92.0
+theme_override_font_sizes/font_size = 16
+text = "Choose your fighter, then review the encounter briefing."
+autowrap_mode = 3
+
+[node name="ContinueButton" type="Button" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 820.0
+offset_top = 604.0
+offset_right = 1224.0
+offset_bottom = 660.0
+theme_override_font_sizes/font_size = 22
+text = "CONTINUE TO BRIEFING"
+
+[node name="ContinueRail" type="Panel" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 820.0
+offset_top = 664.0
+offset_right = 1224.0
+offset_bottom = 667.0
+mouse_filter = 2
+
+[node name="ContinueTopRule" type="Panel" parent="ReferenceFrame"]
+visible = false
+layout_mode = 0
+offset_left = 820.0
+offset_top = 602.0
+offset_right = 1224.0
+offset_bottom = 604.0
+mouse_filter = 2
+
+[node name="AnchorContinue" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+mouse_filter = 2
+script = ExtResource("2_anchor")
+host_path = NodePath("../ContinueButton")

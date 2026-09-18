@@ -211,7 +211,7 @@ provenance = {
 "influence_policy": "dominant positive weight; ties first slot",
 "pose": "imported skeleton rest (not animated Idle)",
 &"presenter": "res://scripts/witcheer_visual.gd",
-&"presenter_sha256": "06b50c206bf09d97fa003386918cc57989de6a6d93c50951b01beecaeba5ff74",
+&"presenter_sha256": "e67481cc3ce3c1ebf08913b7dbcfb805870558a2face18e570e858412e15068b",
 "space": "body: scaled model rest minus foot_origin; hurtbox: native bone local",
 "surfaces": 1,
 "vertices": 69650

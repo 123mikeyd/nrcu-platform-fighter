@@ -14,13 +14,28 @@ var device_choices: Array = []
 var hud: Label
 var ready_ticks := 0
 var paused_from := "match"
+var _upstream_input: Node
+var _previous_scope := "frontend"
+var _previous_mouse_mode := Input.MOUSE_MODE_VISIBLE
 func _ready():
+	# Native Controls and the existing match sampler own this entire preview.
+	# Do not let v0.3's persistent semantic frontend interpret gameplay keys.
+	_upstream_input = get_node_or_null("/root/FrontendInput")
+	_previous_mouse_mode = Input.mouse_mode
+	if _upstream_input != null:
+		_previous_scope = _upstream_input.scope()
+		_upstream_input.set_scope(_upstream_input.SCOPE_GAMEPLAY)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_window().title = "NRCU — Experimental Freeplay"
 	ui = CanvasLayer.new()
 	ui.layer = 10
 	add_child(ui)
 	Input.joy_connection_changed.connect(_on_device_connection)
 	show_menu()
+func _exit_tree():
+	if is_instance_valid(_upstream_input):
+		_upstream_input.set_scope(_previous_scope)
+	Input.mouse_mode = _previous_mouse_mode
 func clear_page(title: String):
 	if is_instance_valid(page):
 		ui.remove_child(page)

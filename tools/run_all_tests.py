@@ -55,6 +55,20 @@ def classify(name, returncode, stdout, log, timed_out):
     # test_bobo_status has no success print: its final quit(1 if failures else 0)
     # is the inspected contract. Do not generalize this to unknown runners.
     marker = bool(re.search(r'(?m)^PASS\b', text))
+    # Inspected completion contracts; fixed totals reject partial matrices.
+    complete = {
+        'test_tumble_roster': 'ROSTER_TUMBLE_COMPLETE checks=432 pairs=98 failures=0',
+        'test_tumble_roster_routes': 'ROSTER_NATIVE_ROUTES_COMPLETE rows=26 failures=0',
+        'test_mephisto_paired_body': 'PAIRED_BODY_COMPLETE failures=0',
+        'test_mephisto_paired_form': 'PAIRED_FORM_COMPLETE failures=0',
+        'test_mephisto_paired_combat': 'PAIRED_COMBAT_COMPLETE checks=18 failures=0',
+        'test_mephisto_paired_lifecycle': 'PAIRED_LIFECYCLE_COMPLETE checks=112 failures=0',
+        'test_mephisto_paired_contacts': 'PAIRED_GROUND_MATRIX_COMPLETE rows=96 failures=0',
+        'test_mephisto_paired_air': 'PAIRED_AIR_COMPLETE failures=0',
+        'test_mephisto_paired_antiair': 'PAIRED_ANTI_AIR_COMPLETE rows=10 failures=0',
+    }
+    if name in complete:
+        marker = complete[name] in text.splitlines()
     if name in legacy:
         marker = bool(re.search(r'(?m)^' + legacy[name] + r' failures=0\s*$', text))
     elif name in {'test_bobo_status', 'project_smoke', 'clean_import'}:

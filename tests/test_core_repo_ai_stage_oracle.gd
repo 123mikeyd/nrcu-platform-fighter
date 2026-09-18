@@ -21,7 +21,7 @@ func run():
 					comparisons += 2
 	check(comparisons == 72000,"72000 comparisons executed")
 	check(FileAccess.get_sha256("res://scripts/bot_controller.gd") == "43f56449e8c92d40cd892f442ad6fd86993c04b34981e4e1c2ecdeee8b1aa867","original bot unchanged")
-	check(FileAccess.get_sha256("res://scripts/fighter.gd") == "9337a721d5ae9fd2a98e41d5f8a2d826006c906ec7da1b676228ef9bbae379ce","reviewed v0.2 fighter unchanged")
+	check(FileAccess.get_sha256("res://scripts/fighter.gd") == "62584642a3905d3811e9970b179b1fd5348f1a47238fa09cd9f8028ff3fdb9dd","reviewed v0.3 fighter unchanged")
 	a.free(); b.free()
 	print("ORACLE_COMPARISONS ",comparisons)
 	if not failures: print("PASS: repo AI 72000 default and original bounds oracle comparisons")

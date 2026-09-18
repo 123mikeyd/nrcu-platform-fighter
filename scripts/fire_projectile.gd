@@ -34,7 +34,7 @@ func _hit_target(target: Node3D) -> void:
     if is_queued_for_deletion() or not is_instance_valid(source) or not source.can_hit(target): return
     if _try_absorb(target): return
     var blocked: bool = target.shielding
-    preload("res://scripts/body_hurtboxes.gd").deliver(target, payload_damage(), Vector3(direction, 0.2, 0), IMPACT_KNOCKBACK, contact_hit)
+    preload("res://scripts/body_hurtboxes.gd").deliver(target, payload_damage(), Vector3(direction, 0.2, 0), IMPACT_KNOCKBACK, contact_hit, source)
     if not blocked: target.apply_burn(source)
     hide()
     queue_free()

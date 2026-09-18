@@ -32,12 +32,20 @@ func run():
     arena.setup.level.select(2)
     arena.setup._start()
     check(arena.active_level == "sky", "switch to sky")
-    arena.open_story()
-    arena.start_story()
-    check(arena.story_state == "playing" and arena.active_level == "sky", "story uses selected stage")
-    arena.story_state = "complete"
-    arena._reset_match()
-    check(arena.story_state == "playing" and arena.active_level == "sky", "story replay")
+    # Story route (WP-0 step 4): the encounter's stage comes from StoryEncounter
+    # Catalog, so the story launch never reads the debug setup's level dropdown.
+    var catalog = load("res://scripts/catalogs/story_encounter_catalog.gd")
+    var encounter_stage := str(catalog.by_id("story_01")["stage_id"])
+    var story = load("res://tests/fixtures/story_route.gd").new()
+    var host = await story.enter(self)
+    var story_arena = await story.start_encounter(self, host)
+    check(story_arena != null and story_arena.story_state == "playing", "story launches through MatchFlow")
+    if story_arena != null:
+        check(story_arena.active_level == encounter_stage, "story uses the encounter's catalog stage")
+        check(story_arena.active_level == "debug", "the encounter's effective stage is the recorded default")
+        check(story_arena.active_level != arena.active_level, "the story stage never follows the debug dropdown")
+        story_arena.queue_free()
+    await story.free_hosts(self)
     arena.show_setup()
     arena.setup.level.select(0)
     arena.setup._start()

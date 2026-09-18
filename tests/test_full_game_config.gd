@@ -14,6 +14,6 @@ func run():
 	assert(not config.validate(["teknium", "turbofit"], "sky", "sparring_easy").is_empty())
 	assert(not config.validate(["teknium"], "toy_room", "human").is_empty())
 	assert(not config.validate(["teknium", "turbofit"], "toy_room", "unknown").is_empty())
-	assert(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/home.tscn")
+	assert(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/title.tscn")
 	print("PASS: full game opt-in configuration")
 	quit()

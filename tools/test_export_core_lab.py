@@ -46,9 +46,17 @@ class CollisionPackagingTests(unittest.TestCase):
         spec.loader.exec_module(module)
         root = MODULE.parent.parent
         with tempfile.TemporaryDirectory() as tmp:
+            # Exercise the real current preset and entry, not a second full asset
+            # tree. The raw plugin writes paths; importing/exporting is a separate gate.
+            source = Path(tmp) / 'source'
+            source.mkdir()
+            for folder in module.COPY_FOLDERS:
+                (source / folder).mkdir()
+            for name in ['project.godot', 'export_presets.cfg']:
+                (source / name).write_bytes((root / name).read_bytes())
             target = Path(tmp) / 'stage'
-            original = (root / 'export_presets.cfg').read_bytes()
-            module.prepare_project(root, target)
+            original = (source / 'export_presets.cfg').read_bytes()
+            module.prepare_project(source, target)
             plugin = target / 'addons/collision_raw_export/export.gd'
             self.assertTrue(plugin.is_file(), 'raw imported files require an explicit export plugin')
             self.assertIn('add_file', plugin.read_text())

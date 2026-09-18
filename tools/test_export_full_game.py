@@ -19,8 +19,13 @@ class FullGameExportTests(unittest.TestCase):
         presets = configparser.ConfigParser(interpolation=None)
         presets.read(Path(__file__).resolve().parent.parent / 'export_presets.cfg')
         upstream = set(presets['preset.0']['include_filter'].strip('"').split(','))
-        web = set(presets['preset.1']['include_filter'].strip('"').split(','))
-        self.assertFalse(upstream - web, 'optional frontend must retain original game raw inputs')
+        web_presets = [presets[section] for section in presets.sections()
+                       if presets[section].get('platform') == '"Web"']
+        self.assertEqual({p['name'] for p in web_presets}, {'"Web Browser"', '"Web LAN"'})
+        for preset in web_presets:
+            web = set(preset['include_filter'].strip('"').split(','))
+            self.assertFalse(upstream - web, preset['name'] + ' must retain original game raw inputs')
+            self.assertIn('.verification/*', preset['exclude_filter'])
 
     def test_exit_zero_dependent_compile_errors_abort_acceptance(self):
         helper = self.helper()
@@ -29,6 +34,14 @@ class FullGameExportTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 helper.run_checked([sys.executable, '-c', 'print(\'SCRIPT ERROR: Compile Error: Failed to compile depended scripts.\')'], log)
             self.assertIn('depended scripts', log.read_text())
+
+    def test_current_upstream_title_entry_is_supported(self):
+        helper = self.helper()
+        text = '[application]\nrun/main_scene="res://scenes/title.tscn"\n'
+        changed = helper.full_game_entry(text)
+        self.assertEqual(changed.replace('experimental_full_game.tscn', 'title.tscn'), text)
+        with self.assertRaises(ValueError):
+            helper.full_game_entry(text + 'run/main_scene="res://scenes/home.tscn"\n')
 
     def test_only_staging_main_scene_changes(self):
         helper = self.helper()

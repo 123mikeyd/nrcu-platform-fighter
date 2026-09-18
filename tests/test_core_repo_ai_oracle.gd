@@ -13,7 +13,9 @@ class LegacyObservation extends Node3D:
 	func magic_locked(): return false
 func run():
 	check(FileAccess.get_sha256("res://scripts/bot_controller.gd") == "43f56449e8c92d40cd892f442ad6fd86993c04b34981e4e1c2ecdeee8b1aa867","original bot byte identity")
-	check(FileAccess.get_sha256("res://scripts/fighter.gd") == "9337a721d5ae9fd2a98e41d5f8a2d826006c906ec7da1b676228ef9bbae379ce","reviewed v0.2 fighter byte identity (decision oracle remains the unchanged bot)")
+	# v0.3 adds tumble/source attribution and paired Mephisto; bot read() is unchanged.
+	# Keep the actual supported-decision oracle below, not just a new source pin.
+	check(FileAccess.get_sha256("res://scripts/fighter.gd") == "62584642a3905d3811e9970b179b1fd5348f1a47238fa09cd9f8028ff3fdb9dd","reviewed v0.3 fighter byte identity (decision oracle remains the unchanged bot)")
 	var a = LegacyObservation.new(); var b = LegacyObservation.new()
 	root.add_child(a); root.add_child(b); a.add_to_group("fighters"); b.add_to_group("fighters")
 	var coverage := {}

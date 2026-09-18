@@ -69,7 +69,16 @@ func run():
     for i in 120:
         await frames(1)
         if arena.match_over: break
-    check(arena.match_over and arena.winner_label.visible, "physical knockback elimination reaches exact story victory")
+    check(arena.match_over, "physical knockback elimination resolves the match")
+    # WP-0 step 5: the frontend owns Results; the arena hands the payload over.
+    var vs = load("res://tests/fixtures/vs_route.gd").new()
+    var post = await vs.wait_for_post_match(self)
+    check(post != null and post.post_match_result() != null,
+        "the resolved match reaches the PostMatch surface")
+    if post != null:
+        var winner: Dictionary = post.post_match_result().winner_entry()
+        check(int(winner.get("player_index", 0)) == 1, "physical knockback elimination makes P1 the winner")
+        check(str(post.post_match().outcome_label.text).find("P1") != -1, "Results names P1")
     arena.queue_free()
     await process_frame
     if failures == 0: print("PASS: autonomous story NPC freeze, human lock/thaw/input damage, physics knockback elimination -> exact victory")

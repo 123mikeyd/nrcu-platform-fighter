@@ -21,9 +21,11 @@ except ModuleNotFoundError:
 
 
 def full_game_entry(text):
-    original = 'run/main_scene="res://scenes/home.tscn"'
-    if text.count(original) != 1:
-        raise ValueError('Expected original home entry in disposable snapshot')
+    originals = ['run/main_scene="res://scenes/title.tscn"',
+                 'run/main_scene="res://scenes/home.tscn"']
+    if sum(text.count(entry) for entry in originals) != 1:
+        raise ValueError('Expected one original title/home entry in disposable snapshot')
+    original = next(entry for entry in originals if entry in text)
     return text.replace(original, 'run/main_scene="res://scenes/experimental_full_game.tscn"')
 
 

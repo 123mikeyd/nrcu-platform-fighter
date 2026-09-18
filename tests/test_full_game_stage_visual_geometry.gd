@@ -3,9 +3,6 @@ extends "res://tests/test_full_game_flow.gd"
 ## This checks the current upstream layout against actual native supports/art.
 var failures := 0
 func _initialize():
-	if "--compact" in OS.get_cmdline_user_args():
-		root.size = Vector2i(960,540)
-		root.content_scale_size = Vector2i(960,540)
 	call_deferred("run")
 func check(ok: bool, message: String):
 	print(("PASS: " if ok else "FAIL: ") + message)
@@ -21,6 +18,11 @@ func capture(label):
 	root.get_texture().get_image().save_png("res://.verification/core/stage-visual-fix/"+prefix+"-"+label+".png")
 	app.session.set_physics_process(running)
 func run():
+	# Startup window policy can overwrite _initialize's size before this point.
+	var target_size := Vector2i(960,540) if "--compact" in OS.get_cmdline_user_args() else Vector2i(1280,720)
+	root.size = target_size
+	root.content_scale_size = target_size
+	check(root.get_visible_rect().size.is_equal_approx(Vector2(target_size)), "actual 16:9 viewport prerequisite")
 	app = load("res://scenes/experimental_full_game.tscn").instantiate()
 	root.add_child(app)
 	await frames(3)

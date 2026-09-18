@@ -66,10 +66,12 @@ def prepare_project(source: Path, target: Path) -> None:
         shutil.copytree(source / folder, destination,
                         ignore=shutil.ignore_patterns('__pycache__'))
     text = (source / 'project.godot').read_text(encoding='utf-8')
-    original = 'run/main_scene="res://scenes/home.tscn"'
-    if original not in text:
+    entries = ['run/main_scene="res://scenes/home.tscn"',
+               'run/main_scene="res://scenes/title.tscn"']
+    present = [entry for entry in entries if entry in text]
+    if len(present) != 1 or text.count(present[0]) != 1:
         raise ValueError('Unexpected source main scene; review exporter before continuing')
-    text = text.replace(original, 'run/main_scene="res://scenes/training_lab.tscn"')
+    text = text.replace(present[0], 'run/main_scene="res://scenes/training_lab.tscn"', 1)
     text = text.replace('config/name="NRCU Platform Fighter"', 'config/name="NRCU Movement Lab"')
     if 'common/physics_ticks_per_second=' not in text:
         text = text.replace('[physics]', '[physics]\n\ncommon/physics_ticks_per_second=60')

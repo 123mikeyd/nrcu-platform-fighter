@@ -1,42 +1,115 @@
 extends Node3D
+# Gameplay arena (Doc 02 §1: "main.tscn may keep its name; its responsibility
+# becomes gameplay"). The player-facing routes no longer load this scene
+# directly — scenes/match_flow.tscn hosts Character Select / Stage Select / the
+# Story Encounter Briefing and constructs the arena with an immutable
+# MatchLaunchConfig (WP-0 steps 3-5).
+#
+# Two ways in:
+#   * the MatchFlow router sets `launch_config` BEFORE tree entry; _ready then
+#     prewarms gameplay and reports `presentation_ready` (Doc 02 §6). The match
+#     starts through start_match_from_config(), which consumes only the frozen
+#     snapshot — mode, resolved slots, the launch stage and, for Story, the
+#     encounter payload.
+#   * a direct load (tests, F10 debug launcher) is the explicit Debug/F10 route
+#     (Doc 02 §9): the arena builds its own Debug Match Setup launcher.
+#
+# WP-0 step 5: gameplay OWNS NO RESULTS SCREEN. At match resolution it produces
+# the immutable end-state data (MatchResult / StoryOutcome, Doc 02 §4) and hands
+# it to the router through the typed post-match payload (AppState
+# .return_to_post_match) — the RETURN verb of Doc 02 §5 — which tears this arena
+# down and lets the frontend present PostMatch. No frame of this scene survives
+# behind Results, and no Results surface ever reads a live fighter.
+#
+# WP-0 steps 7-8: gameplay constructs NO production frontend any more. The
+# in-arena Char/Stage panels and their VS entry route (open_vs, CSS -> SSS ->
+# launch inside main.tscn) are DELETED — the player route lives in MatchFlow,
+# which owns CSS/SSS/Story/PostMatch, and this scene is only the destination it
+# launches with a validated MatchLaunchConfig. The Debug Match Setup screen is
+# constructed on the explicit Debug/F10 route ONLY: a production arena never
+# instantiates, shows or reads it.
+
+signal presentation_ready
 
 const FighterScript = preload("res://scripts/fighter.gd")
 const Config = preload("res://scripts/match_config.gd")
-const SetupScript = preload("res://scripts/match_setup.gd")
 const DemoStyle = preload("res://scripts/demo_style.gd")
+const MatchResultScript = preload("res://scripts/match_result.gd")
+const AppStateScript = preload("res://scripts/app_state.gd")
+# Debug Match Setup (Doc 02 §9): built by the explicit Debug/F10 route only.
+const SetupScript = preload("res://scripts/match_setup.gd")
+# Gameplay stage ids: the launch stage is validated against the shared catalog
+# (the debug setup reads the same catalog for its own level list).
+const StageCatalog = preload("res://scripts/catalogs/stage_catalog.gd")
+# Adapters only: the launch snapshot's typed kinds/input sources are mapped back
+# to the legacy slot vocabulary start_match() already speaks.
+const StateScript = preload("res://scripts/match_flow_state.gd")
+# WP-4 adapter: gameplay delegates Esc/Start to the shared Pause surface.
+const PauseOverlayScript = preload("res://scripts/frontend/pause_overlay.gd")
+
+const MATCH_FLOW_SCENE := "res://scenes/match_flow.tscn"
+const HOME_SCENE := "res://scenes/home.tscn"
+
+# Shipped Story HUD sentence (main.gd _begin_story_encounter), built from the
+# launch config's Story payload: enemy identity + HP come from the snapshot.
+# Bobo (v0.2) is stationary but attempts a slow two-hit claw attack up close.
+const STORY_CONTROLS_TEMPLATE := "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\n%s: %d HP · slow two-hit claws · punish his recovery! · Esc: back to main"
+
+# The immutable launch snapshot handed over by the MatchFlow router (Doc 02 §3).
+# Set before tree entry; null for every direct load.
+var launch_config = null
+var _launched_from_flow := false
 var ready_remaining := 0.0
 var go_remaining := 0.0
 var ready_label: Label
-var result_panel: Panel
 
 var fighters: Array = []
 var active_level := "debug"
 var stage_theme: Node3D
 var debug_visuals: Array[Node3D] = []
 var hud_labels: Array[Label] = []
-var setup: Control
+# Debug Match Setup (Doc 02 §9). Null in a production arena: the launcher is
+# constructed only by the explicit Debug/F10 route and is never production
+# state storage (no production code path reads a field on it).
+var setup: Control = null
 var teams_enabled := false
 var active_slots: Array = []
-# One encounter only. Empty state means ordinary freeplay.
+# Story state machine (Doc 07 §11-16). One encounter only, driven entirely by
+# the MatchLaunchConfig's Story payload: "" = freeplay, "playing" while the
+# encounter runs, "complete"/"lost" at resolution (the Story Result itself is a
+# frontend surface — the arena returns to the MatchFlow host).
 var story_state := ""
-var story_panel: Control
-var story_title: Label
-var story_detail: Label
-var story_action: Button
-var story_back: Button
-var story_character: OptionButton
-var story_choice_row: HBoxContainer
+var _story_encounter := false
+var _story_won := false
 var hud_title: Label
 var hud_controls: Label
 var freeplay_controls: String
 var bobo_health_bar: ProgressBar
 
+# WP-4 adapter state. The overlay itself owns only presentation/actions; this
+# gameplay node owns pause/unpause and the route handoff.
+var _pause_layer: CanvasLayer = null
+var _pause_overlay: Control = null
+var _pause_input_consumed := false
+
 var player_one: CharacterBody3D
 var player_two: CharacterBody3D
 var p1_label: Label
 var p2_label: Label
-var winner_label: Label
 var match_over := false
+# Elimination batches observed during the match (Doc 06 §1/§2). One logical
+# frame/tick collects ALL of its pending eliminations into ONE batch, and the
+# snapshot is built only after that batch is complete — the transient-survivor
+# winner bug (declaring a winner off the first individual elimination signal
+# while a second fighter is still falling out in the same tick) cannot happen.
+# `_elimination_batches` holds closed batches (arrays of player_index, in
+# observation order); `_elimination_pending` is the batch currently being
+# observed, closed at the end of the tick; `_result_finalized` seals the
+# immutable snapshot so no later signal can mutate it.
+var _elimination_batches: Array = []
+var _elimination_pending: Array = []
+var _elimination_flush_queued := false
+var _result_finalized := false
 var p1_spawn := Vector3(-4.0, 1.0, 0.0)
 var p2_spawn := Vector3(4.0, 1.0, 0.0)
 
@@ -56,15 +129,44 @@ func _ready() -> void:
         if child is StaticBody3D:
             debug_visuals.append(child.get_child(0))
     _build_hud()
+    _build_pause_adapter()
+    # The legacy entry flag selected an in-arena screen route; that route is
+    # gone (WP-0 steps 7-8). The flag is consumed so a stale value can never
+    # re-enter it.
+    AppStateScript.enter_mode = "debug"
+    if launch_config != null:
+        # MatchFlow destination (Doc 02 §1/§6): the router already validated the
+        # setup and constructed this arena with an immutable MatchLaunchConfig,
+        # so NO frontend screen is constructed here. Gameplay is prewarmed and
+        # reports readiness; the match starts when the router releases the
+        # frontend.
+        _launched_from_flow = true
+        call_deferred("_announce_presentation_ready")
+    else:
+        # Explicit Debug/F10 route (Doc 02 §9): the developer launcher is the
+        # arena's own setup surface, and this is the ONLY construction site.
+        _build_debug_setup()
+    # Arriving through the persistent transition layer: the previous screen
+    # may have held its frame for the crossfade (Main Menu PLAY). Reveal this
+    # scene underneath it — never leave a stale hold covering the arena.
+    Frontend.release(0.28)
+
+func _build_debug_setup() -> void:
+    # Debug Match Setup (Doc 02 §9): instantiate the launcher ONLY on the
+    # explicit Debug/F10 route. It consumes the shared catalogs (match_setup.gd
+    # builds its level list from StageCatalog, never a private array), it is NOT
+    # production state storage — a production arena never constructs it and no
+    # production code path reads a field on it — and it never receives
+    # player-facing validation errors during VS: the VS route validates through
+    # MatchFlowState in the router before a MatchLaunchConfig exists.
     var menu_layer := CanvasLayer.new()
+    menu_layer.name = "DebugMenuLayer"
     menu_layer.layer = 10
     add_child(menu_layer)
     setup = SetupScript.new()
     menu_layer.add_child(setup)
     setup.start_requested.connect(start_match)
-    setup.story_requested.connect(open_story)
     setup.back_requested.connect(back_to_menu)
-    _build_story_panel(menu_layer)
 
 func _process(_delta: float) -> void:
     for i in range(fighters.size()):
@@ -76,44 +178,150 @@ func _process(_delta: float) -> void:
             bobo_health_bar.value = fighter.health
 
 
+# --- WP-4 Pause adapter -----------------------------------------------------
+func _build_pause_adapter() -> void:
+    _pause_layer = CanvasLayer.new()
+    _pause_layer.name = "PauseLayer"
+    _pause_layer.layer = 20
+    _pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+    add_child(_pause_layer)
+    _pause_overlay = PauseOverlayScript.new()
+    _pause_overlay.name = "PauseOverlay"
+    _pause_layer.add_child(_pause_overlay)
+    _pause_overlay.resume_requested.connect(_resume_from_pause)
+    _pause_overlay.leave_requested.connect(_leave_from_pause)
+    if not FrontendInput.cancel_pressed.is_connected(_on_pause_toggle):
+        FrontendInput.cancel_pressed.connect(_on_pause_toggle)
+    if not FrontendInput.start_pressed.is_connected(_on_pause_toggle):
+        FrontendInput.start_pressed.connect(_on_pause_toggle)
+
+func pause_overlay() -> Control:
+    return _pause_overlay
+
+func _on_pause_toggle() -> void:
+    # FrontendInput emits this before the old arena Escape callback. Mark the
+    # event handled so the legacy debug setup route cannot also run.
+    _pause_input_consumed = true
+    get_viewport().set_input_as_handled()
+    if _pause_overlay == null or not is_instance_valid(_pause_overlay):
+        return
+    if _pause_overlay.is_open():
+        _pause_overlay.resume()
+        return
+    if _pause_overlay.is_leaving() or fighters.is_empty() or match_over:
+        return
+    if setup != null and setup.visible:
+        return
+    if not _pause_overlay.open(_story_encounter):
+        return
+    FrontendInput.set_scope(FrontendInput.SCOPE_FRONTEND)
+    get_tree().paused = true
+    _pause_overlay.focus_default()
+    call_deferred("_clear_pause_input_consumed")
+
+func _clear_pause_input_consumed() -> void:
+    _pause_input_consumed = false
+
+func _resume_from_pause() -> void:
+    get_tree().paused = false
+    FrontendInput.set_scope(FrontendInput.SCOPE_GAMEPLAY)
+    call_deferred("_clear_pause_input_consumed")
+
+func _leave_from_pause(mode: String) -> void:
+    # Minimal route adapter only: teardown happens through scene change before
+    # MatchFlow becomes interactive. Story keeps the selected fighter in the
+    # existing cross-scene channel; VS re-enters its existing CSS route.
+    get_viewport().set_input_as_handled()
+    get_tree().paused = false
+    FrontendInput.set_scope(FrontendInput.SCOPE_FRONTEND)
+    AppStateScript.enter_mode = "story" if mode == "story" else "vs"
+    if mode == "story" and player_one != null:
+        AppStateScript.story_fighter_id = str(player_one.character_id)
+    get_tree().change_scene_to_file(MATCH_FLOW_SCENE)
+
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-        if setup.visible and setup.close_help(): return
-        if setup.visible: back_to_menu()
-        else: show_setup()
+        if _pause_input_consumed:
+            get_viewport().set_input_as_handled()
+            return
+        if setup != null and setup.visible and setup.close_help(): return
+        # Consume the event BEFORE the route action: the arena is the current
+        # scene on a flow launch, so a route change frees this node and any
+        # later statement here would run on a freed instance.
         get_viewport().set_input_as_handled()
-    elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R and match_over:
-        _reset_match()
+        if setup != null and not setup.visible:
+            # Debug route with a match running: the setup screen reopens in
+            # place (shipped debug launcher behaviour).
+            show_setup()
+        else:
+            # Debug launcher at rest (its screen is already up) and production
+            # both leave the arena for Main. Production has NO arena-side setup
+            # screen any more (Doc 02 §9 / WP-0 steps 7-8): the in-arena CSS/SSS
+            # it used to reopen are deleted and the frontend owns the route.
+            back_to_menu()
+    # WP-0 step 5: the raw R rematch bypass is REMOVED. A resolved match hands
+    # its end-state payload to the frontend, which owns the visible Results
+    # actions (Doc 06 §9: no hidden raw rematch; Doc 09 WP-5 "remove host raw R
+    # bypass"). Results input is owned by the PostMatch surface.
 
 func back_to_menu() -> void:
-    show_setup()
-    get_tree().change_scene_to_file("res://scenes/home.tscn")
+    # Leaving the arena for the frontend: the shipped stand-down (cancel READY,
+    # drop the encounter-only HUD, stop the fighters, clear live projectiles)
+    # runs on BOTH routes — production has no setup screen to present, but the
+    # route still leaves a stopped, story-free arena behind (Doc 02 §9).
+    _stand_down_match()
+    if setup != null:
+        setup.show()
+        setup.find_child("StartMatchButton",true,false).grab_focus()
+    get_tree().change_scene_to_file(HOME_SCENE)
 
 func show_setup() -> void:
+    _stand_down_match()
+    if setup == null:
+        # Production arena (MatchLaunchConfig): no arena-side setup screen
+        # exists to show (Doc 02 §9).
+        return
+    setup.show()
+    setup.find_child("StartMatchButton",true,false).grab_focus()
+
+func _stand_down_match() -> void:
+    # Shipped stand-down shared by the debug launcher re-open and the Main
+    # route: cancel READY, leave the story state, hide the encounter-only HUD,
+    # stop every fighter and clear live projectiles.
     _cancel_ready()
-    result_panel.hide()
     story_state = ""
-    story_panel.hide()
-    bobo_health_bar.hide()
+    _story_encounter = false
+    if bobo_health_bar != null:
+        bobo_health_bar.hide()
     for fighter in fighters:
         fighter.controls_enabled = false
         fighter._clear_move_state()
     for projectile in get_tree().get_nodes_in_group("projectiles") + get_tree().get_nodes_in_group("goo_puddles"):
         projectile.queue_free()
+    # The match is abandoned, not resolved: batch identity and the snapshot seal
+    # are cleared with it, so a later elimination in this arena is observed again
+    # exactly as it was before the stand-down.
+    _reset_elimination_state()
     match_over = false
-    winner_label.visible = false
-    setup.show()
-    setup.find_child("StartMatchButton",true,false).grab_focus()
 
-func start_match(slots: Array, teams: bool, bobo_encounter := false) -> bool:
+func start_match(slots: Array, teams: bool, bobo_encounter := false, level := "") -> bool:
     var validation_slots := slots.duplicate(true)
     if bobo_encounter and validation_slots[1].character == "bobo":
         validation_slots[1].character = "ice_mage"
     var error := Config.validate(validation_slots, teams)
     if not error.is_empty():
-        setup.error_label.text = error
+        if setup != null:
+            # Debug route only. The VS route validates through MatchFlowState
+            # (Doc 02 §2) before a MatchLaunchConfig exists, so production never
+            # reaches a player-facing error through this screen (Doc 02 §9).
+            setup.error_label.text = error
         return false
-    apply_level(setup.selected_level())
+    # The launch stage rides the immutable snapshot; the debug launcher's own
+    # model is read ONLY when the caller passed no stage (the debug route).
+    var launch_level := level
+    if launch_level == "" and setup != null:
+        launch_level = setup.selected_level()
+    apply_level(launch_level)
     for fighter in fighters:
         remove_child(fighter)
         fighter.queue_free()
@@ -123,13 +331,14 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false) -> bool:
     for label in hud_labels:
         label.text = ""
     story_state = ""
-    story_panel.hide()
+    _story_encounter = false
+    _story_won = false
     hud_title.text = "NRCU"
     hud_controls.text = freeplay_controls
     active_slots = slots.duplicate(true)
     teams_enabled = teams
+    _reset_elimination_state()
     match_over = false
-    winner_label.visible = false
     var roster = load("res://scripts/roster.gd")
     var palette_counts: Dictionary = {}
     for i in range(slots.size()):
@@ -154,66 +363,84 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false) -> bool:
         fighters.append(fighter)
     player_one = fighters[0]
     player_two = fighters[1]
-    setup.hide()
-    result_panel.hide()
+    if setup != null:
+        # Debug launcher: the setup screen steps aside once the match starts. A
+        # production arena has no setup screen (Doc 02 §9).
+        setup.hide()
     bobo_health_bar.visible = bobo_encounter
+    # A live match is the only gameplay owner of input. MatchFlow also calls
+    # this before launch; keeping the adapter idempotent supports the direct
+    # debug fixture without changing the match-start transition.
+    FrontendInput.set_scope(FrontendInput.SCOPE_GAMEPLAY)
     _begin_ready()
     return true
 
-func _build_story_panel(layer: CanvasLayer) -> void:
-    story_panel = Control.new()
-    story_panel.theme = DemoStyle.make()
-    story_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    layer.add_child(story_panel)
-    var shade := ColorRect.new()
-    shade.color = Color("273a37")
-    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    story_panel.add_child(shade)
-    var center := CenterContainer.new()
-    center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    story_panel.add_child(center)
-    var column := VBoxContainer.new()
-    column.custom_minimum_size.x = 700
-    column.add_theme_constant_override("separation", 24)
-    center.add_child(column)
-    story_title = Label.new()
-    story_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    story_title.add_theme_font_size_override("font_size", 42)
-    column.add_child(story_title)
-    story_detail = Label.new()
-    story_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    story_detail.add_theme_font_size_override("font_size", 20)
-    column.add_child(story_detail)
-    story_choice_row = HBoxContainer.new()
-    story_choice_row.alignment = BoxContainer.ALIGNMENT_CENTER
-    story_choice_row.add_theme_constant_override("separation", 20)
-    column.add_child(story_choice_row)
-    var choice_label := Label.new()
-    choice_label.text = "YOUR CHARACTER / P1"
-    story_choice_row.add_child(choice_label)
-    story_character = OptionButton.new()
-    story_character.name = "StoryCharacterSelect"
-    story_character.custom_minimum_size = Vector2(300, 48)
-    var roster = load("res://scripts/roster.gd")
-    var playable_ids := _story_playable_ids()
-    for id in playable_ids:
-        story_character.add_item(roster.display_name(id))
-        story_character.set_item_metadata(story_character.item_count - 1, id)
-    story_character.select(playable_ids.find("turbofit"))
-    story_choice_row.add_child(story_character)
-    story_action = Button.new()
-    story_action.custom_minimum_size.y = 54
-    story_action.pressed.connect(start_story)
-    column.add_child(story_action)
-    story_back = Button.new()
-    story_back.text = "BACK TO MATCH SETUP"
-    story_back.custom_minimum_size.y = 48
-    story_back.pressed.connect(show_setup)
-    column.add_child(story_back)
-    story_panel.hide()
+# --- MatchFlow launch contract (Doc 02 §3, §6, §10.5) -----------------------
+
+func _announce_presentation_ready() -> void:
+    # Doc 02 §6: the destination reports it is visually ready BEFORE the router
+    # releases the frontend, so the LAUNCH transition never happens over a
+    # black/cursor-only construction frame. The world, HUD and result layer are
+    # already built at this point; what is still constructed synchronously after
+    # the reveal is the match itself (start_match_from_config spawns fighters).
+    presentation_ready.emit()
+
+func start_match_from_config(cfg) -> bool:
+    # Gameplay consumes the immutable snapshot only (Doc 02 §3): the config
+    # carries the mode, the resolved slots, the launch stage and the Story
+    # payload, so nothing here reaches into Character Select, Stage Select, the
+    # Story Briefing, the Debug Setup model or any screen node.
+    if cfg == null or not cfg.is_valid():
+        return false
+    var slots: Array = []
+    for entry in cfg.slots():
+        var slot: Dictionary = entry
+        slots.append({
+            "kind": StateScript.kind_to_legacy(int(slot.get("kind", 0))),
+            "character": str(slot.get("fighter_id", "")),
+            "team": int(slot.get("team_id", 0)),
+            "difficulty": str(slot.get("difficulty", "normal")),
+            "device": StateScript.input_source_to_legacy_device(slot.get("input_source", {})),
+        })
+    var started: bool = start_match(slots, int(cfg.mode()) == 1, cfg.has_story(), str(cfg.stage_id()))
+    if started and cfg.has_story():
+        _begin_story_encounter(cfg.story_payload())
+    return started
+
+func _begin_story_encounter(payload: Dictionary) -> void:
+    # The Story state machine over the frozen payload (Doc 02 §3/§4): the
+    # encounter's HUD copy and its spawn/facing metadata arrive in the snapshot,
+    # exactly the values the shipped start_story() applied from the briefing.
+    _story_encounter = true
+    _story_won = false
+    story_state = "playing"
+    hud_title.text = str(payload.get("hud_title_template", "STORY 01 — %s VS BOBO")) % player_one.fighter_name
+    # The encounter owns the enemy identity and its HP; the shipped HUD sentence
+    # is kept with the catalog's values (BOBO -> "Bobo" sentence case).
+    var enemy_name := str(payload.get("enemy_display_name", "BOBO")).capitalize()
+    var enemy_hp := int(payload.get("enemy_hp", 400))
+    hud_controls.text = STORY_CONTROLS_TEMPLATE % [enemy_name, enemy_hp]
+    player_one.reset_fighter(Vector3(payload.get("player_spawn", p1_spawn)), true)
+    # Central floor lane keeps this large opponent clear of side platforms.
+    player_two.reset_fighter(Vector3(payload.get("enemy_spawn", Vector3(0.6, 1.0, 0.0))), true)
+    player_one.facing = float(payload.get("player_facing", 1.0))
+    player_two.facing = float(payload.get("enemy_facing", -1.0))
+    _begin_ready()
+
+func _return_to_post_match(payload: Dictionary) -> void:
+    # Gameplay end -> the frontend owns post-match (Doc 02 §1, §5 RETURN): the
+    # typed end-state payload (MatchResult / StoryOutcome) is handed to the
+    # MatchFlow router, and this scene change tears the completed arena down
+    # before the PostMatch surface becomes interactive. Gameplay never shows a
+    # Results screen and never reads a live fighter for one.
+    AppStateScript.return_to_post_match(payload)
+    get_tree().change_scene_to_file(MATCH_FLOW_SCENE)
 
 func apply_level(id: String) -> void:
-    if id not in SetupScript.LEVEL_IDS: id = "debug"
+    # Gameplay stage application. The id arrives from the immutable launch
+    # snapshot (or the debug launcher's own model); unknown ids fall back to the
+    # debug arena exactly like before, validated against the shared catalog.
+    if not StageCatalog.has(id): id = "debug"
     if id == active_level: return
     if is_instance_valid(stage_theme):
         remove_child(stage_theme)
@@ -241,51 +468,6 @@ func apply_level(id: String) -> void:
         stage_theme = preload("res://scripts/stage_theme.gd").new()
         stage_theme.level_id = id
         add_child(stage_theme)
-
-func open_story() -> void:
-    show_setup()
-    setup.hide()
-    story_state = "ready"
-    story_title.text = "STORY 01 / BOBO"
-    story_detail.text = "A big goofball with a slow two-hit claw attack.\nDeplete Bobo's 400 HP. Dodge his claws, then punish the recovery!\nHe stays put. You have three stocks — watch the edges!\n\nA / D move · Space jump · F basic · G special\nAim with WASD · E shield · Esc back to setup"
-    story_choice_row.show()
-    story_action.text = "START ENCOUNTER"
-    story_panel.show()
-    story_character.grab_focus()
-
-func _story_playable_ids() -> Array[String]:
-    # The prototype remains available to encounters and freeplay, not Story P1.
-    var ids: Array[String] = load("res://scripts/roster.gd").ids()
-    ids.erase("ice_mage")
-    return ids
-
-func start_story() -> void:
-    var slots := Config.default_slots()
-    var selected = story_character.get_selected_metadata()
-    if not selected is String or selected not in _story_playable_ids():
-        selected = "turbofit"
-        for index in story_character.item_count:
-            if story_character.get_item_metadata(index) == selected:
-                story_character.select(index)
-                break
-    slots[0].character = selected
-    slots[0].kind = "human"
-    slots[0].device = -1
-    slots[1].character = "bobo"
-    slots[1].kind = "bot"
-    slots[1].difficulty = "normal"
-    slots[2].kind = "empty"
-    slots[3].kind = "empty"
-    if start_match(slots, false, true):
-        story_state = "playing"
-        hud_title.text = "STORY 01 — %s VS BOBO" % player_one.fighter_name
-        hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\nBobo: 400 HP · slow two-hit claws · punish his recovery! · Esc: match setup"
-        player_one.reset_fighter(p1_spawn, true)
-        # Central floor lane keeps this large opponent clear of side platforms.
-        player_two.reset_fighter(Vector3(0.6, 1.0, 0.0), true)
-        player_one.facing = 1.0
-        player_two.facing = -1.0
-        _begin_ready()
 
 func _build_environment() -> void:
     var environment := WorldEnvironment.new()
@@ -434,7 +616,11 @@ func _build_hud() -> void:
     layer.add_child(bobo_health_bar)
 
     var controls := Label.new()
-    controls.text = "P1: WASD / Space jump / F basic / G special / E shield    |    P2: Arrows / Enter jump / K basic / L special / O shield\nPad: stick aim / A jump / X basic / B special / shoulder shield    ·    Down: drop through    ·    Esc: match setup"
+    # The Esc destination is route-dependent: the debug launcher opens its own
+    # setup screen; a production arena (launch_config) has none and returns to
+    # Main (WP-0 steps 7-8 removed the in-arena setup screens).
+    var escape_hint := "match setup" if launch_config == null else "main menu"
+    controls.text = "P1: WASD / Space jump / F basic / G special / E shield    |    P2: Arrows / Enter jump / K basic / L special / O shield\nPad: stick aim / A jump / X basic / B special / shoulder shield    ·    Down: drop through    ·    Esc: %s" % escape_hint
     controls.name = "MatchControls"
     hud_controls = controls
     freeplay_controls = controls.text
@@ -445,33 +631,9 @@ func _build_hud() -> void:
     controls.modulate = Color(0.7, 0.78, 0.9)
     layer.add_child(controls)
 
-    winner_label = Label.new()
-    winner_label.position = Vector2(340, 270)
-    winner_label.size = Vector2(600, 120)
-    winner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    winner_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    winner_label.add_theme_font_size_override("font_size", 38)
-    winner_label.visible = false
-    result_panel = Panel.new()
-    result_panel.name = "WinnerPanel"
-    result_panel.position = Vector2(290,235)
-    result_panel.size = Vector2(700,250)
-    result_panel.theme = DemoStyle.make()
-    result_panel.add_theme_stylebox_override("panel",DemoStyle.box(Color("273a37"),Color("aa784c"),2))
-    layer.add_child(result_panel)
-    winner_label.position = Vector2(20,15)
-    winner_label.size = Vector2(660,110)
-    winner_label.add_theme_font_size_override("font_size",30)
-    result_panel.add_child(winner_label)
-    for i in 2:
-        var action := Button.new()
-        action.name = "Rematch" if i == 0 else "ChangeFighters"
-        action.text = "Rematch" if i == 0 else "Change Fighters"
-        action.position = Vector2(30+i*335,160)
-        action.size = Vector2(305,55)
-        result_panel.add_child(action)
-        action.pressed.connect(_reset_match if i == 0 else show_setup)
-    result_panel.hide()
+    # WP-0 step 5: gameplay builds no Results screen. The result layer moved to
+    # the MatchFlow host's PostMatch surface (scripts/frontend/post_match.gd);
+    # at resolution this arena hands the immutable payload over and RETURNs.
     ready_label = Label.new()
     ready_label.name = "ReadyGo"
     ready_label.position = Vector2(340,270)
@@ -486,8 +648,23 @@ func _build_hud() -> void:
     ready_label.hide()
     layer.add_child(ready_label)
 
-func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
+func _on_fighter_eliminated(loser: CharacterBody3D) -> void:
+    if _result_finalized:
+        return
+    # Batch identity is match-layer state: recorded here, before the survivor
+    # check can end the match (Doc 06 §2). Everything observed in this
+    # frame/tick lands in the SAME pending batch.
+    if int(loser.stocks) <= 0:
+        _record_elimination(int(loser.player_index))
     if match_over:
+        # The deciding elimination of this tick already resolved the match, but
+        # the immutable snapshot is not built yet: a further elimination from the
+        # SAME tick still belongs to the deciding batch, so it was recorded above
+        # and is folded in by the deferred finalize. This is Doc 06 §1's
+        # transient-survivor winner bug: the winner is never declared off the
+        # first individual signal while a second fighter is still being removed
+        # in the same tick.
+        _schedule_elimination_flush()
         return
     var survivors: Array = fighters.filter(func(f): return f.stocks > 0)
     var sides: Array = []
@@ -495,6 +672,7 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
         if fighter.team_id not in sides:
             sides.append(fighter.team_id)
     if (teams_enabled and sides.size() > 1) or (not teams_enabled and survivors.size() > 1):
+        _schedule_elimination_flush()
         return
     match_over = true
     _cancel_ready()
@@ -504,35 +682,107 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
     for projectile in get_tree().get_nodes_in_group("projectiles") + get_tree().get_nodes_in_group("goo_puddles"):
         projectile.queue_free()
     if story_state == "playing":
-        var won: bool = player_one.stocks > 0 and player_two.stocks <= 0
-        story_state = "complete" if won else "lost"
-        story_title.text = "your pretty cool" if won else "TRY AGAIN"
-        story_detail.text = "STAGE COMPLETE\nBobo is all tuckered out. You win this first encounter!" if won else "Out of stocks! Bobo is still standing.\nRetry with three fresh stocks and Bobo at 400 HP."
-        story_action.text = "REPLAY" if won else "RETRY"
-        story_choice_row.hide()
-        winner_label.visible = false
-        story_panel.show()
-        story_action.grab_focus()
+        Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
+        _story_won = player_one.stocks > 0 and player_two.stocks <= 0
+        story_state = "complete" if _story_won else "lost"
+        # Doc 02 §1/§4: the arena produces the typed StoryOutcome and RETURNs to
+        # the MatchFlow router, which owns the post-match presentation (the
+        # shipped Story result state today — Doc 07 §16: the story wording with
+        # replay/retry + MAIN MENU, never the multiplayer Results screen).
+        # Deferred so this frame's resolution stays intact.
+        var encounter_id: String = launch_config.story_encounter_id() if launch_config != null and launch_config.has_story() else ""
+        call_deferred("_return_to_post_match", AppStateScript.story_return_payload(
+            _story_won, str(encounter_id), str(player_one.character_id), str(active_level), launch_config))
+        # A Story encounter has no multiplayer MatchResult: sealing the state
+        # stops the deferred finalize from ever building one for it.
+        _result_finalized = true
         return
-    if survivors.is_empty():
-        winner_label.text = "DRAW"
-    elif teams_enabled:
-        winner_label.text = "TEAM %s WINS!" % ("A" if sides[0] == 0 else "B")
-    else:
-        winner_label.text = "P%d %s WINS!" % [survivors[0].player_index, survivors[0].fighter_name]
-    winner_label.visible = true
-    result_panel.show()
-    result_panel.get_node("Rematch").grab_focus()
+    # The snapshot is NOT built here (Doc 06 §1): the deciding tick's batch is
+    # closed at the end of the tick, so every elimination the same tick still
+    # produces is part of it — and only then is the immutable MatchResult
+    # constructed and handed over (Doc 06 §4).
+    _schedule_elimination_flush()
+
+func _reset_elimination_state() -> void:
+    # Match-layer state for one match: cleared at match start and at a local
+    # reset, never by the snapshot (which is immutable).
+    _elimination_batches.clear()
+    _elimination_pending.clear()
+    _elimination_flush_queued = false
+    _result_finalized = false
+
+func _record_elimination(player_index: int) -> bool:
+    # One elimination belongs to exactly one batch: the first observation wins,
+    # and a repeat signal for the same player is ignored.
+    if player_index in _elimination_pending:
+        return false
+    for batch in _elimination_batches:
+        if player_index in batch:
+            return false
+    _elimination_pending.append(player_index)
+    return true
+
+func _schedule_elimination_flush() -> void:
+    # The batch boundary is the end of the logical frame/tick: the deferred call
+    # runs after every fighter's physics step of this tick (and after any
+    # same-tick elimination signal), so a batch is always complete before it is
+    # closed.
+    if _elimination_flush_queued or _result_finalized:
+        return
+    _elimination_flush_queued = true
+    call_deferred("_flush_eliminations")
+
+func _flush_eliminations() -> void:
+    _elimination_flush_queued = false
+    if _result_finalized:
+        return
+    if not match_over:
+        _close_elimination_batch(false)
+        return
+    _finalize_match_result()
+
+func _close_elimination_batch(final: bool) -> void:
+    if final:
+        # Every elimination the match observed is in the deciding batch already;
+        # a fighter that is demonstrably out of stocks but was never signalled
+        # (fixture / defensive path) is still eliminated at resolution time, so
+        # it joins the FINAL batch instead of getting an invented order. Doc 06
+        # §2's tie rule then gives it the same rank as the tick that decided the
+        # match, and when that batch removed every survivor the outcome is DRAW.
+        for fighter in fighters:
+            if int(fighter.stocks) <= 0:
+                _record_elimination(int(fighter.player_index))
+    if _elimination_pending.is_empty():
+        return
+    _elimination_batches.append(_elimination_pending.duplicate())
+    _elimination_pending.clear()
+
+func _finalize_match_result() -> void:
+    # The one place the immutable MatchResult is produced, at the batch boundary
+    # (Doc 06 §1/§5). Sealed first so no later signal can mutate it.
+    if _result_finalized:
+        return
+    _result_finalized = true
+    _close_elimination_batch(true)
+    if story_state != "":
+        return
+    var result = MatchResultScript.resolve(fighters, teams_enabled, _elimination_batches)
+    call_deferred("_return_to_post_match", AppStateScript.vs_return_payload(
+        result, launch_config, teams_enabled, str(active_level), active_slots))
 
 func _reset_match() -> void:
-    if story_state in ["complete", "lost"]:
-        start_story()
+    # Local match restart (debug launcher / test lifecycle). Player-facing
+    # REMATCH is the PostMatch route action: it LAUNCHes a fresh arena from the
+    # preserved MatchLaunchConfig instead of restarting this one in place.
+    if _story_encounter and match_over:
+        # A finished Story encounter is replayed through the Story Result's
+        # REPLAY/RETRY (the arena is a fresh launch by then), so a local reset
+        # never restarts a resolved encounter in place.
         return
+    _reset_elimination_state()
     match_over = false
-    winner_label.visible = false
     for fighter in fighters:
         fighter.reset_fighter(fighter.spawn_position, true)
-    result_panel.hide()
     _begin_ready()
 
 func _cancel_ready() -> void:

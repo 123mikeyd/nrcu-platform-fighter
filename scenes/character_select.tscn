@@ -1,0 +1,129 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/char_select.gd" id="1_css"]
+[ext_resource type="PackedScene" path="res://scenes/components/PlayerBay.tscn" id="2_bay"]
+[ext_resource type="PackedScene" path="res://scenes/components/ReadyBand.tscn" id="3_ready"]
+[ext_resource type="PackedScene" path="res://scenes/components/BackAction.tscn" id="4_back"]
+[ext_resource type="PackedScene" path="res://scenes/components/SegmentedChoice.tscn" id="5_mode"]
+
+[node name="CharacterSelect" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_css")
+
+[node name="Field" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ReferenceFrame" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -640.0
+offset_top = -360.0
+offset_right = 640.0
+offset_bottom = 360.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Header" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 24.0
+offset_right = 1224.0
+offset_bottom = 88.0
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="ReferenceFrame/Header"]
+layout_mode = 0
+offset_right = 460.0
+offset_bottom = 40.0
+theme_override_font_sizes/font_size = 30
+text = "CHARACTER SELECT"
+
+[node name="ModeControl" parent="ReferenceFrame/Header" instance=ExtResource("5_mode")]
+layout_mode = 0
+offset_left = 600.0
+offset_top = 2.0
+offset_right = 1000.0
+offset_bottom = 42.0
+
+[node name="BackAction" parent="ReferenceFrame/Header" instance=ExtResource("4_back")]
+layout_mode = 0
+offset_left = 1064.0
+offset_top = 4.0
+offset_right = 1168.0
+offset_bottom = 40.0
+
+[node name="RosterField" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 96.0
+offset_right = 1224.0
+offset_bottom = 186.0
+mouse_filter = 2
+
+[node name="FieldRule" type="Panel" parent="ReferenceFrame/RosterField"]
+layout_mode = 0
+offset_top = 86.0
+offset_right = 1168.0
+offset_bottom = 87.0
+mouse_filter = 2
+
+[node name="FighterGrid" type="Control" parent="ReferenceFrame/RosterField"]
+layout_mode = 0
+offset_right = 1168.0
+offset_bottom = 82.0
+mouse_filter = 2
+
+[node name="PlayerStations" type="Control" parent="ReferenceFrame"]
+layout_mode = 0
+offset_left = 56.0
+offset_top = 270.0
+offset_right = 1224.0
+offset_bottom = 690.0
+mouse_filter = 2
+
+[node name="PlayerBay0" parent="ReferenceFrame/PlayerStations" instance=ExtResource("2_bay")]
+layout_mode = 0
+offset_right = 283.0
+offset_bottom = 420.0
+
+[node name="PlayerBay1" parent="ReferenceFrame/PlayerStations" instance=ExtResource("2_bay")]
+layout_mode = 0
+offset_left = 295.0
+offset_right = 578.0
+offset_bottom = 420.0
+
+[node name="PlayerBay2" parent="ReferenceFrame/PlayerStations" instance=ExtResource("2_bay")]
+layout_mode = 0
+offset_left = 590.0
+offset_right = 873.0
+offset_bottom = 420.0
+
+[node name="PlayerBay3" parent="ReferenceFrame/PlayerStations" instance=ExtResource("2_bay")]
+layout_mode = 0
+offset_left = 885.0
+offset_right = 1168.0
+offset_bottom = 420.0
+
+[node name="ReadyBand" parent="ReferenceFrame" instance=ExtResource("3_ready")]
+layout_mode = 0
+offset_left = 90.0
+offset_top = 196.0
+offset_right = 1191.0
+offset_bottom = 260.0
