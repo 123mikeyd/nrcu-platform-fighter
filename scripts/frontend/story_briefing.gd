@@ -225,7 +225,7 @@ func present_encounter(data: Dictionary) -> void:
     _rule_stocks.text = str(rules[0]) if rules.size() > 0 else ""
     _rule_behavior.text = str(rules[1]) if rules.size() > 1 else ""
     _flavor.text = str(data.get("flavor", ""))
-    var step = find_child("StepLabel", true, false)
+    var step = get_node("ReferenceFrame/Header/EncounterLabel")
     if step: step.text = str(data.get("encounter_label", ""))
     for child in _presentation.get_children():
         if child.has_method("set_subjects"):

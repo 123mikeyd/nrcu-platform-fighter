@@ -29,6 +29,7 @@ func run():
     check(flow.active_surface() == "story_briefing", "next requires separate briefing Start")
     check(flow.story_selection_id() == "teknium", "hero retained")
     check(flow.story_encounter_id() == "story_02", "second encounter selected")
+    check(flow.story_briefing().get_node("ReferenceFrame/Header/EncounterLabel").text == "ENCOUNTER 02", "second briefing label matches encounter")
     flow.story_briefing().action_button().pressed.emit(); await frames(190)
     arena = current_scene
     check(arena.player_two.character_id == "ice_mage", "second encounter Ice Mage")
