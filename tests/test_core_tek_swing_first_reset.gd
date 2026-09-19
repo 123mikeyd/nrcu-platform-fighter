@@ -1,0 +1,22 @@
+extends "res://tests/test_core_collision_pose_policy.gd"
+func run() -> void:
+    var host = preload("res://scripts/core/collision/collision_host.gd").new()
+    check(host.configure(load("res://data/collision/generated/teknium.tres"),"first-use").is_empty(),"host configured")
+    var view = preload("res://scripts/core/presentation/teknium_presenter.gd").new()
+    root.add_child(view)
+    check(view.animation_player.assigned_animation.is_empty(),"first-use has no previous animation binding")
+    var c := context(); c.entity_id = 1; c.source_melee = true; c.strike_id = "swing"; c.strike_move = "SIDE STRIKE"; c.strike_elapsed = .15
+    host.commit(c,9,Transform3D.IDENTITY,{})
+    var library = view.animation_player.get_animation_library("")
+    view.present_canonical(host.telemetry())
+    check(view.animation_player.assigned_animation == "SwingPunchV1","first presentation is actual derived swing")
+    view.canonical.reset(view)
+    check(view.animation_player.get_animation_library("") == library,"first-use restore retains original resource")
+    check(view.animation_player.assigned_animation != "SwingPunchV1","first-use reset retires private binding")
+    check(not view.animation_player.is_playing(),"reset does not start legacy playback")
+    check(view.state.last_tick == -1,"reset does not advance legacy state clock")
+    view.animation_player.stop()
+    view.reset()
+    view.free()
+    if not failures: print("PASS: canonical first-use derived playback retires safely")
+    quit(1 if failures else 0)

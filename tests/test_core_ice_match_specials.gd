@@ -1,0 +1,46 @@
+extends "res://tests/test_core_recovery_acceptance.gd"
+func run():
+	var m = Match.new(); var a = Actor.new(); var b = Actor.new()
+	root.add_child(a); root.add_child(b)
+	m.register_actor(1,a,-1,"ice_mage"); m.register_actor(2,b,-1,"ice_mage")
+	for aim in [Vector2.ZERO,Vector2.LEFT,Vector2.RIGHT,Vector2.DOWN,Vector2(-1,1)]:
+		m.reset({1:Vector3(0,80,0),2:Vector3(30,80,0)})
+		await step(m,{1:press(aim)})
+		check(m.kit_telemetry(1).special.move == "frost_bolt","all non-up routes cast")
+		check(m.kit_telemetry(1).cast_cooldown == 1.6,"cast budget not decremented on entry")
+		check(m.kit_telemetry(2).cast_cooldown == 0,"duplicate budgets independent")
+		var budget := 1.6
+		for i in 30:
+			await step(m); budget = maxf(0,budget-1.0/60)
+			check(is_equal_approx(m.kit_telemetry(1).cast_cooldown,budget),"source exact cast clock")
+		await step(m,{1:press(aim)})
+		budget = maxf(0,budget-1.0/60)
+		check(not m.fighters[1].buffer.peek("special").is_empty(),"cast blocked by separate budget after action")
+		check(m.kit_telemetry(1).special.move == "","no premature recast or fallback")
+		await step(m,{1:press(Vector2.ZERO,"attack")}); budget = maxf(0,budget-1.0/60)
+		check(m.kit_telemetry(1).basic.clip == "IceStrike","cast budget does not block basic")
+		while budget > 0:
+			await step(m); budget = maxf(0,budget-1.0/60)
+		check(m.kit_telemetry(1).cast_cooldown == 0,"strict source endpoint no expiry epsilon")
+		await step(m,{1:press(aim)})
+		check(m.kit_telemetry(1).cast_cooldown == 1.6,"recast after true zero")
+	for facing in [-1.0,1.0]:
+		m.reset({1:Vector3(0,80,0),2:Vector3(.5,81,0)})
+		m.fighters[1].facing = facing
+		await step(m,{1:press(Vector2(-facing,-1))})
+		check(m.kit_telemetry(1).special.move == "frost_rise","up priority Frost Rise")
+		check(m.kit_telemetry(1).special.facing == facing,"rise preserves facing")
+		check(is_equal_approx(a.velocity.y,13.5) and a.runtime.recovery_spent and a.runtime.air_jumps_left == 0,"shared recovery motion/resource")
+		check(m.fighters[2].percent == 12,"Frost Rise shared source contact")
+		check(m.kit_telemetry(1).cast_cooldown == 0,"rise does not spend cast budget")
+		for i in 21: await step(m)
+		check(m.fighters[1].recovery != null,"recovery before final query")
+		await step(m)
+		check(m.fighters[1].recovery == null,"23 query recovery endpoint")
+		for i in 16: await step(m)
+		check(m.projectile_telemetry().is_empty(),"rise never emits delayed bolt")
+		await step(m,{1:press(Vector2.UP)})
+		check(not m.fighters[1].buffer.peek("special").is_empty(),"spent recovery rejects second rise")
+	a.free(); b.free()
+	if not failures: print("PASS: ice match specials (%d checks)" % checks)
+	quit(1 if failures else 0)

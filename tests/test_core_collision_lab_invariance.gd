@@ -1,0 +1,20 @@
+extends "res://tests/test_core_stock_lab_invariance.gd"
+## Characterization: diagnostics/render sinks must not change native traces.
+func run() -> void:
+    var lab = load("res://scenes/combat_lab.tscn").instantiate()
+    root.add_child(lab); current_scene = lab; lab.set_physics_process(false)
+    lab.select_fighter(1,"turbofit")
+    lab.set_generated_collision_enabled(true)
+    lab.start_stock_match()
+    check(lab.generated_collision_enabled and lab.simulation.collision_telemetry(1).geometry_mode == "generated_hurtboxes","stock route retains generated selection")
+    var baseline: Array = await walk_round(lab)
+    lab.set_collision_shapes_visible(true)
+    check(await walk_round(lab) == baseline,"generated ON overlay exact physics stock result trace vs OFF")
+    lab.set_collision_snapshot_phase("contact_snapshot")
+    check(await walk_round(lab) == baseline,"contact snapshot selection read only")
+    lab.collision_debug.free()
+    for visual in lab.imported_visuals: visual.free()
+    check(await walk_round(lab) == baseline,"overlay and canonical renderers REMOVED exact native trace")
+    lab.free()
+    if not failures: print("PASS: generated collision lab OFF/ON/contact/REMOVED exact three-stock native trace")
+    quit(1 if failures else 0)

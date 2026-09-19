@@ -1,0 +1,24 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/fighter/movement_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+run_speed = 8.0
+ground_acceleration = 60.0
+ground_friction = 70.0
+turn_acceleration = 90.0
+initial_dash_ticks = 6
+initial_dash_acceleration = 90.0
+run_threshold = 0.7
+jump_startup_ticks = 3
+full_jump_speed = 13.0
+short_jump_speed = 8.0
+air_jump_speed = 11.5
+air_jumps = 1
+gravity = 32.0
+air_speed = 7.0
+air_acceleration = 22.0
+fall_speed = 18.0
+fast_fall_speed = 26.0
+landing_ticks = 4

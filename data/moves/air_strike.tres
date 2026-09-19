@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/combat/move_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+move_id = "AIR STRIKE"
+damage = 8.0
+base_knockback = 3.8
+cooldown_seconds = 0.32

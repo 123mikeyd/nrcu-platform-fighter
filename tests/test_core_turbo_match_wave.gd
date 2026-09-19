@@ -1,0 +1,25 @@
+extends "res://tests/test_core_recovery_acceptance.gd"
+func run():
+	var m = Match.new(); var a = Actor.new(); var b = Actor.new()
+	root.add_child(a); root.add_child(b)
+	m.register_actor(1,a,-1,"turbofit"); m.register_actor(2,b)
+	check(m.has_method("projectile_telemetry"), "match exposes authoritative detached projectile telemetry")
+	if not m.has_method("projectile_telemetry"):
+		a.free(); b.free(); quit(1); return
+	m.reset({1:Vector3(0,20,0),2:Vector3(3,20,0)})
+	await step(m,{1:press(Vector2.RIGHT)})
+	check(m.projectile_telemetry().size() == 1, "side special emits real detached wave")
+	check(m.fighters[1].force == null, "wave not Teknium Force")
+	m.set_frozen(1,true)
+	for i in 20: await step(m)
+	check(m.fighters[2].percent == 11, "detached world wave hits despite frozen source")
+	m.reset({1:Vector3(0,20,0),2:Vector3(.5,21,0)})
+	await step(m,{1:press(Vector2.UP)})
+	check(is_equal_approx(a.velocity.y,13.5) and a.runtime.recovery_spent, "Rising Chord uses shared launch and resource")
+	check(m.fighters[2].percent == 12, "Rising Chord source damage")
+	check(m.fighters[1].move_id == "rising_chord", "recovery identity stays kit-specific")
+	for i in 22: await step(m)
+	check(m.fighters[1].recovery == null, "Rising Chord contact ends after 23 ticks")
+	a.free(); b.free()
+	if not failures: print("PASS: turbo match wave and recovery (%d checks)" % checks)
+	quit(1 if failures else 0)
