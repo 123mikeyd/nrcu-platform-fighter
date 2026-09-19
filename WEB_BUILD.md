@@ -1,6 +1,10 @@
 # NRCU browser build
 
-## Current combined prerelease: v0.3-web.3
+## Current tester prerelease: v0.3-web.4
+
+[Current changes and limits](RELEASE_NOTES_v0.3-web.4.md). Both Windows and Web packages use the same source commit. Use each package's `build.json`, `manifest.json` and release SHA256SUMS for exact sizes and hashes. The pinned Pages archive retains member/type/path/hash validation. Physical phones are not certified.
+
+## Historical combined prerelease: v0.3-web.3
 
 See [combined release notes](RELEASE_NOTES_v0.3-web.3.md) for mobile controls, static menus, Doge counter, Tek kit, verification and exact legacy failures. Godot 4.7.2 Compatibility remains single-threaded; this update enables desktop **and mobile** compressed textures. The PCK is 649,474,048 bytes and WASM 39,514,754 bytes; the public payload is approximately 657.50 MiB. Physical phones are not certified.
 

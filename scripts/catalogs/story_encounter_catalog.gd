@@ -26,7 +26,7 @@ const BRIEFING_SCENE := "res://scenes/story_briefing.tscn"
 const ENEMY_SOURCE := "res://scripts/bobo_fighter.gd#MAX_HEALTH"
 const HOST_SOURCE := "res://scripts/main.gd#start_story"
 
-const ENCOUNTER_IDS: Array[String] = ["story_01"]
+const ENCOUNTER_IDS: Array[String] = ["story_01", "story_02"]
 
 static func entries() -> Array:
 	return [
@@ -91,6 +91,10 @@ static func all() -> Array:
 	return entries()
 
 static func by_id(id: String) -> Dictionary:
+	if id == "story_02":
+		var entry: Dictionary = entries()[0].duplicate(true)
+		entry.merge({"id": "story_02", "label": "STORY 02", "encounter_label": "ENCOUNTER 02", "enemy_id": "ice_mage", "enemy_display_name": "ICE MAGE", "enemy_hp": 0, "objective": "Defeat the Normal Ice Mage.", "rules": ["Both fighters start fresh with 3 stocks.", "Watch for freezing Frost Bolts!"], "flavor": "The second and final encounter in this slice.", "enemy_spawn": Vector3(4.0, 1.0, 0.0), "hud_title_template": "STORY 02 — %s VS ICE MAGE", "hud_health_bar_max": 0}, true)
+		return entry
 	for entry in entries():
 		if str(entry["id"]) == id:
 			return entry

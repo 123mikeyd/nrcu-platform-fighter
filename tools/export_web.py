@@ -39,7 +39,7 @@ def main():
         shutil.copy2(ROOT / 'third_party' / name, notices / name)
     # Bind each published artifact to the frozen source commit (no local paths).
     source_commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
-    (output / 'build.json').write_text(json.dumps({'source_commit': source_commit, 'release': 'Mephisto duo browser playtest', 'engine': version}, indent=2) + '\n', encoding='utf-8')
+    (output / 'build.json').write_text(json.dumps({'source_commit': source_commit, 'release': 'v0.3-web.4', 'engine': version}, indent=2) + '\n', encoding='utf-8')
     # No source paths, usernames, private evidence or credentials in the artifact.
     files = []
     for path in sorted(output.rglob('*')):

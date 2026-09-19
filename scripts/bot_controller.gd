@@ -38,7 +38,7 @@ func read(fighter: Node3D, delta: float) -> Dictionary:
             intent.attack = sequence % 2 == 1
             intent.up = target.global_position.y > fighter.global_position.y + 0.8
             intent.down = target.global_position.y < fighter.global_position.y - 0.8
-            intent.shield = fighter.bot_difficulty == "hard" and target.attack_cooldown > 0.3 and sequence % 4 == 0
+            # Universal shielding retired; retain false compatibility intent.
             if fighter.character_id == "teknium" and nearest < 1.65 and nearest > 0.6 and not fighter.magic_locked() and fighter.teknium_magic.cooldown <= 0 and absf(target.global_position.y - fighter.global_position.y) < 0.4:
                 # Reserve the close cast instead of issuing a basic immediately
                 # before it: that basic's cooldown otherwise eats every grab edge.

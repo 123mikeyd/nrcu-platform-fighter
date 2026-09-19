@@ -217,6 +217,24 @@ func _on_action_unfocused() -> void:
     _action_top_rule.hide()
 
 # --- enemy presentation (Doc 07 §13) ----------------------------------------
+func present_encounter(data: Dictionary) -> void:
+    _enemy_name.text = str(data.get("enemy_display_name", "BOBO"))
+    _enemy_health.text = "400 HP" if str(data.get("enemy_id", "bobo")) == "bobo" else "3 STOCKS · NORMAL"
+    _objective.text = str(data.get("objective", ""))
+    var rules: Array = data.get("rules", [])
+    _rule_stocks.text = str(rules[0]) if rules.size() > 0 else ""
+    _rule_behavior.text = str(rules[1]) if rules.size() > 1 else ""
+    _flavor.text = str(data.get("flavor", ""))
+    var step = get_node("ReferenceFrame/Header/EncounterLabel")
+    if step: step.text = str(data.get("encounter_label", ""))
+    for child in _presentation.get_children():
+        if child.has_method("set_subjects"):
+            child.set_subjects([str(data.get("enemy_id", "bobo"))])
+            child.request_render()
+        elif child.name == "BoboNameplate":
+            child.get_node("BoboName").text = _enemy_name.text
+            child.get_node("BoboHealth").text = _enemy_health.text
+
 func _build_enemy() -> void:
     _enemy_name.text = "BOBO"
     _enemy_health.text = "400 HP"

@@ -28,10 +28,10 @@ static func entries() -> Array:
 			"label": "P1 KEYBOARD",
 			"bindings": {
 				"move": "WASD", "jump": "SPACE / W", "basic": "F", "special": "G",
-				"shield": "E", "drop": "S", "none": "—",
+				"drop": "S", "none": "—",
 			},
 			"legacy_mentions": [
-				"WASD move / aim", "Space or W jump", "F basic", "G special", "E shield",
+				"WASD move / aim", "Space or W jump", "F basic", "G special",
 			],
 			"source": SOURCE,
 			"label_source": LABEL_SOURCE,
@@ -42,10 +42,10 @@ static func entries() -> Array:
 			"label": "P2 KEYBOARD",
 			"bindings": {
 				"move": "ARROWS", "jump": "ENTER / UP", "basic": "K", "special": "L",
-				"shield": "O", "drop": "DOWN", "none": "—",
+				"drop": "DOWN", "none": "—",
 			},
 			"legacy_mentions": [
-				"Arrows move / aim", "Enter or Up jump", "K basic", "L special", "O shield",
+				"Arrows move / aim", "Enter or Up jump", "K basic", "L special",
 			],
 			"source": SOURCE,
 			"label_source": LABEL_SOURCE,
@@ -56,10 +56,10 @@ static func entries() -> Array:
 			"label": "CONTROLLER",
 			"bindings": {
 				"move": "STICK / D-PAD", "jump": "A", "basic": "X", "special": "B",
-				"shield": "SHOULDER", "drop": "DOWN", "none": "—",
+				"drop": "DOWN", "none": "—",
 			},
 			"legacy_mentions": [
-				"Stick / D-pad aim", "A jump", "X basic", "B special", "shoulder shield",
+				"Stick / D-pad aim", "A jump", "X basic", "B special",
 			],
 			"source": SOURCE,
 			"label_source": LABEL_SOURCE,

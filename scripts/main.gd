@@ -53,7 +53,7 @@ const HOME_SCENE := "res://scenes/home.tscn"
 # Shipped Story HUD sentence (main.gd _begin_story_encounter), built from the
 # launch config's Story payload: enemy identity + HP come from the snapshot.
 # Bobo (v0.2) is stationary but attempts a slow two-hit claw attack up close.
-const STORY_CONTROLS_TEMPLATE := "YOU / P1: WASD move & aim · Space jump · F basic · G special · E shield\n%s: %d HP · slow two-hit claws · punish his recovery! · Esc: back to main"
+const STORY_CONTROLS_TEMPLATE := "YOU / P1: WASD move & aim · Space jump · F basic · G special\n%s: %d HP · slow two-hit claws · punish his recovery! · Esc: back to main"
 
 # The immutable launch snapshot handed over by the MatchFlow router (Doc 02 §3).
 # Set before tree entry; null for every direct load.
@@ -414,7 +414,7 @@ func start_match_from_config(cfg) -> bool:
             "difficulty": str(slot.get("difficulty", "normal")),
             "device": StateScript.input_source_to_legacy_device(slot.get("input_source", {})),
         })
-    var started: bool = start_match(slots, int(cfg.mode()) == 1, cfg.has_story(), str(cfg.stage_id()))
+    var started: bool = start_match(slots, int(cfg.mode()) == 1, cfg.has_story() and str(cfg.story_payload().get("enemy_id", "")) == "bobo", str(cfg.stage_id()))
     if started and cfg.has_story():
         _begin_story_encounter(cfg.story_payload())
     return started
@@ -432,6 +432,9 @@ func _begin_story_encounter(payload: Dictionary) -> void:
     var enemy_name := str(payload.get("enemy_display_name", "BOBO")).capitalize()
     var enemy_hp := int(payload.get("enemy_hp", 400))
     hud_controls.text = STORY_CONTROLS_TEMPLATE % [enemy_name, enemy_hp]
+    if str(payload.get("enemy_id", "")) == "ice_mage":
+        hud_controls.text = "YOU / P1: WASD move & aim · Space jump · F basic · G special\nIce Mage: Normal bot · three stocks · freezing Frost Bolts · Esc: pause"
+        bobo_health_bar.hide()
     player_one.reset_fighter(Vector3(payload.get("player_spawn", p1_spawn)), true)
     # Central floor lane keeps this large opponent clear of side platforms.
     player_two.reset_fighter(Vector3(payload.get("enemy_spawn", Vector3(0.6, 1.0, 0.0))), true)
@@ -632,7 +635,7 @@ func _build_hud() -> void:
     # setup screen; a production arena (launch_config) has none and returns to
     # Main (WP-0 steps 7-8 removed the in-arena setup screens).
     var escape_hint := "match setup" if launch_config == null else "main menu"
-    controls.text = "P1: WASD / Space jump / F basic / G special / E shield    |    P2: Arrows / Enter jump / K basic / L special / O shield\nPad: stick aim / A jump / X basic / B special / shoulder shield    ·    Down: drop through    ·    Esc: %s" % escape_hint
+    controls.text = "P1: WASD / Space jump / F basic / G special    |    P2: Arrows / Enter jump / K basic / L special\nPad: stick aim / A jump / X basic / B special    ·    Down: drop through    ·    Esc: %s" % escape_hint
     controls.name = "MatchControls"
     hud_controls = controls
     freeplay_controls = controls.text
