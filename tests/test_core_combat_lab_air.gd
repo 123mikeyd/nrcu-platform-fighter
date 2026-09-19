@@ -1,0 +1,31 @@
+extends "res://tests/test_core_combat_lab.gd"
+# Existing combat policies characterized through physical lab input (no new policy).
+func run() -> void:
+    var lab = load("res://scenes/combat_lab.tscn").instantiate()
+    root.add_child(lab)
+    lab.set_physics_process(false)
+    for i in range(40): await tick(lab)
+    key(KEY_S, true)
+    key(KEY_F, true)
+    key(KEY_G, true)
+    await tick(lab)
+    for code in [KEY_S, KEY_F, KEY_G]: key(code, false)
+    for i in range(8): await tick(lab)
+    check(lab.simulation.fighters[2].percent == 8 and lab.simulation.fighters[1].move_id == "LOW SWEEP", "source-backed ground down basic selects LOW SWEEP and hits nearby target")
+    check(lab.simulation.fighters[1].buffer.debug_pending().is_empty(), "accepted basic consumed; unsupported down special expires instead of leaking")
+    # The now-supported sweep launches P2; restore the original airborne fixture
+    # so its later 8 damage assertion cannot pass on stale sweep damage.
+    lab.reset_lab()
+    for i in range(40): await tick(lab)
+    check(lab.simulation.fighters[2].percent == 0, "airborne fixture starts without prior sweep damage")
+    key(KEY_SPACE, true)
+    key(KEY_ENTER, true)
+    for i in range(12): await tick(lab)
+    key(KEY_F, true)
+    await tick(lab)
+    check(lab.simulation.fighters[1].move_id == "AIR STRIKE", "physical airborne F selects AIR STRIKE")
+    check(lab.simulation.fighters[2].percent == 8.0, "physical AIR STRIKE damages nearby airborne target")
+    for code in [KEY_SPACE, KEY_ENTER, KEY_F]: key(code, false)
+    lab.free()
+    if failures == 0: print("PASS: combat lab airborne strike and unsupported request expiry")
+    quit(1 if failures else 0)

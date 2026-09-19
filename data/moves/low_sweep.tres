@@ -1,0 +1,11 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/combat/move_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+move_id = "LOW SWEEP"
+damage = 8.0
+base_knockback = 3.8
+cooldown_seconds = 0.32
+query_axis = Vector3(1, -0.25, 0)

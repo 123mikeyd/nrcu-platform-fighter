@@ -1,0 +1,15 @@
+extends "res://tests/test_core_force_acceptance.gd"
+func run():
+	var m = Match.new(); var a = Actor.new(); root.add_child(a); m.register_actor(1, a); m.reset({1: Vector3(0, 50, 0)})
+	await step(m, {1: press()})
+	for i in 59: await step(m)
+	await step(m, {1: press(Vector2.ZERO, "jump")})
+	check(a.runtime.air_jumps_left == 0 and m.fighters[1].buffer.peek("jump").is_empty(), "magic end unlocks jump on first following tick")
+	while m.tick < 74: await step(m)
+	await step(m, {1: press(Vector2.LEFT)})
+	check(m.fighters[1].force == null and not m.fighters[1].buffer.peek("special").is_empty(), "cooldown blocks t74 without consuming")
+	await step(m)
+	check(m.fighters[1].force != null and m.fighters[1].facing == -1, "cooldown accepts at t75")
+	a.free()
+	if not failures: print("PASS: force end and cooldown endpoints")
+	quit(1 if failures else 0)

@@ -6,6 +6,24 @@ import unittest
 MODULE = Path(__file__).with_name('run_all_tests.py')
 
 class RunnerTests(unittest.TestCase):
+    def test_cold_core_evidence_and_escape_rejection(self):
+        import tempfile
+        spec = importlib.util.spec_from_file_location('runner', MODULE)
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        self.assertTrue(hasattr(runner, 'prepare_evidence'), 'cold evidence preparation required')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'tests').mkdir()
+            fixture = root / 'tests/test_fixture.gd'
+            fixture.write_text('const OUT = "res://.verification/core/swing/"')
+            runner.prepare_evidence(root)
+            self.assertTrue((root / '.verification/core/swing').is_dir())
+            self.assertTrue((root / '.verification/.gdignore').is_file())
+            fixture.write_text('const OUT = "res://.verification/../../escape/"')
+            with self.assertRaises(ValueError):
+                runner.prepare_evidence(root)
+
     def test_pass_requires_clean_full_output(self):
         self.assertTrue(MODULE.exists(), 'portable runner must exist')
         spec = importlib.util.spec_from_file_location('runner', MODULE)
@@ -55,7 +73,7 @@ class RunnerTests(unittest.TestCase):
         process = subprocess.run([sys.executable, str(MODULE), '--engine', sys.executable, '--list'], capture_output=True, text=True)
         self.assertEqual(process.returncode, 0)
         self.assertIn('test_bobo_status', process.stdout)
-        expected = sorted(p.stem for p in (MODULE.parent.parent / 'tests').glob('test_*.gd'))
+        expected = sorted(path.stem for path in (MODULE.parent.parent / 'tests').glob('test_*.gd'))
         self.assertEqual(json.loads(process.stdout), expected)
         self.assertTrue(expected, 'test discovery must not be empty')
         process = subprocess.run([sys.executable, str(MODULE), '--engine', sys.executable, '--output', '..', '--list'], capture_output=True, text=True)

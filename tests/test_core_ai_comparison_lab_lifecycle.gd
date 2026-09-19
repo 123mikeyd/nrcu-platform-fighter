@@ -1,0 +1,27 @@
+extends "res://tests/test_core_ai_comparison_lab_ticks.gd"
+func run():
+	var lab = load("res://scenes/combat_lab.tscn").instantiate(); root.add_child(lab); lab.set_physics_process(false)
+	lab.set_p2_repo_ai(true)
+	check(lab._roster_help_text().contains("P2 Repo AI") and not lab._roster_help_text().contains("arrows move"),"AI help replaces inactive P2 keyboard directions")
+	lab.select_fighter(1,"turbofit")
+	lab.fighter_buttons[1].pressed.emit()
+	check(lab.selected_fighters[1] == "teknium", "generated roster button cycles supported kits instead of trapped Ice refusal")
+	lab.start_stock_match()
+	check(lab.repo_inputs.enabled and lab.generated_collision_enabled,"stocks preserve comparison ownership and geometry")
+	var bindings = lab.sources[0].bindings.duplicate(true)
+	for i in 3:
+		lab.actors[1].position = Vector3(0,-9,0)
+		await physics_frame; lab._physics_process(1.0/60)
+	check(not lab.simulation.result.is_empty(),"real stocks reach results")
+	var tick = lab.simulation.tick; var sequence = lab.repo_inputs.ai.sequence
+	for i in 5: await physics_frame; lab._physics_process(1.0/60)
+	check(lab.simulation.tick == tick and lab.repo_inputs.ai.sequence == sequence,"results freeze AI")
+	lab.rematch_lab()
+	check(lab.repo_inputs.ai.sequence == 0 and lab.simulation.result.is_empty(),"rematch clears AI state and result")
+	check(lab.sources[0].bindings == bindings and lab.simulation.fighters[1].stocks == 3,"rematch preserves human bindings restores stocks")
+	lab.set_ai_difficulty("easy")
+	check(lab.repo_inputs.ai.difficulty == "easy" and lab.repo_inputs.ai.sequence == 0,"difficulty reconfigures actual source and resets")
+	check(lab.simulation.fighter_interaction_mode == "grounded_jostle", "stock rematch keeps interaction")
+	lab.free()
+	if not failures: print("PASS: AI lab roster help and stock lifecycle")
+	quit(1 if failures else 0)
