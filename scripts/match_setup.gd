@@ -139,7 +139,7 @@ func _ready() -> void:
         kind.item_selected.connect(func(_index): _refresh())
     mode.item_selected.connect(func(_index): _refresh())
     var controls := Label.new()
-    controls.text = "P1: WASD · Space jump · F basic · G special · E shield    |    How to Play: both players & moves"
+    controls.text = "P1: WASD · Space jump · F basic · G special    |    How to Play: both players & moves"
     controls.add_theme_font_size_override("font_size", 16)
     column.add_child(controls)
     error_label = Label.new()

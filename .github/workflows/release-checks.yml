@@ -1,0 +1,40 @@
+name: Release current-contract checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  current-contract:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          lfs: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Download matching official engine
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download 4.7.2-stable --repo godotengine/godot --pattern Godot_v4.7.2-stable_win64.exe.zip --dir "$env:RUNNER_TEMP/engine"
+          if ((Get-FileHash "$env:RUNNER_TEMP/engine/Godot_v4.7.2-stable_win64.exe.zip" -Algorithm SHA256).Hash.ToLower() -ne "731980f9608d61333e5baf54a2ef17210acc7a538446c0cb9969f002aca1e953") { throw "Engine hash mismatch" }
+          Expand-Archive "$env:RUNNER_TEMP/engine/Godot_v4.7.2-stable_win64.exe.zip" "$env:RUNNER_TEMP/engine/bin"
+          "GODOT=$env:RUNNER_TEMP/engine/bin/Godot_v4.7.2-stable_win64_console.exe" >> $env:GITHUB_ENV
+      - name: Import project
+        shell: pwsh
+        run: |
+          & $env:GODOT --headless --path . --editor --import
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify current release contracts
+        run: python tools/test_release_contract.py --godot "${{ env.GODOT }}"
+      - name: Preserve bounded evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: current-contract-evidence
+          path: .verification/release

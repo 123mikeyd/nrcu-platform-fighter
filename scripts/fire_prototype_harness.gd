@@ -36,4 +36,4 @@ func start(slots: Array, _teams: bool) -> void:
     arena.player_two.enable_fire_prototype()
     arena.hud_labels[1].modulate = arena.player_two.body_color
     arena.hud_title.text = "FIRE MAGE — PROTOTYPE OPPONENT TEST"
-    arena.hud_controls.text = "P1: WASD move/aim · Space jump · F basic · G special · E shield · Esc setup\nFirebolt: 6 impact + up to 4 burn. Non-stacking refresh only. Provisional balance."
+    arena.hud_controls.text = "P1: WASD move/aim · Space jump · F basic · G special · Esc setup\nFirebolt: 6 impact + up to 4 burn. Non-stacking refresh only. Provisional balance."

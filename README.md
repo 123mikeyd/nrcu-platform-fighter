@@ -1,49 +1,44 @@
-# NRCU Platform Fighter — v0.3
+# NRCU Platform Fighter — v0.3-web.4
 
-**Unfinished alpha playtest — this is not a finished game.** New frontend by [Arts Bro](https://github.com/realartsbro), integrated with the current gameplay snapshot. See [v0.3 release notes](RELEASE_NOTES_v0.3.md) for changes, known issues, and the checks actually completed.
+**Unfinished alpha tester build — not a finished game.** Public frontend by [Arts Bro](https://github.com/realartsbro), with updated gameplay. [Release notes and known issues](RELEASE_NOTES_v0.3-web.4.md).
 
 ## Play
 
-[![Play Now — In Your Browser](https://img.shields.io/badge/PLAY_NOW-In_Your_Browser-267B52?style=for-the-badge)](https://123mikeyd.github.io/nrcu-platform-fighter/)
+**[Play in your browser](https://123mikeyd.github.io/nrcu-platform-fighter/)** — click Play Now and keep the tab open while it loads. This is a large full-game download; use a good connection. Physical-phone memory/GPU viability is not certified.
 
-**[Play in your browser](https://123mikeyd.github.io/nrcu-platform-fighter/)** — no installer or manual ZIP download. Click Play Now on the launch page and keep the tab open while it loads. The full game's first-load data is approximately **657.50 MiB**, so use a good connection; phone memory/GPU viability is not certified. The combined browser update adds touch controls, static menus, Doge's counter and Tek's revised kit. Chrome desktop touch emulation was tested, not physical phones. See [combined browser release notes and known failures](RELEASE_NOTES_v0.3-web.3.md).
+**[Download the Windows tester](https://github.com/123mikeyd/nrcu-platform-fighter/releases/download/v0.3-web.4/NRCU-v0.3-web.4-Windows.zip)** · [Release and checksums](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3-web.4)
 
-Earlier public HTTPS builds were checked through title/home, Story selection, movement, attack damage and pause. The combined update's local verification and remaining failures are recorded in its release notes; hosted checks are a separate deployment gate. This is not a fix for every inherited gameplay issue. See [Web build details](WEB_BUILD.md) and the [Web release](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3-web.3).
+Extract the entire ZIP, open `NRCU-Alpha`, and run `NRCU.exe` beside `NRCU.pck`. Choose **PLAY** for local matches or **STORY MODE** for the Bobo → Normal Ice Mage slice.
 
-**Prefer native Windows?** [Download v0.3 for Windows](https://github.com/123mikeyd/nrcu-platform-fighter/releases/download/v0.3/NRCU-v0.3-Windows.zip) · [Windows release notes and checksum](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.3)
+P1: **WASD** move/aim, **Space** jump, **F** basic, **G** special. **Escape** pauses. Universal Shield is retired. Teknium stores a neutral charge on a **fresh direction**; Up/Jump also jumps. Release then press Special to resume; normal release fires. See [controls](CONTROLS.md) and in-game How to Play.
 
-For Windows, extract the complete ZIP, open `NRCU-Alpha`, and launch `NRCU.exe` beside `NRCU.pck`. In either version, choose **PLAY** for a local match or **STORY MODE** for Bobo. P1: WASD move/aim, Space jump, F basic, G special, E shield. Escape pauses. See [TESTING.md](TESTING.md) for bug-report instructions.
+## What's new
 
-The freshly extracted Windows build was exercised with native keyboard/mouse inputs, including Story combat and pause. The final focused selection passed **35/35**; the broader inherited selection remains **142 passed / 48 failed**. This is a playable development snapshot, not all-green certification. Physical controllers and exhaustive matchups are not verified.
+- No universal Shield; character defensive specials remain.
+- Teknium's fresh-direction charge storage and updated help.
+- Shared Return to Sender revival platforms after stock loss.
+- Two-stage Story progression, current-encounter retries and final Restart Run.
+- TurboFit's MoshIdleV004 in passive grounded gameplay.
+- Preserved static public menus, browser touch controls/cancellation and rotate pause ownership.
 
-## Open the source
+Goo reduced rebound and GGB puddle immunity are **not implemented**. Mephisto size is unchanged; presentation/protection rules, minor HUD issues and balance remain under review. A misdirected Mephisto Up-special can self-KO.
 
-Install **Godot 4.7.2**, Git, and Git LFS. Clone this public repository (no collaborator invitation is required to read or download it), run `git lfs pull` inside the clone, then import `project.godot` in Godot. Let the initial import finish, then press F5 to launch the project home screen.
+## Testing boundaries
 
-The project uses the Compatibility renderer. The `.godot` cache regenerates locally; it is deliberately not versioned. Keep the source `.import` settings, `.uid` sidecars, and `tools/import_*.gd` hooks: they preserve the intended animation sampling. Blender and the author's personal source library are not required to play or import the supplied assets.
+Current-contract tests cover controls, charge edges, defensive specials/Mosh idle, revival and two-stage Story. Story fixtures include forced outcomes, distinct from natural combat playtests. The historical full-suite baseline is **139 passed / 63 failed / 8 timed out**; this update does not claim an all-green legacy suite. Physical controllers/phones, long-session soak and exhaustive matchups are not certified. Desktop touch emulation is not physical-phone certification.
 
-Large models, textures, video, and binary test fixtures use Git LFS. Prefer cloning to GitHub's source ZIP so LFS retrieval is explicit. Keep quota usage in mind when updating binaries; do not enable paid overages without agreement.
+Report the exact tag, fighter/opponent/stage, inputs, expected versus actual behavior and a screenshot or clip. [Tester guidance](TESTING.md).
 
-## Test and export
+## Open project / build
 
-Use Python 3.11+ and the matching Godot console executable. The portable test runner lives in `tools/run_all_tests.py`; run it with `--help` for engine and output options. Generated logs and evidence belong in ignored `.verification/`, not in commits. Tests include independent reference fixtures rather than depending on the author's machine.
+Install **Godot 4.7.2**, Git and Git LFS. Clone this repository, run `git lfs pull`, import `project.godot`, let import finish, then F5. Compatibility renderer; no Blender installation is needed for the supplied assets. Preserve `.import`, `.uid` and import hooks. Generated `.godot`, builds and `.verification` are not versioned.
 
-Install the matching Godot **4.7.2 export templates** and use the **Windows Playtest** preset. Exports belong in ignored `builds/`. Exported files and a source-project test run are not proof of a working release: verify a fresh extraction of the final player ZIP before publishing it.
+Run `python tools/test_release_contract.py --godot PATH_TO_GODOT` for the bounded current-contract checks. The broader portable legacy runner is `tools/run_all_tests.py`; inspect its help and keep evidence in ignored `.verification/`. Use matching official 4.7.2 export templates and **Windows Playtest** / **Web Browser** presets. [Web build details](WEB_BUILD.md).
 
-## Current scope
+Large models, textures, video and binary fixtures use Git LFS. Prefer cloning over GitHub's source ZIP so retrieval is explicit. Do not enable paid overages without agreement.
 
-- Freeplay with local keyboard/gamepad slots and bots; no online multiplayer is claimed.
-- Story Mode contains a stationary 400-HP Bobo encounter. Bobo now attempts a slow two-part thrust/slash when an opponent is nearby.
-- New title, home, character/stage selection, glove cursor, and shared pause/quit/back navigation from [PR #1](https://github.com/123mikeyd/nrcu-platform-fighter/pull/1). Unfinished VS presentation and VFX Lab are excluded.
-- Integrated tumble/contact fixes, Witcheer's native DefaultSwim and the paired-Mephisto starter. Character kits, dark stage readability and other polish remain in progress; later Mephisto experiments are not part of this snapshot.
-- Shared agent workflow: [Godot development and testing skill](skills/nous-game-dev-testing/SKILL.md).
+## Collaborate and sharing boundaries
 
-## Collaborate
+Use Issues and separate branches/PRs. Avoid simultaneous edits to binary assets or the shared fighter controller. This sanitized collaboration snapshot and the author's working project do not automatically synchronize. [Shared testing workflow](skills/nous-game-dev-testing/SKILL.md).
 
-Use Issues for reproducible bugs and separate design suggestions. Include the exact build tag or commit. Prefer a branch and pull request for changes so we can review them together; avoid simultaneous edits to the same binary asset or shared fighter controller. Never overwrite someone else's uncommitted work.
-
-This repository is a sanitized collaboration snapshot of the current local game. Changes made here must be deliberately reconciled with the author's local working project; do not assume the two folders synchronize automatically.
-
-## Sharing boundaries
-
-No blanket open-source or asset redistribution license is granted here. Public visibility is not permission to reuse the assets. Ask before reusing art, characters, music, or other assets in a different game or redistributing them separately. Private acquisition notes, local source-library paths, Blender masters, and historical review outputs are intentionally excluded. Preserve third-party notices and review rights before broader distribution.
+No blanket open-source or asset redistribution license is granted. Public visibility is not permission to reuse art, characters, music or other assets separately. Ask first and preserve all bundled Godot/font notices. Private source libraries, Blender masters and historical evidence are excluded.

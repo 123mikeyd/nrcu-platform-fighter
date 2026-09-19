@@ -319,6 +319,8 @@ func _stage_slots() -> Array:
 func _current_encounter_id() -> String:
     # One encounter today; the catalog owns the list, so a second entry only
     # needs to appear there to be launchable later.
+    if flow != null and EncounterCatalog.has(str(flow.story_encounter_id)):
+        return str(flow.story_encounter_id)
     var ids: Array = EncounterCatalog.ids()
     return str(ids[0]) if not ids.is_empty() else ""
 
@@ -766,11 +768,12 @@ func play_entry(surface_name: String, _context: Dictionary = {}) -> void:
                 return
             _show_surface(SURFACE_STORY_BRIEFING)
             _briefing.open(story_selection_id())
+            _briefing.present_encounter(EncounterCatalog.by_id(_current_encounter_id()))
         SURFACE_STORY_RESULT:
             if _story_result == null:
                 return
             _show_surface(SURFACE_STORY_RESULT)
-            _story_result.present(_story_result_won, story_selection_id())
+            _story_result.present(_story_result_won, story_selection_id(), _current_encounter_id())
         SURFACE_POSTMATCH:
             if _post_match == null:
                 return
@@ -939,7 +942,16 @@ func _on_story_start(_fighter_id: String = "") -> void:
 func _on_story_result_replay(_fighter_id: String = "") -> void:
     if _launch_state != LAUNCH_IDLE or _mode != MODE_STORY:
         return
-    if _active_surface != SURFACE_STORY_RESULT or not _begin_story_launch():
+    if _active_surface != SURFACE_STORY_RESULT:
+        return
+    if _story_result_won:
+        var next_id := "story_02" if _current_encounter_id() == "story_01" else "story_01"
+        var hero := story_selection_id()
+        flow = StateScript.fresh_story(next_id, hero)
+        _apply_encounter_slots()
+        push_surface(SURFACE_STORY_BRIEFING, "story_result")
+        return
+    if not _begin_story_launch():
         return
     if _story_result != null:
         _story_result.play_exit()

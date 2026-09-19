@@ -95,6 +95,11 @@ func _on_semantic_cancel() -> void:
 	if is_visible_in_tree() and not _exiting:
 		_on_menu_pressed()
 
+func _unhandled_key_input(event: InputEvent) -> void:
+	if is_visible_in_tree() and not _exiting and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R:
+		get_viewport().set_input_as_handled()
+		_on_replay_pressed()
+
 func _on_replay_pressed() -> void:
 	if not _exiting:
 		replay_requested.emit(_fighter_id)
@@ -131,15 +136,19 @@ func _on_focus_exited(button: Button) -> void:
 	elif button == _menu:
 		_menu_rule.hide()
 
-func present(won: bool, fighter_id: String) -> void:
+func present(won: bool, fighter_id: String, encounter_id: String = "story_01") -> void:
 	_won = won
 	_fighter_id = fighter_id
 	_exiting = false
 	visible = true
-	_verdict.text = "YOU'RE PRETTY COOL" if won else "TRY AGAIN"
+	_verdict.text = "your pretty cool" if won else "TRY AGAIN"
 	_detail.text = "BOBO DEFEATED" if won else "Out of stocks. Bobo is still standing."
 	_fighter_label.text = Roster.display_name(fighter_id).to_upper() if fighter_id != "" else "YOUR FIGHTER"
-	_replay.text = "REPLAY" if won else "RETRY"
+	_replay.text = ("NEXT ENCOUNTER" if encounter_id == "story_01" else "RESTART RUN") if won else "RETRY"
+	if won:
+		_detail.text = "STAGE COMPLETE — BOBO DEFEATED" if encounter_id == "story_01" else "TWO-ENCOUNTER SLICE COMPLETE"
+	elif encounter_id == "story_02":
+		_detail.text = "Out of stocks. Ice Mage wins. Retry with three fresh stocks."
 	_back.text = "BACK"
 	_refresh_render()
 	_refresh_focus_graph()

@@ -45,9 +45,9 @@ const TAB_NODES: Dictionary = {"BASICS": "SectionBasics", "FIGHTERS": "SectionFi
 # Displayed bindings per input profile (Doc 07 §4). Source of truth: the
 # legacy demo_style CONTROLS string. Only these labels swap.
 const BINDINGS: Dictionary = {
-    "P1_KEYBOARD": {"move": "WASD", "jump": "SPACE / W", "basic": "F", "special": "G", "shield": "E", "drop": "S", "none": "—"},
-    "P2_KEYBOARD": {"move": "ARROWS", "jump": "ENTER / UP", "basic": "K", "special": "L", "shield": "O", "drop": "DOWN", "none": "—"},
-    "CONTROLLER": {"move": "STICK / D-PAD", "jump": "A", "basic": "X", "special": "B", "shield": "SHOULDER", "drop": "DOWN", "none": "—"},
+    "P1_KEYBOARD": {"move": "WASD", "jump": "SPACE / W", "basic": "F", "special": "G", "drop": "S", "none": "—"},
+    "P2_KEYBOARD": {"move": "ARROWS", "jump": "ENTER / UP", "basic": "K", "special": "L", "drop": "DOWN", "none": "—"},
+    "CONTROLLER": {"move": "STICK / D-PAD", "jump": "A", "basic": "X", "special": "B", "drop": "DOWN", "none": "—"},
 }
 
 # BASICS subsections (Doc 07 §4). Each row: action name + input key + one
@@ -62,7 +62,7 @@ const BASICS_GROUPS: Array = [
         {"id": "special", "name": "SPECIAL", "input": "special", "note": "Character-specific special move."},
     ]},
     {"title": "DEFENSE", "column": 1, "rows": [
-        {"id": "shield", "name": "SHIELD", "input": "shield", "note": "Block incoming attacks."},
+        {"id": "defense", "name": "DEFENSIVE SPECIALS", "input": "special", "note": "No universal shield. Defensive windows depend on your fighter."},
     ]},
     {"title": "PLATFORMS", "column": 1, "rows": [
         {"id": "upper_platforms", "name": "UPPER PLATFORMS", "input": "jump", "note": "Pass-through platforms catch you when you jump up through them."},
@@ -76,7 +76,8 @@ const BASICS_GROUPS: Array = [
 # the two universal moves are shown instead of invented specifics.
 const MOVE_LISTS: Dictionary = {
     "teknium": [
-        {"name": "CHARGE SHOT", "input": "HOLD / RELEASE SPECIAL; JUMP / SHIELD STORES"},
+        {"name": "CHARGE SHOT", "input": "HOLD / RELEASE SPECIAL; FRESH DIRECTION STORES"},
+        {"name": "RESUME CHARGE", "input": "RELEASE, THEN PRESS SPECIAL; UP / JUMP STORES + JUMPS"},
         {"name": "SHADOW KICK", "input": "LEFT / RIGHT + SPECIAL"},
         {"name": "AIMED RECOVERY", "input": "UP + SPECIAL; AIM DURING CHARGE"},
         {"name": "HOLY GRENADE", "input": "DOWN + SPECIAL; PRESS AGAIN TO DETONATE"},
@@ -84,7 +85,7 @@ const MOVE_LISTS: Dictionary = {
     "doge_man": [
         {"name": "TYSON COUNTER", "input": "DOWN + SPECIAL; COUNTER AN INCOMING HIT"},
         {"name": "FLYING TACKLE", "input": "LEFT / RIGHT + SPECIAL"},
-        {"name": "SUPERMAN PUNCH", "input": "JUMP, THEN BASIC"},
+        {"name": "SUPERMAN PUNCH", "input": "AIRBORNE LEFT / RIGHT + BASIC"},
     ],
     "ggb": [
         {"name": "STICKY GOO", "input": "LEFT / RIGHT + SPECIAL"},
@@ -94,6 +95,12 @@ const MOVE_LISTS: Dictionary = {
     "turbofit": [
         {"name": "BASIC STRIKES", "input": "BASIC", "note": "Changes with direction."},
         {"name": "SOUND ATTACKS", "input": "SPECIAL"},
+    ],
+    "mephisto": [
+        {"name": "GIRL BARRIER / EMBER", "input": "NEUTRAL / SIDE + SPECIAL"},
+        {"name": "DEMON SMOKE / CHAIN", "input": "NEUTRAL / SIDE + SPECIAL"},
+        {"name": "PAIRED TELEPORT", "input": "UP + SPECIAL"},
+        {"name": "SWITCH LEAD", "input": "GROUNDED DOWN + SPECIAL"},
     ],
     "ice_mage": [
         {"name": "PALM", "input": "BASIC"},

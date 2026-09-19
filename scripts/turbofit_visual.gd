@@ -2,6 +2,8 @@ extends Node3D
 
 # Presentation only. Fighter owns translation, collision, hit timing, and damage.
 const MODEL = preload("res://assets/turbofit/turbofit_animations.glb")
+# Approved full v004 body + travel baked into native bones only. No actor motion.
+const MOSH_IDLE = preload("res://assets/turbofit/mosh_idle_v004.tres")
 
 var model: Node3D
 var animation_player: AnimationPlayer
@@ -100,6 +102,7 @@ func _ready() -> void:
             library.add_animation(name, animation)
         animation_player.remove_animation_library(library_name)
         animation_player.add_animation_library(library_name, library)
+    animation_player.get_animation_library("").add_animation("MoshIdleV004", MOSH_IDLE.get_animation("MoshIdleV004").duplicate(true))
     for mesh in model.find_children("*", "MeshInstance3D", true, false):
         for surface in mesh.mesh.get_surface_count():
             var source = mesh.get_active_material(surface)
@@ -194,6 +197,15 @@ func sync_pose(grounded: bool, motion: Vector3, interrupted: bool, shielding: bo
                 landing_remaining = animation_player.get_animation("Landing").length
                 falling = false
             clip = "Landing" if landing_remaining > 0 else ("Run" if absf(motion.x) > 4 else ("Walk" if absf(motion.x) > 0.15 else "Idle"))
+    # Idle is intentionally not replaced in the native library: Power Chord's
+    # approved recovery and setup retain that pose. Only passive play uses v004.
+    if clip == "Idle" and grounded and motion.length() <= 0.15 and not interrupted and not shielding and active_move.is_empty():
+        var fighter = get_parent().get_parent()
+        var passive_allowed := true
+        if fighter != null and fighter.has_method("is_grounded"):
+            passive_allowed = fighter.controls_enabled and fighter.stocks > 0 and fighter.attack_cooldown <= 0 and fighter.recovery_active <= 0 and not fighter.charging and not fighter.magic_locked() and fighter.freeze_remaining <= 0
+        if passive_allowed:
+            clip = "MoshIdleV004"
     var target_duration: float = {
         "MeleeHorizontal": 0.8,
         "MeleeBackhand": 0.8,
@@ -202,7 +214,7 @@ func sync_pose(grounded: bool, motion: Vector3, interrupted: bool, shielding: bo
     animation_player.speed_scale = animation_player.get_animation(clip).length / target_duration
     if clip in ["Run", "Walk"]:
         animation_player.speed_scale = clampf(absf(motion.x) / (7.5 if clip == "Run" else 2.5), 0.55, 1.6)
-    if clip == current_clip:
+    if clip == current_clip and (clip != "MoshIdleV004" or (animation_player.assigned_animation == clip and animation_player.is_playing())):
         return
     if not animation_player.has_animation(clip):
         push_error("TurboFit animation missing: " + clip)

@@ -6,6 +6,17 @@ const ProjectileScript = preload("res://scripts/projectile.gd")
 const GooProjectileScript = preload("res://scripts/goo_projectile.gd")
 const BotScript = preload("res://scripts/bot_controller.gd")
 var prototype_fire := false
+var revival
+
+func is_revival_protected() -> bool:
+    return revival != null and revival.protected()
+
+func _begin_revival() -> void:
+    if revival == null:
+        revival = preload("res://scripts/return_to_sender.gd").new()
+        revival.name = "ReturnToSender"
+        add_child(revival)
+    revival.begin(self)
 var burn
 var reaction_recovery
 var humanoid_air_basic
@@ -23,7 +34,7 @@ func receive_hit_from(amount: float, direction: Vector3, push: float, source: No
 
 # Contact routing affects presentation only; the native damage sink remains authoritative.
 func receive_contact_hit(amount: float, direction: Vector3, push: float, point: Vector3, region := "") -> void:
-    var accepted = controls_enabled and stocks > 0 and not shielding and not is_knockdown_protected() and amount > 0
+    var accepted = controls_enabled and stocks > 0 and not shielding and not is_knockdown_protected() and not is_revival_protected() and amount > 0
     var role = region if region in ["head", "body"] else (fitted_reaction.classify(point) if fitted_reaction else "")
     receive_hit(amount, direction, push)
     if accepted and not counter_blocked_hit and fitted_reaction and controls_enabled and stocks > 0:
@@ -36,11 +47,12 @@ func begin_uppercut_reaction() -> void:
     if reaction_recovery: reaction_recovery.begin_uppercut_reaction()
 
 func apply_status_damage(amount: float) -> void:
-    if is_knockdown_protected(): return
+    if is_revival_protected() or is_knockdown_protected(): return
     damage_percent = CombatMathScript.apply_damage(damage_percent, amount)
     state_changed.emit()
 
 func apply_burn(caster: Node3D) -> bool:
+    if is_revival_protected(): return false
     if not controls_enabled or stocks <= 0 or shielding or not is_instance_valid(caster) or not caster.controls_enabled or not caster.can_hit(self): return false
     if burn == null:
         burn = preload("res://scripts/burn_status.gd").new()
@@ -264,6 +276,7 @@ var ice_cast_cooldown := 0.0
 var _frozen_shell: MeshInstance3D
 
 func apply_freeze(caster: Node3D) -> bool:
+    if is_revival_protected(): return false
     if not controls_enabled or shielding or freeze_remaining > 0 or freeze_immunity > 0 or not is_instance_valid(caster) or not caster.can_hit(self):
         return false
     if _visual_root:
@@ -498,6 +511,7 @@ var controls_enabled := true:
             if not value: _cancel_witcheer()
             else: _latch_witcheer_inputs()
         if not value:
+            if revival: revival.clear()
             clear_counter_hitstop()
             if teknium_specials: teknium_specials.clear()
             if tumble: tumble.clear()
@@ -523,6 +537,7 @@ var _jump_was_down := false
 var _attack_was_down := false
 var _special_was_down := false
 var _down_was_down := false
+var _charge_store_held: Dictionary = {}
 var _bot = BotScript.new()
 var _ignored_platforms: Array = []
 var _drop_platform: StaticBody3D
@@ -533,6 +548,7 @@ var _floor_contacts_valid := true
 
 # Native capsule tops can be floors; gameplay support must be terrain.
 func is_grounded() -> bool:
+    if revival and revival.phase == "waiting": return true
     if not _floor_contacts_valid or not is_on_floor():
         return false
     for i in get_slide_collision_count():
@@ -670,6 +686,12 @@ func _ready() -> void:
         add_child(teknium_specials)
 
 func _physics_process(delta: float) -> void:
+    var revival_input: Dictionary = {}
+    if revival and controls_enabled:
+        # Only the platform hold consumes controls early; ordinary combat keeps
+        # its original timer/hitstop/input ordering after the first stock loss.
+        if revival.phase != "idle": revival_input = read_controls(delta)
+        if revival.tick(delta, revival_input): return
     if counter_hitstop > 0:
         counter_hitstop = maxf(0,counter_hitstop-delta)
         if counter_hitstop <= 0: clear_counter_hitstop()
@@ -707,7 +729,7 @@ func _physics_process(delta: float) -> void:
         _update_move_visuals()
         return
 
-    var input := read_controls(delta)
+    var input: Dictionary = revival_input if not revival_input.is_empty() else read_controls(delta)
     var left_down: bool = input.left
     var right_down: bool = input.right
     var up_down: bool = input.up
@@ -715,8 +737,8 @@ func _physics_process(delta: float) -> void:
     var jump_down: bool = input.jump or up_down
     var attack_down: bool = input.attack
     var special_down: bool = input.special
-    shielding = not magic_locked() and freeze_remaining <= 0 and input.shield and not _torpedo_committed() and hitstun <= 0.0 and not charging and not drop_committed and attack_cooldown <= 0.0
-    if doge_ground_rush and doge_ground_rush.phase != "idle": shielding = false
+    # Retired universal defense; character specials own their defensive windows.
+    shielding = false
     if _shield_visual:
         _shield_visual.visible = shielding and hitstun <= 0.0
 
@@ -763,9 +785,15 @@ func _physics_process(delta: float) -> void:
                 _visual_root.scale.x = facing
 
         if charging:
-            if teknium_specials and (input.shield or (input.jump and not _jump_was_down)):
+            var store_edge := false
+            var store_jump := false
+            for direction in ["left", "right", "up", "down", "jump"]:
+                if input[direction] and not _charge_store_held.get(direction, false):
+                    store_edge = true
+                    if direction in ["up", "jump"]: store_jump = true
+            if teknium_specials and store_edge:
                 teknium_specials.store()
-                if input.jump: try_jump()
+                if store_jump: try_jump()
             else:
                 advance_charge(delta)
                 if not special_down:
@@ -784,6 +812,8 @@ func _physics_process(delta: float) -> void:
             elif down_down and not _down_was_down and not attack_down and not special_down:
                 try_drop_through()
 
+    for direction in ["left", "right", "up", "down", "jump"]:
+        _charge_store_held[direction] = input[direction]
     _jump_was_down = jump_down
     _attack_was_down = attack_down
     _special_was_down = special_down
@@ -847,6 +877,7 @@ func _physics_process(delta: float) -> void:
         _handle_blast_zone()
 
 func can_hit(target: Node) -> bool:
+    if is_instance_valid(target) and target.has_method("is_revival_protected") and target.is_revival_protected(): return false
     if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return false
     if is_instance_valid(target) and target.has_method("is_knockdown_protected") and target.is_knockdown_protected(): return false
     return is_instance_valid(target) and target != self and target.is_in_group("fighters") and target.controls_enabled and (team_id < 0 or target.team_id < 0 or team_id != target.team_id)
@@ -872,10 +903,10 @@ func _read_raw_controls(delta: float) -> Dictionary:
         result.jump = Input.is_joy_button_pressed(input_device, JOY_BUTTON_A)
         result.attack = Input.is_joy_button_pressed(input_device, JOY_BUTTON_X)
         result.special = Input.is_joy_button_pressed(input_device, JOY_BUTTON_B)
-        result.shield = Input.is_joy_button_pressed(input_device, JOY_BUTTON_LEFT_SHOULDER) or Input.is_joy_button_pressed(input_device, JOY_BUTTON_RIGHT_SHOULDER)
+        # Shoulder buttons no longer provide universal shielding.
     elif player_index in [1, 2]:
-        var keys := [KEY_A, KEY_D, KEY_W, KEY_S, KEY_SPACE, KEY_F, KEY_G, KEY_E] if player_index == 1 else [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_K, KEY_L, KEY_O]
-        var names := ["left", "right", "up", "down", "jump", "attack", "special", "shield"]
+        var keys := [KEY_A, KEY_D, KEY_W, KEY_S, KEY_SPACE, KEY_F, KEY_G] if player_index == 1 else [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_K, KEY_L]
+        var names := ["left", "right", "up", "down", "jump", "attack", "special"]
         for i in keys.size():
             result[names[i]] = Input.is_key_pressed(keys[i])
     # Merge P1 touch before the existing aim/edge/charge/recovery filters.
@@ -944,6 +975,8 @@ func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -
     var collateral = collateral_hit
     hit_source = null
     collateral_hit = false
+    counter_blocked_hit = false
+    if is_revival_protected(): return
     counter_blocked_hit = doge_counter != null and doge_counter.intercept(hit_damage,source)
     if counter_blocked_hit: return
     if is_knockdown_protected(): return
@@ -1020,6 +1053,7 @@ func reset_air_resources() -> void:
     recovery_targets.clear()
 
 func _clear_move_state() -> void:
+    if revival: revival.clear()
     clear_counter_hitstop()
     counter_blocked_hit = false
     if teknium_specials: teknium_specials.clear()
@@ -1053,8 +1087,12 @@ func _clear_move_state() -> void:
     _attack_was_down = false
     _special_was_down = false
     _latch_witcheer_inputs()
+    _charge_store_held.clear()
     if character_id == "teknium" and is_inside_tree():
-        _special_was_down = _read_raw_controls(0).special
+        var held = _read_raw_controls(0)
+        _special_was_down = held.special
+        for direction in ["left", "right", "up", "down", "jump"]:
+            _charge_store_held[direction] = held[direction]
     drop_committed = false
     torpedo_phase = "idle"
     torpedo_time = 0
@@ -1085,6 +1123,7 @@ func ground_speed_multiplier() -> float:
     return multiplier
 
 func try_jump() -> bool:
+    if revival and revival.phase != "idle": return false
     if doge_counter and doge_counter.phase != "idle": return false
     if tumble and tumble.active: return false
     if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return false
@@ -1112,6 +1151,7 @@ func try_jump() -> bool:
     return true
 
 func start_special(aim: Vector2) -> void:
+    if revival and not revival.permit_attack(): return
     if doge_counter and doge_counter.phase != "idle": return
     if tumble and tumble.active: return 
     if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return
@@ -1259,6 +1299,7 @@ func advance_charge(delta: float) -> void:
         charge_time = minf(doge_ground_rush.MAX_CHARGE if doge_ground_rush and doge_ground_rush.phase == "charge" else MAX_CHARGE_TIME, charge_time + delta)
 
 func release_special() -> void:
+    if revival and not revival.permit_attack(): return
     if teknium_specials:
         teknium_specials.release()
         return
@@ -1415,6 +1456,7 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
 
 
 func basic_attack(aim: Vector2, airborne: bool) -> void:
+    if revival and not revival.permit_attack(): return
     if doge_counter and doge_counter.phase != "idle": return
     if teknium_specials and teknium_specials.phase != "idle": return
     if tumble and tumble.active: return 
@@ -1998,9 +2040,7 @@ func _directional_hit(hit_damage: float, base_knockback: float, attack_range: fl
 func _handle_blast_zone() -> void:
     lose_stock()
     if stocks > 0:
-        global_position = spawn_position
-        velocity = Vector3.ZERO
-        hitstun = 0.55
+        _begin_revival()
     else:
         controls_enabled = false
         collision_layer = 0
