@@ -19,6 +19,29 @@ static func portrait_texture(id: String) -> Texture2D:
 		return null
 	return load(portrait_path(id)) as Texture2D
 
+const BODY_DIR := "res://assets/portraits/body/"
+
+static func body_path(id: String, palette_index := 0) -> String:
+	# Full-body stills for surfaces that show the whole fighter (Character
+	# Select bays, Story/How-to previews, Results). Pre-rendered offline, so the
+	# menus stay free of live 3D. Palette-tinted fighters carry one still per
+	# slot palette (<id>_p<n>.png); the rest share <id>.png.
+	var p := posmod(palette_index, 4)
+	if p > 0:
+		var variant := BODY_DIR + "%s_p%d.png" % [id, p]
+		if ResourceLoader.exists(variant):
+			return variant
+	return BODY_DIR + id + ".png"
+
+static func body_texture(id: String, palette_index := 0) -> Texture2D:
+	# Falls back to the bust portrait when no full-body still exists.
+	if id == "":
+		return null
+	var path := body_path(id, palette_index)
+	if ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return portrait_texture(id)
+
 static func missing_ids(ids: Array) -> Array[String]:
 	var missing: Array[String] = []
 	for id in ids:
