@@ -1,0 +1,58 @@
+{
+  "asset": "Metal050A",
+  "source": "https://ambientcg.com/a/Metal050A",
+  "download": "https://ambientcg.com/get?file=Metal050A_1K-JPG.zip",
+  "license": "CC0-1.0",
+  "license_url": "https://docs.ambientcg.com/license/",
+  "zip_sha256": "c2785502e4e2c14869f728f819548e1eaeef92df9bd9d4ec8e4904daaed24805",
+  "maps": [
+    {
+      "file": "Metal050A_1K-JPG_Color.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "1cc4a35b2d577a8d62713d4c3b1bd0206d0cb751fb4c97afd5abc3b2ac58c01b"
+    },
+    {
+      "file": "Metal050A_1K-JPG_Displacement.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "40f2f875d1704734706617058ccc9ec42170f07b0362d6f9e959c4018bdc1f2b"
+    },
+    {
+      "file": "Metal050A_1K-JPG_Metalness.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "7591621409d475bb0a06b3d084b58f8e90a18186c0e61a3d4e9eb418e975efc0"
+    },
+    {
+      "file": "Metal050A_1K-JPG_NormalDX.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "739dcb972e02443d136653f94554b01d4716a4c01f400b24c5c060f413faccab"
+    },
+    {
+      "file": "Metal050A_1K-JPG_NormalGL.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "86dbdc9e09876f9284f64660267bc2a44d8220636fe4e3ecbd3e6109a4b2f278"
+    },
+    {
+      "file": "Metal050A_1K-JPG_Roughness.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "14965fca92f7aa87859cb2355c59559871433b933c25b776f01dd8fb0ab75e76"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+See third_party/ASSET-NOTICES.txt, Godot-LICENSE.txt, Godot-COPYRIGHT.txt and OFL-ZillaSlab.txt.

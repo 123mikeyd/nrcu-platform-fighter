@@ -1,0 +1,25 @@
+{
+  "bones": {
+    "RightFoot": {
+      "bind_world_radius": 0.242616513187619,
+      "center": [
+        0.411709308624268,
+        11.4112958908081,
+        3.39585590362549
+      ],
+      "radius": 20.2180347442627,
+      "vertices": 3617
+    },
+    "RightHand": {
+      "bind_world_radius": 0.17445741670822,
+      "center": [
+        0.742051601409912,
+        12.5686874389648,
+        1.21240615844727
+      ],
+      "radius": 14.5381145477295,
+      "vertices": 2765
+    }
+  },
+  "method": "Bind-pose enclosing spheres over dominant native hand / foot+toe mesh vertices; no receiving anatomy changes"
+}
