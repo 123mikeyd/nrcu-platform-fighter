@@ -6,10 +6,10 @@ concurrency:
   group: github-pages
   cancel-in-progress: false
 env:
-  RELEASE_TAG: v0.3-web.4
-  SOURCE_SHA: 2ce8f86726986ea34827f83a0930030276598fc6
-  ARCHIVE: NRCU-v0.3-web.4.zip
-  ARCHIVE_SHA256: 16ae771184709d9993e4c75d08af34c7cd46615bf15e68e551ac116fa250302e
+  RELEASE_TAG: v0.5
+  SOURCE_SHA: b2712e41641ad27b4a0b4dc2f0902e0e77c19181
+  ARCHIVE: NRCU-v0.5-Web.zip
+  ARCHIVE_SHA256: 2eb71b1c57670cd4828115fbcfd8feb62d92ab71969298fba54410b8349686e3
 jobs:
   package:
     if: github.ref == 'refs/heads/main'
@@ -40,8 +40,8 @@ jobs:
           with zipfile.ZipFile(archive) as z:
               infos = z.infolist()
               names = [i.filename for i in infos]
-              assert len(names) == len(set(names)) == 14, 'Unexpected or duplicate members'
-              assert sum(i.file_size for i in infos) == 690479957, 'Unexpected site size'
+              assert len(names) == len(set(names)) == 15, 'Unexpected or duplicate members'
+              assert sum(i.file_size for i in infos) == 992678169, 'Unexpected site size'
               for i in infos:
                   p = PurePosixPath(i.filename)
                   assert not p.is_absolute() and '..' not in p.parts
@@ -53,9 +53,9 @@ jobs:
               assert manifest['threaded'] is False
               assert json.loads(z.read('build.json'))['source_commit'] == os.environ['SOURCE_SHA']
               entries = manifest['files']
-              assert len(entries) == 13
+              assert len(entries) == 14
               assert set(names) == {e['file'] for e in entries} | {'manifest.json'}
-              assert sum(e['bytes'] for e in entries) == manifest['total_bytes'] == 690477734
+              assert sum(e['bytes'] for e in entries) == manifest['total_bytes'] == 992675777
               for e in entries:
                   data = z.read(e['file'])
                   assert len(data) == e['bytes']
@@ -63,7 +63,7 @@ jobs:
               assert {'index.html', 'index.wasm', 'index.pck', 'index.js'} <= set(names)
               site.mkdir()
               z.extractall(site)
-          print('Verified 14 files, 690479957 bytes; exact reviewed archive and manifest hashes.')
+          print('Verified 15 files, 992678169 bytes; exact reviewed archive and manifest hashes.')
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
