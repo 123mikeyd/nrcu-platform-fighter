@@ -1,0 +1,86 @@
+{
+  "Idle": {
+    "start": 1,
+    "end": 49,
+    "seconds": 2.0,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "Run": {
+    "start": 51,
+    "end": 75,
+    "seconds": 1.0,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "Hit": {
+    "start": 77,
+    "end": 95,
+    "seconds": 0.75,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "PactJab": {
+    "start": 97,
+    "end": 115,
+    "seconds": 0.75,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "RubberGuillotine": {
+    "start": 117,
+    "end": 142,
+    "seconds": 1.0416666666666667,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "CinderLift": {
+    "start": 144,
+    "end": 167,
+    "seconds": 0.9583333333333334,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "AnkleRake": {
+    "start": 169,
+    "end": 193,
+    "seconds": 1.0,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "Barrier": {
+    "start": 195,
+    "end": 225,
+    "seconds": 1.25,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "EmberCast": {
+    "start": 227,
+    "end": 245,
+    "seconds": 0.75,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "EmberHold": {
+    "start": 247,
+    "end": 279,
+    "seconds": 1.3333333333333333,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "EmberRelease": {
+    "start": 281,
+    "end": 303,
+    "seconds": 0.9166666666666666,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "TeleportDepart": {
+    "start": 305,
+    "end": 321,
+    "seconds": 0.6666666666666666,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "TeleportArrive": {
+    "start": 323,
+    "end": 343,
+    "seconds": 0.8333333333333334,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  },
+  "Seat": {
+    "start": 345,
+    "end": 369,
+    "seconds": 1.0,
+    "provenance": "native Rigify FK authored; candidate choreography"
+  }
+}

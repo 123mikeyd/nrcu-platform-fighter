@@ -1,0 +1,186 @@
+{
+  "status": "Mixed approval: NeutralHook and native grounded HighKick approved; other existing entries preserved, no overall role implied.",
+  "fps": 24,
+  "moves": {
+    "Celebration": {
+      "carrier": "celebration",
+      "source_action": "Armature|happy_jump_m|baselayer",
+      "full_source_range": [
+        0.8,
+        236.8
+      ],
+      "start": 16.8,
+      "contact": 24.8,
+      "end": 56.8,
+      "duration": 1.6666666666666667,
+      "contact_time": 0.3333333333333333,
+      "active_end": 1.3333333333333333,
+      "damage": 0,
+      "input": "G celebrate / S+G projectile absorption dance",
+      "role": "both",
+      "provisional": true,
+      "selection": "Reviewed source pose sheet: raise arms24.8, heel-out celebratory hop32.8..40.8, settle48.8..56.8. Startup16.8..24.8 and recovery48.8..56.8 vulnerable. No loop.",
+      "healing": "Enemy contact only, actual projectile payload, clamp percent to zero. No melee protection."
+    },
+    "HighKick": {
+      "carrier": "high_kick",
+      "source_action": "Armature|High_Kick|baselayer",
+      "full_source_range": [
+        0.8,
+        50.4
+      ],
+      "start": 16,
+      "contact": 25.6,
+      "end": 40,
+      "duration": 1.0,
+      "contact_time": 0.4000000000000001,
+      "damage": 8,
+      "input": "W+F ground / Up+K ground; existing grounded side mapping retained",
+      "role": "ground",
+      "provisional": false,
+      "asset_range": [
+        0,
+        30
+      ],
+      "asset_fps": 30,
+      "active_start": 0.4,
+      "active_end": 0.6
+    },
+    "JumpPunch": {
+      "carrier": "double_jump_superman_punch",
+      "source_action": "Armature|Jumping_Punch|baselayer",
+      "full_source_range": [
+        0.8,
+        65.6
+      ],
+      "start": 18.4,
+      "contact": 28.8,
+      "end": 43.2,
+      "duration": 1.0333333333333334,
+      "contact_time": 0.4333333333333334,
+      "damage": 9,
+      "input": "F (air, neutral/side/down)",
+      "role": "air",
+      "provisional": true
+    },
+    "CaneSweep": {
+      "carrier": "cane_twirl",
+      "source_action": "Armature|Reaping_Swing|baselayer",
+      "full_source_range": [
+        0.8,
+        143.20000000000002
+      ],
+      "start": 88,
+      "contact": 99.2,
+      "end": 128,
+      "duration": 1.6666666666666667,
+      "contact_time": 0.4666666666666668,
+      "damage": 9,
+      "input": "S+F ground",
+      "role": "ground",
+      "provisional": true
+    },
+    "SpinRise": {
+      "carrier": "spiny_flippy_kick",
+      "source_action": "Armature|360_Power_Spin_Jump|baselayer",
+      "full_source_range": [
+        0.8,
+        74.4
+      ],
+      "start": 14.4,
+      "contact": 27.2,
+      "end": 60,
+      "duration": 1.9000000000000001,
+      "contact_time": 0.5333333333333333,
+      "damage": 11,
+      "input": "W+F airborne",
+      "role": "air",
+      "motion": "Ordinary gravity, no velocity injection, no jump/recovery resource change. One upward volume event at source27.2; landing cancels. Not a recovery.",
+      "provisional": true
+    },
+    "AirSwim": {
+      "carrier": "swimming",
+      "source_action": "Armature|Swim_Forward|baselayer",
+      "full_source_range": [
+        0.8,
+        109.60000000000001
+      ],
+      "start": 0.8,
+      "contact": 12.8,
+      "end": 48.8,
+      "duration": 2.0,
+      "contact_time": 0.5,
+      "damage": 6,
+      "input": "W+G",
+      "motion": "Finite source0.8..48.8 at24fps, no loop; controller horizontal5.5 and upward1.2 units/sec for2s, one recovery per airtime, real terrain resets only.",
+      "role": "both",
+      "provisional": true
+    },
+    "Toss": {
+      "carrier": "pickup_n_toss",
+      "source_action": "Armature|Female_Crouch_Pick_Throw_Forward|baselayer",
+      "full_source_range": [
+        0.8,
+        118.4
+      ],
+      "start": 40,
+      "contact": 60.8,
+      "end": 76,
+      "duration": 1.5,
+      "contact_time": 0.8666666666666666,
+      "damage": 11,
+      "input": "A/D+G (tap, no charge)",
+      "anticipation_speed": 3.0,
+      "combat_release": 0.2888888888888889,
+      "combat_duration": 0.9222222222222223,
+      "clock": "Source40..60.8 anticipation3x only; exact60.8 release pose; source60.8..76 followthrough at1x. Original GLB unchanged.",
+      "role": "both",
+      "provisional": true
+    },
+    "NeutralHook": {
+      "carrier": "approved_Witcheer_retarget",
+      "source_action": "Witcheer_Neutral_Hook_F05_RETARGET_PREVIEW",
+      "full_source_range": [
+        1,
+        66
+      ],
+      "start": 1,
+      "contact": 33,
+      "end": 66,
+      "fps": 30,
+      "duration": 2.1666666666666665,
+      "contact_time": 1.0666666666666667,
+      "active_start": 1.0,
+      "active_end": 1.3,
+      "damage": 8,
+      "input": "F neutral ground / K neutral ground",
+      "role": "ground",
+      "provisional": false,
+      "selection": "Full user-approved retarget; right-hand extension observed at frames33\u201340; active hand samples31\u201340, no animation trim."
+    },
+    "TurnaroundKick": {
+      "carrier": "dance_flying_kick",
+      "source_action": "Armature|Flying_Fist_Kick|baselayer",
+      "start": 59,
+      "contact": 71,
+      "end": 95,
+      "fps": 24,
+      "duration": 1.5,
+      "contact_time": 0.5,
+      "active_start": 0.375,
+      "active_end": 0.625,
+      "damage": 8,
+      "input": "Opposite horizontal direction + basic, ground and air; pre-input facing captured",
+      "role": "both",
+      "provisional": true,
+      "selection": "User-approved exact start59. Native right-foot extension observed71; provisional active68..74; planted/guard recovery95. Full original0.8..112.8 preserved externally. Ordinary gravity; no lift or recovery resource change; native horizontal hip travel anchored to existing Run. Native spin starts back-to-target and ends forward; whole model yaw targets opposite initial facing without reflecting bones."
+    }
+  },
+  "unassigned": {
+    "Jump_Rope": "full source exercise cataloged; no combat assignment",
+    "running": "existing approved Run untouched"
+  },
+  "missing": "No Jumping Jacks Action exists",
+  "root_motion": "Controller owns travel. New clips anchor hips X/Y; JumpPunch, SpinRise and AirSwim also anchor hips height to base Run height. Bone rotations and carrier rigid orientation preserved; all rest matrices/object bases match exactly.",
+  "contact_selection": "From sampled actual source landmarks: HighKick right foot extension25.6; JumpPunch first right fist extension28.8; Toss right-hand forward release60.8; CaneSweep right-hand forward sweep99.2. SpinRise and AirSwim contact beats provisional visual samples27.2/12.8."
+}

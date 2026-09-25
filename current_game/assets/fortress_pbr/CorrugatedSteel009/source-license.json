@@ -1,0 +1,66 @@
+{
+  "asset": "CorrugatedSteel009",
+  "source": "https://ambientcg.com/a/CorrugatedSteel009",
+  "download": "https://ambientcg.com/get?file=CorrugatedSteel009_1K-JPG.zip",
+  "license": "CC0-1.0",
+  "license_url": "https://docs.ambientcg.com/license/",
+  "zip_sha256": "fa917cba8bbf4ceb645cf27e4c1a4a17621d3b1ad44a4125997cdd05662711fb",
+  "maps": [
+    {
+      "file": "CorrugatedSteel009_1K-JPG_AmbientOcclusion.jpg",
+      "dimensions": [
+        1024,
+        512
+      ],
+      "sha256": "5bbe0875736d2313bceafae6c807150697f32b9c8ebae3c541489b2365c6351a"
+    },
+    {
+      "file": "CorrugatedSteel009_1K-JPG_Color.jpg",
+      "dimensions": [
+        1024,
+        512
+      ],
+      "sha256": "d873459d9752377688fd14e0e4f4b813fc787e66880ce7d06ada07831be048f0"
+    },
+    {
+      "file": "CorrugatedSteel009_1K-JPG_Displacement.jpg",
+      "dimensions": [
+        1024,
+        512
+      ],
+      "sha256": "f121692a1df54756c7f137e288b92f0c644003a885ec16a80da53a00f2b37da5"
+    },
+    {
+      "file": "CorrugatedSteel009_1K-JPG_Metalness.jpg",
+      "dimensions": [
+        1024,
+        512
+      ],
+      "sha256": "f6e180c91aac80365c74fa58e47caef4622690307bf439cfc8243fc618b885ad"
+    },
+    {
+      "file": "CorrugatedSteel009_1K-JPG_NormalDX.jpg",
+      "dimensions": [
+        1024,
+        512
+      ],
+      "sha256": "4b2cdb918db4c0fd455199f7100ee9de555db6a835029d00b74984e2be76e03f"
+    },
+    {
+      "file": "CorrugatedSteel009_1K-JPG_NormalGL.jpg",
+      "dimensions": [
+        1024,
+        512
+      ],
+      "sha256": "0682a09b02db4bd964e0297126355e7d95ebfeb31aa9c8e9835297cdc46d396a"
+    },
+    {
+      "file": "CorrugatedSteel009_1K-JPG_Roughness.jpg",
+      "dimensions": [
+        1024,
+        512
+      ],
+      "sha256": "9af07f183450a11dc59bf2cb71e91e84f8a60e866724a54e6b86f8f2fdcebbae"
+    }
+  ]
+}

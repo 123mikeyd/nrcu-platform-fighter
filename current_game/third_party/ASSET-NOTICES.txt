@@ -1,0 +1,19 @@
+NRCU v0.5 ASSET NOTICES
+
+Arts Bro: frontend portrait and layout adaptation.
+Quarker (Quark): current fighter state-coordinator adaptation from contribution 09970e27. Experimental combat and collision-authoring applications are not included.
+
+Zilla Slab: SIL Open Font License. See OFL-ZillaSlab.txt.
+Godot Engine: MIT License. See Godot-LICENSE.txt and Godot-COPYRIGHT.txt.
+
+Industrial material maps: ambientCG, CC0 1.0 Universal.
+https://ambientcg.com/view?id=CorrugatedSteel009
+https://ambientcg.com/view?id=DiamondPlate009
+https://ambientcg.com/view?id=Metal046B
+https://ambientcg.com/view?id=Metal050A
+https://ambientcg.com/view?id=Metal053C
+License: https://creativecommons.org/publicdomain/zero/1.0/
+Distributed 1K JPEG maps: Color, NormalGL, Roughness and Metalness.
+
+Kainan reference image appears as a static terminal display. No affiliation or endorsement is claimed.
+Music-hall and flower-meadow environments combine existing procedural environment artwork and playable geometry; no new character artwork is supplied by those worlds.

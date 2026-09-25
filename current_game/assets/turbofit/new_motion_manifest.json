@@ -1,0 +1,121 @@
+{
+  "fps": 30,
+  "rest_matrix_tolerance": 1e-06,
+  "clips": {
+    "Walk": {
+      "source_file": "Walking.fbx",
+      "source_frames": [
+        1,
+        43
+      ],
+      "inclusive": true,
+      "output_frames": 43,
+      "duration_seconds": 1.4,
+      "loop": true
+    },
+    "Run": {
+      "source_file": "Slow Run.fbx",
+      "source_frames": [
+        1,
+        23
+      ],
+      "inclusive": true,
+      "output_frames": 23,
+      "duration_seconds": 0.7333333333333333,
+      "loop": true
+    },
+    "GoalkeeperKick": {
+      "source_file": "Goalkeeper Drop Kick.fbx",
+      "source_frames": [
+        40,
+        99
+      ],
+      "inclusive": true,
+      "output_frames": 60,
+      "duration_seconds": 1.9666666666666666,
+      "loop": false,
+      "approved_cut": "40-99 inclusive; exactly 60 samples, 59 intervals. Earlier cuts and blend scene range are not used.",
+      "impact_source_frame": 67
+    },
+    "FallLoop": {
+      "source_file": "Falling To Landing.fbx",
+      "source_frames": [
+        1,
+        3
+      ],
+      "inclusive": true,
+      "output_frames": 25,
+      "duration_seconds": 0.8,
+      "loop": true,
+      "derivation": "Source airborne frames 1-3 ping-pong at 6x slower sampling; vertical ballistic root removed. Frames 4-8 approach ground; first contact is frame 9. Not a dedicated authored cyclic fall."
+    },
+    "Landing": {
+      "source_file": "Falling To Landing.fbx",
+      "source_frames": [
+        9,
+        33
+      ],
+      "inclusive": true,
+      "output_frames": 25,
+      "duration_seconds": 0.8,
+      "loop": false,
+      "derivation": "Starts on source first foot-contact frame 9; runs once only after real floor contact."
+    },
+    "AirSideKick": {
+      "clip": "AirSideKick",
+      "source_file": "mid_air_attack.blend",
+      "source_action": "mixamo.com",
+      "user_source_label": "Kicking(2)",
+      "source_frames": [
+        36,
+        51
+      ],
+      "inclusive": true,
+      "fps": 30,
+      "output_frames": 16,
+      "duration_seconds": 0.5,
+      "loop": false,
+      "approval": "User: not an up attack or a down attack, just a side kick, mid air. Airborne neutral/horizontal F only.",
+      "impact_source_frame": 42,
+      "impact_basis": "Maximum right-foot forward reach relative to hips among approved samples, frame 42; no visual approval claimed.",
+      "rest_matrix_tolerance": 2e-05,
+      "rest_max_error": 1.52587890625e-05,
+      "maximum_source_vs_master_mesh_local_pose_error": 1.4685205869115814e-06,
+      "geometry_and_uv_exact": true,
+      "object_transform_policy": "Carrier object transform excluded; installed master transform retained.",
+      "root_policy": "All hips translation removed; fighter controller owns horizontal and ballistic travel."
+    }
+  },
+  "mesh_preservation": "Animation-only merge into original installed GLB; mesh, skin, materials, images and old animations unchanged.",
+  "rejected_sources": {
+    "Kneeing Soccerball.fbx": "User rejected knee attack; source catalog only, not exported or mapped."
+  },
+  "attacks": {
+    "GoalkeeperKick": {
+      "duration": 0.9833333333333333,
+      "impact_time": 0.45,
+      "impact_source_frame": 67,
+      "speed": 2,
+      "damage": 14,
+      "knockback": 5.5
+    },
+    "AirSideKick": {
+      "duration": 0.5,
+      "impact_time": 0.2,
+      "impact_source_frame": 42,
+      "speed": 1,
+      "damage": 14,
+      "knockback": 5.5
+    },
+    "AirDownKick": {
+      "duration": 1.2666666666666666,
+      "impact_time": 0.4666666666666667,
+      "speed": 1,
+      "damage": 14,
+      "knockback": 5.5,
+      "active_start": 0.4,
+      "active_end": 0.5,
+      "radius": 0.22
+    }
+  }
+}

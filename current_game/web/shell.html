@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>NRCU v0.5 — Play in browser</title><link rel="icon" href="data:,">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#060b14;color:#edf5ff;font:16px/1.5 system-ui,sans-serif}canvas{display:block;width:100vw;height:100vh;outline:none}#gate{position:fixed;inset:0;display:grid;place-items:center;background:#060b14;z-index:2;padding:24px}article{max-width:760px;width:100%;border:1px solid #344458;background:#101b2b;padding:clamp(22px,5vw,48px);border-radius:12px}h1{font-size:clamp(32px,5vw,56px);line-height:1.1;margin:12px 0}p{color:#c6d3e5}.eyebrow{color:#78e1cc;letter-spacing:.15em;font-size:13px}button,.fallback{border-radius:6px;padding:12px 22px;display:inline-block;font:inherit;font-weight:700}button{cursor:pointer;background:#89f0d4;color:#081c20;border:0}button:disabled{opacity:.55;cursor:wait}a{color:#a9d8ff}.fallback{font-size:14px}progress{width:100%;height:14px;accent-color:#89f0d4}#status{min-height:26px}details{margin:20px 0;color:#c6d3e5}summary{cursor:pointer}kbd{color:white;font-family:inherit;font-weight:700}#gate[hidden]{display:none}#help{position:fixed;right:8px;bottom:8px;z-index:1;font-size:12px;background:#101b2bed;color:#d8e6f9;border:1px solid #344458;padding:5px 10px}#help[hidden]{display:none}
+/* Local mobile review adaptation: no engine/game payload changes. */
+html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+canvas{position:fixed;left:env(safe-area-inset-left,0px);top:env(safe-area-inset-top,0px);width:calc(100vw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px))!important;height:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))!important;height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))!important;touch-action:none;user-select:none;-webkit-user-select:none}
+#gate{height:100vh;height:100dvh;overflow:auto;display:block;padding:max(18px,env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) max(18px,env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));overscroll-behavior:contain}
+article{margin:0 auto}#help{right:max(8px,env(safe-area-inset-right,0px));left:auto;transform:none;bottom:max(4px,env(safe-area-inset-bottom,0px))}
+#rotate{display:none;position:fixed;inset:0;z-index:3;background:#060b14f5;padding:32px;text-align:center;align-content:center}
+@media (pointer:coarse) and (orientation:portrait){body.running #rotate{display:grid}}
+</style>$GODOT_HEAD_INCLUDE</head>
+<body><canvas id="canvas" tabindex="0" aria-label="NRCU game. Keyboard and experimental landscape touch controls listed before play.">Your browser needs canvas and WebGL 2 support.</canvas>
+<section id="gate"><article><div class="eyebrow">NRCU · V0.5 UNFINISHED ALPHA</div><h1>Enter the arena.</h1><p>The v0.5 Story gauntlet and current roster, running here in your browser. No installer. This is a large first load: <strong id="size">calculating download size…</strong>. Please keep this tab open while it loads.</p><button id="play">Play Now</button><a class="fallback" href="https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.5">Windows download instead</a><p id="status" role="status" aria-live="polite">Desktop keyboard/controller or experimental landscape touch. WebGL 2 is required; phone performance and compatibility are not yet verified.</p><progress id="progress" hidden></progress><a id="cancel" href="" hidden>Cancel loading / reload</a><details open><summary>Controls & browser notes</summary><p><kbd>P1:</kbd> A / D move · W / S aim · Space jump · F attack · G special.<br><kbd>P2:</kbd> Arrow keys move / aim · Enter jump · K attack · L special.<br><kbd>Esc</kbd> pause / back. Click the game if keys stop responding. In-game menus explain modes and controller setup.</p><p>This snapshot has no music or combat sound effects. Keep this tab active. Progress saves require browser storage. Experimental P1 touch: left pad moves and aims, Up jumps, Down drops through platforms; right thumb has Attack and Special only. Hold Special for charge moves. Teknium: a fresh direction stores; release and press Special to resume. No universal shield. Pause opens Resume / Leave controls. Tap menus to navigate. Play landscape; no shake/sensor controls. Phone texture compatibility, memory use and performance still require real-device testing. Reloading restarts the game.</p><p><a href="third_party/Godot-LICENSE.txt" target="_blank" rel="noopener">Godot license</a> · <a href="third_party/Godot-COPYRIGHT.txt" target="_blank" rel="noopener">Engine notices</a> · <a href="third_party/OFL-ZillaSlab.txt" target="_blank" rel="noopener">Font license</a></p></details></article></section><button id="help" hidden title="Reload to return to the launch page" onclick="if(confirm('Restart the game and return to the launch page?'))location.reload()">Restart game</button>
+<aside id="rotate" role="status"><h2>Rotate to landscape</h2><p>The movement pad and Attack / Special controls need a wide screen.</p><p>Rotate your phone to continue. Touch contacts reset when the viewport changes.</p></aside>
+<script src="$GODOT_URL"></script><script>
+'use strict';
+const config=$GODOT_CONFIG;
+const canvas=document.getElementById('canvas'), gate=document.getElementById('gate'), play=document.getElementById('play'), status=document.getElementById('status'), progress=document.getElementById('progress');
+const bytes=Object.values(config.fileSizes||{}).reduce((a,b)=>a+b,0);
+document.getElementById('size').textContent=bytes?`${(bytes/1048576).toFixed(1)} MiB of engine and game data`:'hundreds of megabytes of engine and game data';
+window.nrcuLog=[];
+function record(type,args){const text=Array.from(args).join(' ');window.nrcuLog.push({type,text,time:performance.now()});if(window.nrcuLog.length>1500)window.nrcuLog.shift();console[type==='error'?'error':'log'](text)}
+window.addEventListener('error',e=>record('error',[e.message]));
+window.addEventListener('unhandledrejection',e=>record('error',[String(e.reason)]));
+const engine=new Engine(config);
+play.addEventListener('click',async()=>{
+ if(play.dataset.failed){location.reload();return;}
+ play.disabled=true;progress.hidden=false;document.getElementById('cancel').hidden=false;status.textContent='Loading engine and game data…';
+ try{
+  const missing=Engine.getMissingFeatures({threads:false});if(missing.length)throw new Error('Missing browser features: '+missing.join(', '));
+  await engine.startGame({canvas,onPrint:(...a)=>record('info',a),onPrintError:(...a)=>record('error',a),onProgress:(current,total)=>{
+   if(total>0){progress.max=total;progress.value=current;status.textContent=current>=total?'Download complete. Initializing the game…':`Loading ${(current/1048576).toFixed(1)} / ${(total/1048576).toFixed(1)} MiB (${Math.floor(current/total*100)}%)`;}
+   else{progress.removeAttribute('value');status.textContent=`Loading ${(current/1048576).toFixed(1)} MiB…`;}
+  }});
+  gate.hidden=true;document.body.classList.add('running');document.getElementById('help').hidden=false;canvas.focus();record('info',['NRCU browser engine started']);
+ }catch(error){record('error',[error.message||error]);status.textContent='Could not start: '+(error.message||error)+'. Reload to retry, or use the Windows download.';progress.hidden=true;play.textContent='Reload to retry';play.disabled=false;play.dataset.failed='true';}
+});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+</script></body></html>

@@ -1,0 +1,66 @@
+{
+  "asset": "DiamondPlate009",
+  "source": "https://ambientcg.com/a/DiamondPlate009",
+  "download": "https://ambientcg.com/get?file=DiamondPlate009_1K-JPG.zip",
+  "license": "CC0-1.0",
+  "license_url": "https://docs.ambientcg.com/license/",
+  "zip_sha256": "86bd439bb12f00c96f1a12cd827165e85f39295f3d1ab8f915c4b5714bc618e0",
+  "maps": [
+    {
+      "file": "DiamondPlate009_1K-JPG_AmbientOcclusion.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "2f70342e2b192723c57968d89a25e5acb6e74c6fcdf560327fa56a349488ad16"
+    },
+    {
+      "file": "DiamondPlate009_1K-JPG_Color.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "ded4f37bf243350df41130a0888dd35f893fbbc577b0161f653656b3cc9d00c3"
+    },
+    {
+      "file": "DiamondPlate009_1K-JPG_Displacement.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "99c2009a77dfa5f9664b0a8ee354cb85a31197d53ff532d142271ee81cd86b2c"
+    },
+    {
+      "file": "DiamondPlate009_1K-JPG_Metalness.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "da145be62f32b3a3bbf542d951c4d4c723f8428d9d4dee1a7568b1f8913fb912"
+    },
+    {
+      "file": "DiamondPlate009_1K-JPG_NormalDX.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "7bccda32c9cd8fa0473ea9974420319a61bdf04ada7f9cac9b2d39c482c5e258"
+    },
+    {
+      "file": "DiamondPlate009_1K-JPG_NormalGL.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "f4a554eaa50fc08d86813b323f17db7ef05320142db952710a2bab850e8c59a0"
+    },
+    {
+      "file": "DiamondPlate009_1K-JPG_Roughness.jpg",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "sha256": "55d70f0b8a21983967b815de9ff5c9a9f4756cca3e9fb352b3ff2c2403b82f4f"
+    }
+  ]
+}
