@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "input": {
+    "stage_id": "string",
+    "teams_enabled": "bool",
+    "fighters": [
+      {
+        "slot_id": "P1..P4",
+        "fighter_id": "roster id",
+        "team_id": "0|1|null",
+        "kind": "human|bot"
+      }
+    ]
+  },
+  "normalization": [
+    "remove Empty slots",
+    "preserve slot_id/player identity",
+    "route 2 no-team to existing DUEL_1V1 renderer unchanged",
+    "route 3 no-team to FFA_3",
+    "route 4 no-team to FFA_4",
+    "route 3 team to TEAM_2V1; mirror group sides as needed",
+    "route 4 2+2 to TEAM_2V2",
+    "route 4 3+1 to TEAM_3V1; mirror group sides as needed"
+  ],
+  "orientation": [
+    "derive visual slot",
+    "apply optical assignment optimizer",
+    "apply original/mirrored asset based on profile canonical_inward_side",
+    "attach player/team label to fighter after permutation"
+  ]
+}

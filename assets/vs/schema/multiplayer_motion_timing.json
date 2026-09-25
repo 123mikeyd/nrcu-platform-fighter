@@ -1,0 +1,47 @@
+{
+  "fps_reference": 30,
+  "shared": {
+    "stage": [
+      0.0,
+      0.18
+    ],
+    "echoes": [
+      0.06,
+      0.28
+    ],
+    "primaries": [
+      0.14,
+      0.46
+    ],
+    "vs": [
+      0.52,
+      0.66
+    ],
+    "names": [
+      0.62,
+      0.88
+    ],
+    "hold_start": 0.88
+  },
+  "micro_stagger": {
+    "FFA_3": 0.025,
+    "FFA_4": 0.02,
+    "TEAM_2V2": 0.025,
+    "TEAM_2V1": 0.03,
+    "TEAM_3V1": 0.02
+  },
+  "stagger_rule": "symmetrical around base start; maximum added span <= 0.06s; never serialize all fighters",
+  "minimum_total_exposure": 1.5,
+  "hold": {
+    "duration": "indefinite_until_match_ready",
+    "fighter_motion": false,
+    "echo_motion": false,
+    "vs_motion": false,
+    "name_motion": false
+  },
+  "exit": {
+    "same_as_1v1": true,
+    "cover_close_duration": 0.26,
+    "reveal_duration": 0.34
+  }
+}

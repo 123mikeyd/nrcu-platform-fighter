@@ -1,0 +1,16 @@
+{
+  "runtime_strategy": "2D deterministic presentation built from pre-baked renders of the actual 3D models; no live SubViewport required",
+  "scene": "res://scenes/vs_screen.tscn",
+  "script": "res://scripts/vs_screen.gd",
+  "config": "res://assets/vs/vs_layout.json",
+  "integration_seam": "current match start path after validation/stage/fighter setup, before existing _begin_ready()",
+  "supported_initial_case": "exactly two active supported roster fighters",
+  "fallbacks": {
+    "unsupported_fighter": "bypass VS and preserve existing _begin_ready path",
+    "not_exactly_two_active_fighters": "bypass VS and preserve existing path",
+    "missing_stage_plate": "use debug plate",
+    "missing_echo": "use primary at opacity 0.18 + grayscale/tint as emergency fallback only; log warning",
+    "mephisto": "supported visually but keep provisional status; do not treat as quality gate"
+  },
+  "main_gd_change_limit": "minimal orchestration only; do not redesign setup/frontend/gameplay"
+}

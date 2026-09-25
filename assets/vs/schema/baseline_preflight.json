@@ -1,0 +1,25 @@
+{
+  "baseline_return": "VS_RETURN_2026-09-14",
+  "verdict": "GO",
+  "tests": {
+    "full_suite": "172/172 PASS",
+    "vs_checks": "291/291 PASS"
+  },
+  "visual_parity_mean_delta_255": {
+    "S1": 1.2655,
+    "S2": 1.3805,
+    "S3": 0.99
+  },
+  "existing_contract": {
+    "adapter": "exactly two active fighters",
+    "screen_start": "start(left_fighter_id, right_fighter_id, stage_id)",
+    "multi_active": "currently bypassed"
+  },
+  "required_followup_changes": [
+    "normalize 2-4 fighter presentation records",
+    "preserve existing DUEL_1V1 renderer/parity",
+    "route 3/4 supported matches to multiplayer layouts",
+    "suppress frontend hand cursor for VS lifetime",
+    "restore cursor behavior after VS teardown"
+  ]
+}

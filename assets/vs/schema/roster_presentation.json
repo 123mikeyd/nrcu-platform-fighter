@@ -1,0 +1,164 @@
+{
+  "teknium": {
+    "canonical_side": "left",
+    "primary": {
+      "x": 20,
+      "y": 23,
+      "height": 600
+    },
+    "echo": {
+      "x": -160,
+      "y": -97,
+      "height": 840,
+      "opacity": 0.3
+    },
+    "accent_rgb": [
+      56,
+      196,
+      126
+    ],
+    "display_name": "TEKNIUM",
+    "primary_asset": "assets/fighters/teknium/primary.png",
+    "echo_asset": "assets/fighters/teknium/echo.png",
+    "name_asset": "assets/fighters/teknium/name.png"
+  },
+  "doge_man": {
+    "canonical_side": "right",
+    "primary": {
+      "x": 740,
+      "y": 19,
+      "height": 617
+    },
+    "echo": {
+      "x": 803,
+      "y": -90,
+      "height": 853,
+      "opacity": 0.28
+    },
+    "accent_rgb": [
+      218,
+      58,
+      48
+    ],
+    "display_name": "DOGE MAN",
+    "primary_asset": "assets/fighters/doge_man/primary.png",
+    "echo_asset": "assets/fighters/doge_man/echo.png",
+    "name_asset": "assets/fighters/doge_man/name.png"
+  },
+  "ggb": {
+    "canonical_side": "left",
+    "primary": {
+      "x": -57,
+      "y": 97,
+      "width": 547
+    },
+    "echo": {
+      "x": -213,
+      "y": -33,
+      "width": 720,
+      "opacity": 0.29
+    },
+    "accent_rgb": [
+      108,
+      150,
+      65
+    ],
+    "display_name": "GGB",
+    "primary_asset": "assets/fighters/ggb/primary.png",
+    "echo_asset": "assets/fighters/ggb/echo.png",
+    "name_asset": "assets/fighters/ggb/name.png"
+  },
+  "ice_mage": {
+    "canonical_side": "right",
+    "primary": {
+      "x": 720,
+      "y": 21,
+      "height": 620
+    },
+    "echo": {
+      "x": 807,
+      "y": -83,
+      "height": 840,
+      "opacity": 0.27
+    },
+    "accent_rgb": [
+      58,
+      114,
+      150
+    ],
+    "display_name": "ICE MAGE",
+    "primary_asset": "assets/fighters/ice_mage/primary.png",
+    "echo_asset": "assets/fighters/ice_mage/echo.png",
+    "name_asset": "assets/fighters/ice_mage/name.png"
+  },
+  "turbofit": {
+    "canonical_side": "left",
+    "primary": {
+      "x": 10,
+      "y": 19,
+      "height": 627
+    },
+    "echo": {
+      "x": -157,
+      "y": -90,
+      "height": 853,
+      "opacity": 0.28
+    },
+    "accent_rgb": [
+      108,
+      79,
+      53
+    ],
+    "display_name": "TURBOFIT",
+    "primary_asset": "assets/fighters/turbofit/primary.png",
+    "echo_asset": "assets/fighters/turbofit/echo.png",
+    "name_asset": "assets/fighters/turbofit/name.png"
+  },
+  "witcheer": {
+    "canonical_side": "right",
+    "primary": {
+      "x": 747,
+      "y": 28,
+      "height": 617
+    },
+    "echo": {
+      "x": 860,
+      "y": -77,
+      "height": 827,
+      "opacity": 0.28
+    },
+    "accent_rgb": [
+      168,
+      50,
+      52
+    ],
+    "display_name": "WITCHEER",
+    "primary_asset": "assets/fighters/witcheer/primary.png",
+    "echo_asset": "assets/fighters/witcheer/echo.png",
+    "name_asset": "assets/fighters/witcheer/name.png"
+  },
+  "mephisto": {
+    "canonical_side": "right",
+    "primary": {
+      "x": 755,
+      "y": 22,
+      "height": 620
+    },
+    "echo": {
+      "x": 785,
+      "y": -88,
+      "height": 840,
+      "opacity": 0.28
+    },
+    "status": "PROVISIONAL_SMOKE_ONLY",
+    "accent_rgb": [
+      218,
+      126,
+      74
+    ],
+    "display_name": "MEPHISTO",
+    "primary_asset": "assets/fighters/mephisto/primary.png",
+    "echo_asset": "assets/fighters/mephisto/echo.png",
+    "name_asset": "assets/fighters/mephisto/name.png"
+  }
+}
