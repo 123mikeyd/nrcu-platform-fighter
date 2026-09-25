@@ -9,3 +9,15 @@ __pycache__/
 export_credentials.cfg
 *.blend
 *.blend1
+
+# Local FX review output is reproducible and must not be swept into a PR.
+# Curated handoff documents can be added explicitly with git add -f.
+evidence/
+scope_run.txt
+STATIC_QA_AUTHORING_PARITY.json
+nrcu_fx_data/.recovery/
+nrcu_fx_data/looks/
+# The authoring process owns these mutable Production documents locally; they
+# are runtime state, not portable source fixtures for the PR.
+nrcu_fx_data/assignments.json
+nrcu_fx_data/composition.json
