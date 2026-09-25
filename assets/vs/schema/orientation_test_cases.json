@@ -1,0 +1,84 @@
+[
+  {
+    "fighter_id": "teknium",
+    "visual_side": "left",
+    "expected_variant": "original"
+  },
+  {
+    "fighter_id": "teknium",
+    "visual_side": "right",
+    "expected_variant": "mirrored"
+  },
+  {
+    "fighter_id": "doge_man",
+    "visual_side": "left",
+    "expected_variant": "mirrored"
+  },
+  {
+    "fighter_id": "doge_man",
+    "visual_side": "right",
+    "expected_variant": "original"
+  },
+  {
+    "fighter_id": "ggb",
+    "visual_side": "left",
+    "expected_variant": "mirrored"
+  },
+  {
+    "fighter_id": "ggb",
+    "visual_side": "right",
+    "expected_variant": "original"
+  },
+  {
+    "fighter_id": "ice_mage",
+    "visual_side": "left",
+    "expected_variant": "mirrored"
+  },
+  {
+    "fighter_id": "ice_mage",
+    "visual_side": "right",
+    "expected_variant": "original"
+  },
+  {
+    "fighter_id": "turbofit",
+    "visual_side": "left",
+    "expected_variant": "original"
+  },
+  {
+    "fighter_id": "turbofit",
+    "visual_side": "right",
+    "expected_variant": "mirrored"
+  },
+  {
+    "fighter_id": "witcheer",
+    "visual_side": "left",
+    "expected_variant": "mirrored"
+  },
+  {
+    "fighter_id": "witcheer",
+    "visual_side": "right",
+    "expected_variant": "original"
+  },
+  {
+    "fighter_id": "mephisto",
+    "visual_side": "left",
+    "expected_variant": "mirrored"
+  },
+  {
+    "fighter_id": "mephisto",
+    "visual_side": "right",
+    "expected_variant": "original"
+  },
+  {
+    "fighter_id": "ggb",
+    "visual_side": "left",
+    "expected_variant": "mirrored",
+    "hard_failure_if": "original"
+  },
+  {
+    "fighter_id": "ggb",
+    "visual_side": "right",
+    "expected_variant": "original",
+    "hard_failure_if": "mirrored"
+  }
+]
