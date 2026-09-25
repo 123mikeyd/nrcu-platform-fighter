@@ -11,6 +11,8 @@ var token:Control
 var route_line:Control
 var motion:Tween
 var primary:Button
+# Invalidate deferred results when leaving/replacing an encounter.
+var _story_result_serial=0
 var points:Array[Vector2]=[Vector2(135,320),Vector2(290,220),Vector2(455,365),Vector2(620,240),Vector2(785,395),Vector2(935,265),Vector2(1115,350)]
 func _ready():
  super._ready()
@@ -26,6 +28,7 @@ func _create_fighter(id:String,bobo_encounter:bool,slot:int):
  if screen=="briefing" and slot==1 and id=="mephisto":return load("res://story_boss/scripts/fighter.gd").new()
  return super._create_fighter(id,bobo_encounter,slot)
 func clear_battle():
+ _story_result_serial+=1
  _cancel_ready();story_state="";match_over=false
  setup.hide();story_panel.hide();result_panel.hide();winner_label.hide();bobo_health_bar.hide()
  for f in fighters:
@@ -125,8 +128,17 @@ func _on_fighter_eliminated(loser:CharacterBody3D):
   super._on_fighter_eliminated(loser);return
  if match_over:return
  if player_one.stocks>0 and player_two.stocks>0:return
+ # Latch the outcome now, but keep actors attached until the contact/physics
+ # stack unwinds. Removing them here invalidates the attacker's get_tree/space.
  match_over=true
  var won=player_one.stocks>0 and player_two.stocks<=0
+ for f in fighters:f.controls_enabled=false
+ _story_result_serial+=1
+ _finish_story_battle.call_deferred(_story_result_serial,player_one,player_two,won)
+func _finish_story_battle(serial:int,hero,opponent,won:bool):
+ if serial!=_story_result_serial or story_state!="playing" or screen!="battle" or not match_over:return
+ if not is_instance_valid(hero) or not is_instance_valid(opponent):return
+ if hero!=player_one or opponent!=player_two:return
  run.finish(won)
  if won:show_board(true)
  else:

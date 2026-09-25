@@ -53,6 +53,9 @@ func run_suite():
   arena.show_victory();arena.show_credits();check(arena.screen=="credits","final credits")
   var reload=load("res://scripts/v05_clearance.gd").new();reload.save_path=arena.clearance.save_path
   check(reload.is_unlocked(),"persistent unlock reload")
+ # Ordinary lethal contact must unwind before Story tears down actors.
+ DirAccess.remove_absolute(ProjectSettings.globalize_path(arena.clearance.save_path))
+ await preload("res://tests/story_contact_cases.gd").new().run_cases(self,arena,check)
  # Current freeplay factory: all eight current actors, never historical boss.
  arena.show_setup()
  for id in load("res://scripts/roster.gd").ids():

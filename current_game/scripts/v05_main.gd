@@ -101,9 +101,9 @@ func show_credits():
   label("Battle Lab unlocked · Current-game practice
 Quark experimental tools are separate and not included.",Vector2(55,610),Vector2(1120,55),18)
   button("HOME",Vector2(920,565),Vector2(280,60),back_to_menu)
-func _on_fighter_eliminated(loser:CharacterBody3D):
- super._on_fighter_eliminated(loser)
- if story_state=="" and screen=="board" and run.complete():clearance.record_run(run)
+func show_board(advance=false):
+ super.show_board(advance)
+ if advance and run.complete():clearance.record_run(run)
 func pause_game():
  if not screen in ["battle","freeplay","practice"]:return
  for child in pause_menu.get_children():
