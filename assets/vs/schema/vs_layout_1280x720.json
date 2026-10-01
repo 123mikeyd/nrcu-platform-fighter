@@ -1,0 +1,136 @@
+{
+  "design_size": [
+    1280,
+    720
+  ],
+  "stretch_assumption": "project uses canvas_items at 1280x720",
+  "side_fields": {
+    "left_points": [
+      [0, 0],
+      [290, 0],
+      [850, 720],
+      [0, 720]
+    ],
+    "right_points": [
+      [1280, 0],
+      [492, 0],
+      [927, 720],
+      [1280, 720]
+    ],
+    "alpha": 110
+  },
+  "nameplates": {
+    "left_points": [
+      [
+        0,
+        547
+      ],
+      [
+        440,
+        541
+      ],
+      [
+        513,
+        601
+      ],
+      [
+        453,
+        667
+      ],
+      [
+        0,
+        660
+      ]
+    ],
+    "right_points": [
+      [
+        1280,
+        547
+      ],
+      [
+        840,
+        541
+      ],
+      [
+        767,
+        601
+      ],
+      [
+        827,
+        667
+      ],
+      [
+        1280,
+        660
+      ]
+    ],
+    "fill_rgba": [
+      2,
+      4,
+      5,
+      245
+    ],
+    "left_accent_line": [
+      [
+        0,
+        548
+      ],
+      [
+        440,
+        542
+      ]
+    ],
+    "right_accent_line": [
+      [
+        1280,
+        548
+      ],
+      [
+        840,
+        542
+      ]
+    ],
+    "accent_line_width": 3,
+    "name_y": 561,
+    "left_name_x": 23,
+    "right_name_margin": 23
+  },
+  "vs_mark": {
+    "asset": "assets/ui/vs_mark.png",
+    "height": 224,
+    "center_x": 640,
+    "y": 222,
+    "shadow_offset": [
+      3,
+      4
+    ],
+    "shadow_alpha": 0.66,
+    "shadow_dilate_px": 3
+  },
+  "stage": {
+    "mode": "pregraded_plate",
+    "assets": {
+      "debug": "assets/stages/debug.png",
+      "toy_room": "assets/stages/toy_room.png",
+      "sky": "assets/stages/sky.png"
+    },
+    "unknown_fallback": "debug"
+  },
+  "layer_order": [
+    "stage",
+    "side_fields",
+    "echo_left",
+    "echo_right",
+    "primary_left",
+    "primary_right",
+    "vs_mark",
+    "nameplates",
+    "names",
+    "transition_cover"
+  ],
+  "forbidden_layers": [
+    "grunge_rays",
+    "stripe_burst",
+    "persistent_fx_behind_vs"
+  ]
+}

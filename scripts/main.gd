@@ -46,6 +46,9 @@ const StageCatalog = preload("res://scripts/catalogs/stage_catalog.gd")
 const StateScript = preload("res://scripts/match_flow_state.gd")
 # WP-4 adapter: gameplay delegates Esc/Start to the shared Pause surface.
 const PauseOverlayScript = preload("res://scripts/frontend/pause_overlay.gd")
+# Optional VS presentation adapter. Unsupported/story launches keep the existing
+# MatchFlow -> gameplay path and never invent a presentation.
+const VsPresentationAdapterScript = preload("res://scripts/vs_presentation_adapter.gd")
 
 const MATCH_FLOW_SCENE := "res://scenes/match_flow.tscn"
 const HOME_SCENE := "res://scenes/home.tscn"
@@ -91,6 +94,10 @@ var bobo_health_bar: ProgressBar
 var _pause_layer: CanvasLayer = null
 var _pause_overlay: Control = null
 var _pause_input_consumed := false
+var _vs_presentation = null
+# While the VS overlay covers the arena the READY gate is held, so no input
+# acts unseen and GO! lands the moment the ink has torn open.
+var _vs_holds_ready := false
 
 var player_one: CharacterBody3D
 var player_two: CharacterBody3D
@@ -141,6 +148,7 @@ func _ready() -> void:
         # reports readiness; the match starts when the router releases the
         # frontend.
         _launched_from_flow = true
+        _start_vs_presentation()
         call_deferred("_announce_presentation_ready")
     else:
         # Explicit Debug/F10 route (Doc 02 §9): the developer launcher is the
@@ -183,6 +191,24 @@ func _process(_delta: float) -> void:
         if fighter.character_id == "bobo":
             hud_labels[i].text = "BOBO\n%d / 400 HP" % ceili(fighter.health)
             bobo_health_bar.value = fighter.health
+
+func _start_vs_presentation() -> void:
+    # The adapter owns only supported VS presentation shapes. It is mounted
+    # before the destination announces readiness so the MatchFlow reveal never
+    # exposes an unprepared overlay. Failed/unsupported binding is a conservative
+    # bypass: gameplay remains responsible for the normal route.
+    if launch_config == null or launch_config.has_story():
+        return
+    _vs_presentation = VsPresentationAdapterScript.new()
+    _vs_presentation.name = "VsPresentationAdapter"
+    add_child(_vs_presentation)
+    if not _vs_presentation.begin(launch_config, self):
+        _vs_presentation.queue_free()
+        _vs_presentation = null
+        return
+    _vs_holds_ready = true
+    # Fail-open: whatever ends the overlay also releases the gate.
+    _vs_presentation.finished.connect(_release_vs_ready_hold.bind(0.0))
 
 
 # --- WP-4 Pause adapter -----------------------------------------------------
@@ -417,7 +443,28 @@ func start_match_from_config(cfg) -> bool:
     var started: bool = start_match(slots, int(cfg.mode()) == 1, cfg.has_story() and str(cfg.story_payload().get("enemy_id", "")) == "bobo", str(cfg.stage_id()))
     if started and cfg.has_story():
         _begin_story_encounter(cfg.story_payload())
+    if started and _vs_presentation != null and is_instance_valid(_vs_presentation):
+        # The gameplay destination is live; let the presentation leave HOLD
+        # through the same readiness signal as the manual adapter path.
+        _vs_presentation.signal_match_ready()
     return started
+
+func complete_launch_under_cover() -> void:
+    # MatchFlow already owns the launch transition and starts gameplay beneath
+    # the cover. The adapter calls this at full cover as an explicit seam; no
+    # second match start is allowed here. The held READY gate is released so
+    # that GO! lands exactly as the overlay's reveal finishes.
+    var reveal := 0.0
+    if _vs_presentation != null and is_instance_valid(_vs_presentation) and _vs_presentation.screen() != null:
+        reveal = float(_vs_presentation.screen().reveal_duration())
+    _release_vs_ready_hold(reveal)
+
+func _release_vs_ready_hold(go_in: float) -> void:
+    if not _vs_holds_ready:
+        return
+    _vs_holds_ready = false
+    if ready_remaining > 0.0 and go_in > 0.0:
+        ready_remaining = minf(ready_remaining, go_in)
 
 func _begin_story_encounter(payload: Dictionary) -> void:
     # The Story state machine over the frozen payload (Doc 02 §3/§4): the
@@ -820,6 +867,8 @@ func _begin_ready() -> void:
 
 func _physics_process(delta: float) -> void:
     if ready_remaining > 0:
+        if _vs_holds_ready:
+            return
         ready_remaining = maxf(0,ready_remaining-delta)
         if ready_remaining == 0:
             ready_label.text = "GO!"

@@ -1,0 +1,114 @@
+{
+  "fps_reference": 30,
+  "entry": {
+    "stage": {
+      "start": 0.0,
+      "end": 0.22,
+      "opacity": [
+        0,
+        1
+      ],
+      "scale": [
+        1.025,
+        1.0
+      ],
+      "ease": "cubic_out"
+    },
+    "echoes": {
+      "start": 0.08,
+      "end": 0.34,
+      "opacity": [
+        0,
+        1
+      ],
+      "scale": [
+        1.03,
+        1.0
+      ],
+      "outside_offset_px": 48,
+      "ease": "cubic_out"
+    },
+    "primaries": {
+      "start": 0.18,
+      "end": 0.5,
+      "opacity": [
+        0,
+        1
+      ],
+      "scale": [
+        1.035,
+        1.0
+      ],
+      "outside_offset_px": 52,
+      "ease": "cubic_out"
+    },
+    "vs": {
+      "start": 0.58,
+      "end": 0.72,
+      "opacity": [
+        0,
+        1
+      ],
+      "scale": [
+        0.72,
+        1.0
+      ],
+      "ease": "back_out",
+      "impact_flash": {
+        "center_time": 0.615,
+        "half_width": 0.02,
+        "rgba_peak": [
+          255,
+          244,
+          198,
+          32
+        ]
+      }
+    },
+    "names": {
+      "start": 0.62,
+      "end": 0.8,
+      "opacity": [
+        0,
+        1
+      ],
+      "y_offset": [
+        25,
+        0
+      ],
+      "ease": "cubic_out"
+    },
+    "hold_start": 0.93
+  },
+  "minimum_total_exposure": 1.5,
+  "hold": {
+    "duration": "indefinite_until_ready",
+    "stage_motion": false,
+    "fighter_motion": false,
+    "echo_motion": false,
+    "vs_motion": false,
+    "name_motion": false
+  },
+  "exit": {
+    "start_condition": "match_ready && elapsed>=minimum_total_exposure",
+    "cover_close_duration": 0.26,
+    "cover_shape": "ink look: side inks slam shut on the seam, 0.07 s hit, tear open; legacy: two black center-origin wedges",
+    "transition_cover_reached_at": 0.26,
+    "reveal_duration": 0.34,
+    "total_duration": 0.6,
+    "on_cover_reached": "enable/show gameplay fighters and call existing ready/go start underneath cover",
+    "on_finished": "hide/free VS overlay"
+  },
+  "events": [
+    "vs_enter",
+    "stage_reveal",
+    "fighter_reveal",
+    "fighter_lock",
+    "clash_impact",
+    "hold_enter",
+    "match_ready",
+    "vs_exit",
+    "transition_cover_reached",
+    "exit_finished"
+  ]
+}

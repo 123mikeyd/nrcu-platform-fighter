@@ -1,0 +1,151 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/vs_screen.gd" id="1_vs"]
+[ext_resource type="Shader" path="res://scripts/vs_mark_shadow.gdshader" id="2_shadow"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_shadow"]
+shader = ExtResource("2_shadow")
+shader_parameter/dilate_px = 3.0
+shader_parameter/mark_size = Vector2(211, 224)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.66)
+
+[node name="VsScreen" type="CanvasLayer"]
+layer = 80
+script = ExtResource("1_vs")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Stage" type="TextureRect" parent="Root"]
+texture_filter = 2
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 720.0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="SideFields" type="Node2D" parent="Root"]
+
+[node name="FieldLeft" type="Polygon2D" parent="Root/SideFields"]
+color = Color(1, 1, 1, 0.12)
+
+[node name="FieldRight" type="Polygon2D" parent="Root/SideFields"]
+color = Color(1, 1, 1, 0.12)
+
+[node name="EchoLeft" type="TextureRect" parent="Root"]
+texture_filter = 2
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="EchoRight" type="TextureRect" parent="Root"]
+texture_filter = 2
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="PrimaryLeft" type="TextureRect" parent="Root"]
+texture_filter = 2
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="PrimaryRight" type="TextureRect" parent="Root"]
+texture_filter = 2
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="FamilyBack" type="Control" parent="Root"]
+layout_mode = 0
+mouse_filter = 2
+
+[node name="Echoes" type="Control" parent="Root/FamilyBack"]
+layout_mode = 0
+mouse_filter = 2
+
+[node name="Primaries" type="Control" parent="Root/FamilyBack"]
+layout_mode = 0
+mouse_filter = 2
+
+[node name="VsMark" type="Control" parent="Root"]
+layout_mode = 0
+mouse_filter = 2
+
+[node name="UnderShadow" type="TextureRect" parent="Root/VsMark"]
+material = SubResource("ShaderMaterial_shadow")
+texture_filter = 2
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="Mark" type="TextureRect" parent="Root/VsMark"]
+texture_filter = 2
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="NamePlates" type="Node2D" parent="Root"]
+
+[node name="PlateLeft" type="Polygon2D" parent="Root/NamePlates"]
+color = Color(0.007843138, 0.015686275, 0.019607844, 0.9607843)
+
+[node name="PlateRight" type="Polygon2D" parent="Root/NamePlates"]
+color = Color(0.007843138, 0.015686275, 0.019607844, 0.9607843)
+
+[node name="AccentLeft" type="Line2D" parent="Root/NamePlates"]
+width = 3.0
+default_color = Color(1, 1, 1, 1)
+
+[node name="AccentRight" type="Line2D" parent="Root/NamePlates"]
+width = 3.0
+default_color = Color(1, 1, 1, 1)
+
+[node name="NameLeft" type="TextureRect" parent="Root"]
+texture_filter = 2
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="NameRight" type="TextureRect" parent="Root"]
+texture_filter = 2
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="FamilyFront" type="Control" parent="Root"]
+layout_mode = 0
+mouse_filter = 2
+
+[node name="Plates" type="Node2D" parent="Root/FamilyFront"]
+
+[node name="Names" type="Control" parent="Root/FamilyFront"]
+layout_mode = 0
+mouse_filter = 2
+
+[node name="Labels" type="Control" parent="Root/FamilyFront"]
+layout_mode = 0
+mouse_filter = 2
+
+[node name="ImpactFlash" type="ColorRect" parent="Root"]
+layout_mode = 0
+offset_right = 1280.0
+offset_bottom = 720.0
+mouse_filter = 2
+color = Color(1, 0.95686275, 0.7764706, 0)
+
+[node name="TransitionCover" type="Node2D" parent="Root"]
+
+[node name="CoverLeft" type="Polygon2D" parent="Root/TransitionCover"]
+color = Color(0, 0, 0, 0)
+scale = Vector2(0, 1)
+
+[node name="CoverRight" type="Polygon2D" parent="Root/TransitionCover"]
+color = Color(0, 0, 0, 0)
+scale = Vector2(0, 1)

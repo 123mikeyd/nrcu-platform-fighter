@@ -117,6 +117,7 @@ var hovered: Control = null
 var mode: Mode = Mode.MOUSE
 var visual: Visual = Visual.REGULAR
 var scope := SCOPE_FRONTEND
+var _native_pointer_suppressed := false
 var hotspot := Vector2.ZERO          # authoritative interaction point
 var _mouse := Vector2.ZERO
 var _visual_mouse := Vector2.ZERO     # last sampled pointer position for art only
@@ -260,6 +261,14 @@ func is_mouse_active() -> bool:
     # separate questions above instead.
     return is_mouse_mode() and _hover_armed
 
+func set_native_pointer_suppressed(suppressed: bool) -> void:
+    # The global Cursor service uses this guard while an authoring owner has the
+    # OS pointer. Screen lifecycle/scope code may still run during a remount,
+    # but it must not reveal the game hand until the final owner releases it.
+    _native_pointer_suppressed = suppressed
+    if suppressed:
+        visible = false
+
 # --- scope (§9) ------------------------------------------------------------
 func set_scope(next_scope: String) -> void:
     scope = next_scope if next_scope == SCOPE_GAMEPLAY else SCOPE_FRONTEND
@@ -278,7 +287,7 @@ func set_scope(next_scope: String) -> void:
             set_mode(Mode.MOUSE)
         visible = false
     else:
-        visible = true
+        visible = not _native_pointer_suppressed
     queue_redraw()
 
 # --- carry (token lives in the screen; the cursor only carries it) -------

@@ -1,0 +1,94 @@
+{
+  "teknium": {
+    "canonical_inward_side": "right",
+    "mirror_safe": true,
+    "center_suitability": 0.4,
+    "silhouette": "standard",
+    "primary_aspect": 0.6641,
+    "original_dimensions": [
+      1020,
+      1536
+    ],
+    "opposite_side_rule": "horizontal_mirror",
+    "center_rule": "use only when optimizer selects; FFA_3 minimizes center_suitability penalty"
+  },
+  "doge_man": {
+    "canonical_inward_side": "right",
+    "mirror_safe": true,
+    "center_suitability": 0.1,
+    "silhouette": "standard_wide",
+    "primary_aspect": 0.7409,
+    "original_dimensions": [
+      1138,
+      1536
+    ],
+    "opposite_side_rule": "horizontal_mirror",
+    "center_rule": "use only when optimizer selects; FFA_3 minimizes center_suitability penalty"
+  },
+  "ggb": {
+    "canonical_inward_side": "right",
+    "mirror_safe": true,
+    "center_suitability": 1.0,
+    "silhouette": "wide_nonhuman",
+    "note": "Current original bake must NOT be used unmirrored on the left; it reads outward.",
+    "primary_aspect": 1.1558,
+    "original_dimensions": [
+      1536,
+      1329
+    ],
+    "opposite_side_rule": "horizontal_mirror",
+    "center_rule": "use only when optimizer selects; FFA_3 minimizes center_suitability penalty"
+  },
+  "ice_mage": {
+    "canonical_inward_side": "right",
+    "mirror_safe": true,
+    "center_suitability": 0.25,
+    "silhouette": "oversized_gesture",
+    "primary_aspect": 0.8932,
+    "original_dimensions": [
+      1372,
+      1536
+    ],
+    "opposite_side_rule": "horizontal_mirror",
+    "center_rule": "use only when optimizer selects; FFA_3 minimizes center_suitability penalty"
+  },
+  "turbofit": {
+    "canonical_inward_side": "left",
+    "mirror_safe": true,
+    "center_suitability": 0.55,
+    "silhouette": "standard",
+    "primary_aspect": 0.6283,
+    "original_dimensions": [
+      965,
+      1536
+    ],
+    "opposite_side_rule": "horizontal_mirror",
+    "center_rule": "use only when optimizer selects; FFA_3 minimizes center_suitability penalty"
+  },
+  "witcheer": {
+    "canonical_inward_side": "left",
+    "mirror_safe": true,
+    "center_suitability": 0.7,
+    "silhouette": "tall_thin",
+    "primary_aspect": 0.7533,
+    "original_dimensions": [
+      1157,
+      1536
+    ],
+    "opposite_side_rule": "horizontal_mirror",
+    "center_rule": "use only when optimizer selects; FFA_3 minimizes center_suitability penalty"
+  },
+  "mephisto": {
+    "canonical_inward_side": "right",
+    "mirror_safe": true,
+    "center_suitability": 0.45,
+    "silhouette": "standard_provisional",
+    "primary_aspect": 0.7923,
+    "original_dimensions": [
+      1217,
+      1536
+    ],
+    "opposite_side_rule": "horizontal_mirror",
+    "center_rule": "use only when optimizer selects; FFA_3 minimizes center_suitability penalty"
+  }
+}
