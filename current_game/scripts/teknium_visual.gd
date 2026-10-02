@@ -15,6 +15,9 @@ var placement_elapsed := 0.06
 var model: Node3D
 var animation_player: AnimationPlayer
 var current_clip := ""
+# Identity node for ledge_grab.gd, which reads view.flight_root (Doge's up-flight pivot).
+# Tek has no flight pivot: the model is NOT parented to it, it stays at identity.
+var flight_root: Node3D
 var jump_elapsed := 0.0
 var jump_active := false
 
@@ -47,6 +50,9 @@ func _ready() -> void:
     scale = Vector3.ONE * 1.25
     model = MODEL.instantiate()
     add_child(model)
+    flight_root = Node3D.new()
+    flight_root.name = "LedgeFlightRoot"
+    add_child(flight_root)
     animation_player = model.find_children("*", "AnimationPlayer", true, false)[0]
     for library_name in animation_player.get_animation_library_list():
         var source = animation_player.get_animation_library(library_name)
@@ -66,6 +72,53 @@ func _ready() -> void:
             material.emission_enabled = false
             mesh.set_surface_override_material(surface, material)
     sync_pose(true, Vector3.ZERO, false, false, "", 1.0, 0.0)
+    _setup_laser()
+
+# ---- Laser Blast: clip library + bone-mounted holo gun (hidden unless the move shows it) ----
+const LASER_LIB := preload("res://assets/teknium/laser/laser_blast_20260928.tres")
+const LASER_GUN := preload("res://assets/teknium/laser/laser_gun.tscn")
+var laser_gun: Node3D
+var laser_holo: ShaderMaterial
+# Holo glow: additive teal fresnel edge so the dark gun reads at gameplay camera distance;
+# `fill` adds a full teal wash during materialize/dematerialize.
+const HOLO_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_back;
+uniform vec4 tint : source_color = vec4(0.05, 0.95, 0.85, 1.0);
+uniform float rim = 0.9;
+uniform float fill = 0.0;
+void fragment() {
+    float edge = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
+    ALBEDO = tint.rgb * (edge * rim * 1.6 + fill * 0.85);
+}
+"""
+func _setup_laser() -> void:
+    if not animation_player.has_animation_library("laser"):
+        animation_player.add_animation_library("laser", LASER_LIB.duplicate(true))
+    var skeleton: Skeleton3D = model.find_children("*", "Skeleton3D", true, false)[0]
+    var mount := BoneAttachment3D.new(); mount.name = "LaserGunMount"; mount.bone_name = "RightHand"
+    skeleton.add_child(mount)
+    laser_gun = LASER_GUN.instantiate(); mount.add_child(laser_gun)
+    var shader := Shader.new(); shader.code = HOLO_SHADER
+    laser_holo = ShaderMaterial.new(); laser_holo.shader = shader
+    var gun_mesh: MeshInstance3D = laser_gun.get_node("GunMesh")
+    gun_mesh.material_overlay = laser_holo
+    gun_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    laser_gun.visible = false
+func laser_gun_state(amount: float, holo: float, flicker_off: bool) -> void:
+    if laser_gun == null: return
+    laser_gun.visible = amount > 0.01 and not flicker_off
+    laser_gun.scale = Vector3.ONE * maxf(amount, 0.001)
+    # Baseline teal wash: the gun is only ~22x7 px at gameplay zoom, so a rim alone is invisible.
+    laser_holo.set_shader_parameter("fill", maxf(clampf(holo, 0.0, 1.0), 0.45))
+    laser_holo.set_shader_parameter("rim", 1.2)
+func laser_muzzle() -> Vector3:
+    if laser_gun == null: return global_position + Vector3(0, 1.5, 0)
+    var skeleton: Skeleton3D = model.find_children("*", "Skeleton3D", true, false)[0]
+    skeleton.force_update_all_bone_transforms()
+    var bone_xf: Transform3D = skeleton.global_transform * skeleton.get_bone_global_pose(skeleton.find_bone("RightHand"))
+    # Muzzle at full gun size (scale only animates the holo pop), independent of the attachment's update timing.
+    return bone_xf * laser_gun.get_node("Muzzle").position
 
 func choose_clip(grounded: bool, motion: Vector3, interrupted: bool, shielding: bool, active_move: String) -> String:
     if interrupted: return "Hit"

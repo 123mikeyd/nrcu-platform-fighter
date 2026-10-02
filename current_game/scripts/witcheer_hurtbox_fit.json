@@ -1,0 +1,320 @@
+{
+ "policy": "Native CPU-skinned dominant-bone samples (w>=.25, active blendshapes) at idle; SVD axis, trimmed 10-90 pct extent, 75th pct radius (trimmed cores, not triangle-exact). Fitted by Hermes 2026-09-27 for review.",
+ "regions": [
+  {
+   "name": "Head",
+   "bone": "Head",
+   "a": [
+    -0.93,
+    14.72,
+    -8.22
+   ],
+   "b": [
+    2.28,
+    5.37,
+    -13.4
+   ],
+   "radius": 17.63
+  },
+  {
+   "name": "Neck",
+   "bone": "neck",
+   "a": [
+    -3.95,
+    4.62,
+    -5.37
+   ],
+   "b": [
+    2.53,
+    4.62,
+    -5.85
+   ],
+   "radius": 5.08
+  },
+  {
+   "name": "Pelvis",
+   "bone": "Hips",
+   "a": [
+    18.52,
+    1.05,
+    18.54
+   ],
+   "b": [
+    -2.44,
+    0.62,
+    -2.9
+   ],
+   "radius": 15.31
+  },
+  {
+   "name": "Abdomen",
+   "bone": "Spine01",
+   "a": [
+    -9.5,
+    6.41,
+    9.23
+   ],
+   "b": [
+    8.64,
+    7.66,
+    9.25
+   ],
+   "radius": 5.75
+  },
+  {
+   "name": "Chest",
+   "bone": "Spine02",
+   "a": [
+    -9.77,
+    8.21,
+    1.42
+   ],
+   "b": [
+    9.0,
+    8.75,
+    5.13
+   ],
+   "radius": 11.57
+  },
+  {
+   "name": "LeftShoulder",
+   "bone": "LeftShoulder",
+   "a": [
+    1.83,
+    4.89,
+    -2.55
+   ],
+   "b": [
+    -5.28,
+    6.71,
+    -1.24
+   ],
+   "radius": 5.12
+  },
+  {
+   "name": "RightShoulder",
+   "bone": "RightShoulder",
+   "a": [
+    6.18,
+    7.26,
+    -0.06
+   ],
+   "b": [
+    -0.53,
+    6.97,
+    -3.02
+   ],
+   "radius": 5.5
+  },
+  {
+   "name": "LeftUpperArm",
+   "bone": "LeftArm",
+   "a": [
+    1.59,
+    6.42,
+    1.04
+   ],
+   "b": [
+    0.63,
+    16.92,
+    -0.7
+   ],
+   "radius": 8.19
+  },
+  {
+   "name": "LeftForearm",
+   "bone": "LeftForeArm",
+   "a": [
+    0.14,
+    13.42,
+    -0.18
+   ],
+   "b": [
+    0.4,
+    17.58,
+    0.2
+   ],
+   "radius": 7.91
+  },
+  {
+   "name": "LeftHand",
+   "bone": "LeftHand",
+   "a": [
+    2.83,
+    15.01,
+    -1.57
+   ],
+   "b": [
+    -4.5,
+    9.22,
+    1.05
+   ],
+   "radius": 8.09
+  },
+  {
+   "name": "RightUpperArm",
+   "bone": "RightArm",
+   "a": [
+    -3.25,
+    5.2,
+    1.04
+   ],
+   "b": [
+    -0.36,
+    12.14,
+    1.29
+   ],
+   "radius": 8.17
+  },
+  {
+   "name": "RightForearm",
+   "bone": "RightForeArm",
+   "a": [
+    0.13,
+    8.2,
+    -2.08
+   ],
+   "b": [
+    -0.35,
+    19.04,
+    0.53
+   ],
+   "radius": 7.84
+  },
+  {
+   "name": "RightHand",
+   "bone": "RightHand",
+   "a": [
+    -0.65,
+    16.91,
+    -1.01
+   ],
+   "b": [
+    2.72,
+    7.57,
+    0.58
+   ],
+   "radius": 8.48
+  },
+  {
+   "name": "LeftThigh",
+   "bone": "LeftUpLeg",
+   "a": [
+    8.43,
+    2.67,
+    2.78
+   ],
+   "b": [
+    10.66,
+    15.46,
+    4.73
+   ],
+   "radius": 14.7
+  },
+  {
+   "name": "LeftShin",
+   "bone": "LeftLeg",
+   "a": [
+    -1.57,
+    9.61,
+    0.18
+   ],
+   "b": [
+    -0.22,
+    24.32,
+    1.66
+   ],
+   "radius": 10.03
+  },
+  {
+   "name": "LeftFoot",
+   "bone": "LeftFoot",
+   "a": [
+    -4.3,
+    2.52,
+    8.05
+   ],
+   "b": [
+    -0.7,
+    9.43,
+    -0.67
+   ],
+   "radius": 8.54
+  },
+  {
+   "name": "LeftToes",
+   "bone": "LeftToeBase",
+   "a": [
+    -5.76,
+    8.19,
+    0.57
+   ],
+   "b": [
+    5.32,
+    7.21,
+    0.66
+   ],
+   "radius": 5.42
+  },
+  {
+   "name": "RightThigh",
+   "bone": "RightUpLeg",
+   "a": [
+    -2.81,
+    9.07,
+    1.12
+   ],
+   "b": [
+    -11.57,
+    8.5,
+    12.77
+   ],
+   "radius": 13.72
+  },
+  {
+   "name": "RightShin",
+   "bone": "RightLeg",
+   "a": [
+    0.81,
+    26.7,
+    2.62
+   ],
+   "b": [
+    1.86,
+    10.16,
+    -0.6
+   ],
+   "radius": 9.76
+  },
+  {
+   "name": "RightFoot",
+   "bone": "RightFoot",
+   "a": [
+    0.69,
+    9.62,
+    -1.0
+   ],
+   "b": [
+    2.49,
+    3.58,
+    7.71
+   ],
+   "radius": 8.72
+  },
+  {
+   "name": "RightToes",
+   "bone": "RightToeBase",
+   "a": [
+    -4.91,
+    7.65,
+    0.56
+   ],
+   "b": [
+    5.93,
+    7.36,
+    0.47
+   ],
+   "radius": 5.71
+  }
+ ]
+}

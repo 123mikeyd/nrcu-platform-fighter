@@ -6,7 +6,7 @@ const FLOOR_OFFSET := 0.13
 # Full native Swim_Idle is the default; legacy presentation remains available.
 # Keep the existing per-instance fallback switch for comparison and regression tests.
 @export var idle_review_enabled := true
-const IDLE_REVIEW = preload("res://assets/witcheer/idle_review/relaxed_idle_review.tres")
+const IDLE_REVIEW = preload("res://assets/witcheer/idle/relaxed_idle.tres")
 var model: Node3D
 var animation_player: AnimationPlayer
 var current_clip := "Run"

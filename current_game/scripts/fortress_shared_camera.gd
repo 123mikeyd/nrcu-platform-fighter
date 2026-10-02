@@ -21,7 +21,7 @@ func _place():
     position = focus + offset_axis * distance
     look_at(focus)
 func _process(delta):
-    if arena.active_level not in ["debug","hall","meadow"]:
+    if arena.active_level != "debug":
         position = Vector3(0,5.8,19.5)
         look_at(Vector3(0,2,0))
         snap_pending = true

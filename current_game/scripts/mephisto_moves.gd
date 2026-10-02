@@ -18,6 +18,11 @@ var girl_magic
 var girl_kick
 var shadow_chain
 var chain_pose
+var dream_grasp
+func grasp():
+ if not dream_grasp:
+  dream_grasp=preload("res://scripts/mephisto_dream_grasp.gd").new();dream_grasp.moves=self
+ return dream_grasp
 func chain_animation():
  if not chain_pose:
   chain_pose=preload("res://scripts/mephisto_chain_pose.gd").new();chain_pose.moves=self
@@ -38,7 +43,8 @@ const BASIC={
 func _ready():actor=get_parent()
 func view():return actor.get_node_or_null("VisualRoot/MephistoVisual")
 func route(aim:Vector2,air:bool,special:bool)->String:
- if special and aim.y>.1:return "CompanionPalm"
+ # Sleep kit: Down-B is the demon DREAM GRASP (CompanionPalm stays recoverable, unrouted).
+ if special and aim.y>.1:return "DreamGrasp"
  if demon_form:
   if special:return "PairVanish" if aim.y<-.1 else ("ShadowChain" if absf(aim.x)>.1 else "SmokeCharge")
   if aim.y<-.1:return "RisingForearm"
@@ -54,6 +60,7 @@ func start_kit(id:String,direction:float):
  cancel();move=id;facing=direction;actor.facing=direction;serial+=1
  actor.last_move=id;elapsed=0;contacts.clear();impulse_done=false
  if id=="AnkleRake":kick().begin()
+ if id=="DreamGrasp":grasp().begin()
  if id in ["Barrier","EmberHold","PairTeleport","PairVanish"]:magic().begin(id)
  if id=="SmokeCharge":actor.charging=true;actor.charge_time=0
  if id=="CinderToss":actor.recovery_spent=true;actor.jumps_used=2
@@ -62,6 +69,7 @@ func start_kit(id:String,direction:float):
   shadow_chain=preload("res://scripts/mephisto_shadow_chain.gd").new();shadow_chain.moves=self;actor.get_parent().add_child(shadow_chain)
 func duration()->float:
  if move=="CompanionPalm":return view().companion.attack_duration()
+ if move=="DreamGrasp":return grasp().duration()
  if move in ["ForwardBackhand","GroundPalmSlam"]:return ArmTiming.duration(move)
  if move=="ShadowChain":return 100000.0
  if move=="ShadowRecover":return preload("res://scripts/mephisto_chain_pose.gd").RETRACT
@@ -82,6 +90,7 @@ func present():
  if move=="CompanionPalm":
   view().pose_frame(704,facing);view().show_native_girl(facing);view().native_pose("Idle",elapsed,true)
   view().companion.sync_pose();return
+ if move=="DreamGrasp":grasp().present(elapsed);return
  if move in ["ShadowChain","ShadowRecover"]:chain_animation().present();return
  if move=="AnkleRake":kick().present(elapsed);return
  if move in ["Barrier","EmberHold","EmberRelease","PairTeleport","PairVanish"]:magic().present();return
@@ -103,6 +112,7 @@ func release():
  present()
 func cancel():
  if chain_pose:chain_pose.cancel()
+ if dream_grasp:dream_grasp.cancel()
  if is_instance_valid(shadow_chain):shadow_chain.hide();shadow_chain.queue_free()
  shadow_chain=null
  if girl_magic:girl_magic.cancel()
@@ -115,13 +125,15 @@ func cancel():
  if actor and view():view().end_shadow_move()
 func tick(delta:float):
  if move.is_empty():return
- if not actor.controls_enabled or actor.stocks<=0 or actor.hitstun>0 or actor.freeze_remaining>0 or actor.magic_locked() or actor._read_raw_controls(0).shield:
+ if not actor.controls_enabled or actor.stocks<=0 or actor.hitstun>0 or actor.freeze_remaining>0 or actor.sleep_remaining>0 or actor.magic_locked() or actor._read_raw_controls(0).shield:
   cancel();actor.attack_cooldown=0;return
  var previous=elapsed
  elapsed+=delta;present()
  if move in ["ShadowChain","ShadowRecover"] and is_instance_valid(shadow_chain):shadow_chain.tick(delta)
  if move in ["Barrier","EmberHold","EmberRelease","PairTeleport","PairVanish"]:magic().tick(delta)
- if move=="CompanionPalm":
+ if move=="DreamGrasp":
+  grasp().tick(previous,elapsed);actor.attack_cooldown=maxf(actor.attack_cooldown,duration()-elapsed)
+ elif move=="CompanionPalm":
   view().companion.tick_contact(self,previous,elapsed)
  elif move in ["ForwardBackhand","GroundPalmSlam"]:
   tick_footless(previous)

@@ -22,6 +22,10 @@ var walk_clock=0.0
 var walking=false
 # Approved Rust review size. Source rigs/Actions remain in their original units.
 const APPROVED_GIRL_SCALE=.71926
+# Sleep-kit pass (Mike 09-29 "she is still too small"): uniform girl-only size-up
+# about the same evaluated sole/hip pivots. Rest bones, weights, Actions, companion
+# and the movement capsule are unchanged; receiving capsules follow her bones.
+const GIRL_SIZE_UP=1.15
 const SOURCE_GIRL_SCALE=.504
 const NATIVE_SOLE_Y=.047908014
 var native_unscaled_transform=Transform3D.IDENTITY
@@ -103,7 +107,7 @@ func apply_girl_size(seated:float):
  # Stand about the evaluated native Idle sole; carry about the evaluated hip.
  native_unscaled_transform=native_model.transform
  var pivot=native_model.to_global(Vector3(0,NATIVE_SOLE_Y,0)).lerp(girl_point("Hips"),seated)
- var ratio=APPROVED_GIRL_SCALE/SOURCE_GIRL_SCALE
+ var ratio=APPROVED_GIRL_SCALE*GIRL_SIZE_UP/SOURCE_GIRL_SCALE
  native_model.scale*=ratio
  native_model.global_position=pivot+(native_model.global_position-pivot)*ratio
  # Seat footprint was behind the wrist after enlargement. Recenter toward the

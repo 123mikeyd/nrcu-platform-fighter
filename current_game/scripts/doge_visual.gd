@@ -136,6 +136,14 @@ func _ready() -> void:
     var ground_library = load("res://assets/doge_man/ground_basic_20260915.tres")
     for clip in ground_library.get_animation_list():
         animation_player.get_animation_library("").add_animation(clip, ground_library.get_animation(clip).duplicate(true))
+    # V5 "Thanos" 6-hit boxing string (neutral ground basic, installed 2026-09-28).
+    var boxing_library = load("res://assets/doge_man/boxing_string_v5_20260928.tres")
+    for clip in boxing_library.get_animation_list():
+        animation_player.get_animation_library("").add_animation(clip, boxing_library.get_animation(clip).duplicate(true))
+    # Approved skydiver helpless-fall wiggle loop after Air Doge (installed 2026-09-30).
+    var helpless_library = load("res://assets/doge_man/helpless_fall_v001_20260930.tres")
+    for clip in helpless_library.get_animation_list():
+        animation_player.get_animation_library("").add_animation(clip, helpless_library.get_animation(clip).duplicate(true))
     for mesh in model.find_children("*", "MeshInstance3D", true, false):
         for shape_index in mesh.mesh.get_blend_shape_count():
             if "Fist_STUDY" in str(mesh.mesh.get_blend_shape_name(shape_index)):

@@ -19,9 +19,10 @@ func fit(i:int,a:Vector3,b:Vector3,r:float):
 func sync():
  if not view or not view.native_skeleton:return
  body.global_transform=Transform3D.IDENTITY;body.collision_layer=4 if actor.controls_enabled and actor.stocks>0 else 0
- fit(0,view.girl_point("Hips"),view.girl_point("neck"),.13)
+ var k=view.GIRL_SIZE_UP
+ fit(0,view.girl_point("Hips"),view.girl_point("neck"),.13*k)
  var gh=view.girl_point("Head")
- fit(1,gh,gh+Vector3.UP*.09,.12)
- fit(2,view.girl_point("LeftUpLeg"),view.girl_point("LeftFoot"),.08)
- fit(3,view.girl_point("RightUpLeg"),view.girl_point("RightFoot"),.08)
+ fit(1,gh,gh+Vector3.UP*.09*k,.12*k)
+ fit(2,view.girl_point("LeftUpLeg"),view.girl_point("LeftFoot"),.08*k)
+ fit(3,view.girl_point("RightUpLeg"),view.girl_point("RightFoot"),.08*k)
  body.force_update_transform()
