@@ -1,6 +1,6 @@
 extends RefCounted
 # Editable native-rest Teknium ForcePush derivative; original skin stays intact.
-const LIB=preload("res://story_boss/assets/mephisto_girl2/ember_forcepush.tres")
+const LIB=preload("res://assets/mephisto_girl2/ember_forcepush.tres")
 const SOURCE_EVENT=24.0/24.0 # Actual extended pose, after Teknium's frame16 projectile event.
 const SOURCE_END=34.0/24.0
 const CAST=.75

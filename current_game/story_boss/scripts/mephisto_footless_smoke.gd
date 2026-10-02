@@ -42,7 +42,7 @@ func setup(v):
    var old=m.get_active_material(s)
    var mat=ShaderMaterial.new();mat.shader=preload('res://story_boss/scripts/mephisto_leg_dissolve.gdshader')
    mat.set_shader_parameter('audition',1.0);mat.set_shader_parameter('variant',2.0)
-   mat.set_shader_parameter('film_tex',preload('res://story_boss/assets/mephisto_paired/approved_rust_film.png'));mat.set_shader_parameter('albedo_tex',old.albedo_texture);mat.set_shader_parameter('tint',old.albedo_color)
+   mat.set_shader_parameter('film_tex',preload('res://assets/mephisto_paired/approved_rust_film.png'));mat.set_shader_parameter('albedo_tex',old.albedo_texture);mat.set_shader_parameter('tint',old.albedo_color)
    mat.set_shader_parameter('orm_tex',old.roughness_texture);mat.set_shader_parameter('normal_tex',old.normal_texture);mat.set_shader_parameter('normal_strength',old.normal_scale)
    m.set_surface_override_material(s,mat);materials.append(mat)
   m.mesh=mesh_cache[id]
