@@ -1,7 +1,9 @@
-"""Bounded nested-project import and v0.5 integration contract runner.
+"""Bounded nested-project import and v0.6 integration contract runner.
 
 Evidence is private: keep --output outside the repo or under .verification.
-A zero exit without exactly one V05_RELEASE_COMPLETE line is NOT success.
+A zero exit without exactly one completion marker per contract is NOT success.
+The only tolerated ERROR text is the headless dummy-renderer line
+'Parameter "material" is null' (plus its following "at:" line); any other ERROR fails.
 """
 import argparse
 import json
@@ -10,6 +12,10 @@ from pathlib import Path
 import re
 import signal
 import subprocess
+
+
+# Headless dummy-renderer noise (engine-side, no script source); the only tolerated ERROR.
+NOISE = re.compile(r'^ERROR: Parameter "material" is null\.[ \t]*\r?\n[ \t]*at: material_get_instance_shader_parameters \(servers/rendering/dummy/[^\n]*\n?', re.MULTILINE)
 
 
 def run_process(command, log, timeout, marker=None):
@@ -31,16 +37,23 @@ def run_process(command, log, timeout, marker=None):
             code = 124
     text = Path(log).read_text(encoding='utf-8', errors='replace')
     markers = sum(line.strip() == marker for line in text.splitlines()) if marker else 0
-    passed = code == 0 and not re.search(r'SCRIPT ERROR:|ERROR:|FAIL(?:[: ]|$)', text, re.MULTILINE)
+    scrubbed = re.sub(NOISE, '', text)
+    passed = code == 0 and not re.search(r'SCRIPT ERROR:|ERROR:|FAIL(?:[: ]|$)', scrubbed, re.MULTILINE)
     if marker:
         passed = passed and markers == 1
     return {'exit': code, 'passed': passed, 'completion_count': markers}
 
 
+CONTRACTS = [('test_v06_release', 'V06_RELEASE_COMPLETE'),
+             ('test_v06_worlds', 'V06_WORLDS_COMPLETE'),
+             ('test_v06_contact_lifecycle', 'V06_CONTACT_COMPLETE'),
+             ('test_v06_mobile', 'V06_MOBILE_COMPLETE')]
+
+
 def run_suite(engine, project, output, timeout=180, fresh_import=False):
     project, output = Path(project).resolve(), Path(output).resolve()
-    if not (project / 'project.godot').is_file() or not (project / 'tests/test_v05_release.gd').is_file():
-        raise ValueError('Missing project or required tests/test_v05_release.gd contract; no tests skipped')
+    if not (project / 'project.godot').is_file() or not all((project / 'tests' / (name + '.gd')).is_file() for name, _ in CONTRACTS):
+        raise ValueError('Missing project or a required tests/test_v06_*.gd contract; no tests skipped')
     if output.is_relative_to(project):
         raise ValueError('Keep runner evidence outside the game project')
     output.mkdir(parents=True, exist_ok=True)
@@ -50,9 +63,10 @@ def run_suite(engine, project, output, timeout=180, fresh_import=False):
             [engine, '--headless', '--path', str(project), '--editor', '--import'],
             output / 'import.log', timeout)})
     if not results or results[-1]['passed']:
-        results.append({'step': 'test_v05_release', **run_process(
-            [engine, '--headless', '--path', str(project), '--script', 'res://tests/test_v05_release.gd'],
-            output / 'test_v05_release.log', timeout, 'V05_RELEASE_COMPLETE')})
+        for name, marker in CONTRACTS:
+            results.append({'step': name, **run_process(
+                [engine, '--headless', '--path', str(project), '--script', 'res://tests/%s.gd' % name],
+                output / (name + '.log'), timeout, marker)})
     (output / 'results.json').write_text(json.dumps(results, indent=2) + '\n', encoding='utf-8')
     return results
 
@@ -70,7 +84,7 @@ def main():
         print(json.dumps(results))
         return 0 if all(r['passed'] for r in results) else 1
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
-        parser.exit(1, 'v0.5 contract failed: ' + str(exc) + '\n')
+        parser.exit(1, 'v0.6 contract failed: ' + str(exc) + '\n')
 
 
 if __name__ == '__main__':

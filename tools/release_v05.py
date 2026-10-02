@@ -27,8 +27,8 @@ def digest(path):
 def metadata(sha, release, engine):
     if not re.fullmatch(r'[0-9a-f]{40}', sha):
         raise ValueError('Expected explicit full lowercase source commit')
-    if not re.fullmatch(r'v0\.5(?:[.-][A-Za-z0-9.-]+)?', release):
-        raise ValueError('Expected v0.5 release identifier')
+    if not re.fullmatch(r'v0\.[56](?:[.-][A-Za-z0-9.-]+)?', release):
+        raise ValueError('Expected v0.5/v0.6 release identifier')
     if not re.fullmatch(r'4\.7\.2\.stable\.official\.[A-Za-z0-9]+', engine):
         raise ValueError('Expected official Godot 4.7.2 version')
     return {'source_commit': sha, 'release': release, 'engine': engine}
