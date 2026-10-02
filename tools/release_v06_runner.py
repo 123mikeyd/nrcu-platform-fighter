@@ -47,7 +47,14 @@ def run_process(command, log, timeout, marker=None):
 CONTRACTS = [('test_v06_release', 'V06_RELEASE_COMPLETE'),
              ('test_v06_worlds', 'V06_WORLDS_COMPLETE'),
              ('test_v06_contact_lifecycle', 'V06_CONTACT_COMPLETE'),
-             ('test_v06_mobile', 'V06_MOBILE_COMPLETE')]
+             ('test_v06_mobile', 'V06_MOBILE_COMPLETE'),
+             ('test_v06_touch_pause', 'V06_TOUCH_PAUSE_COMPLETE'),
+             ('test_mobile_touch', 'PASS mobile touch'),
+             # Ported live tests: they report through exit code + FAIL lines (no marker).
+             ('test_ledge_grab', None),
+             ('test_unlocks_gauntlet', None),
+             ('test_heavy_bag', None),
+             ('test_story_glowup', None)]
 
 
 def run_suite(engine, project, output, timeout=180, fresh_import=False):

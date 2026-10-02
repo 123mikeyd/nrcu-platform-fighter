@@ -1,4 +1,5 @@
 extends SceneTree
+# v0.6 web touch + rotate-pause contract on the live router (match_active/pause_match).
 var failures := 0
 func _initialize(): call_deferred("run")
 func check(ok: bool, message: String):
@@ -13,7 +14,7 @@ func run():
     slots[1].character = "bobo"
     slots[2].kind = "empty"
     slots[3].kind = "empty"
-    check(game.start_match(slots,false,true,"debug"), "fixture launches actual match")
+    check(game.start_match(slots,false), "fixture launches actual match")
     await create_timer(4).timeout
     var pad = root.get_node("MobileTouch")
     pad.touch_mode = true
@@ -29,17 +30,17 @@ func run():
     root.size = Vector2i(844,390)
     for i in 8: await process_frame
     check(not paused,"landscape releases owned rotate pause")
-    game._on_pause_toggle()
+    game.pause_match()
     for i in 4: await process_frame
-    check(not game.player_one.is_visible_in_tree(), "pause menu hides retained fighters")
+    check(game.pause_menu.visible and paused, "Esc pause menu owns the pause")
     root.size = Vector2i(390,844)
     for i in 4: await process_frame
     root.size = Vector2i(844,390)
     for i in 4: await process_frame
     check(paused, "rotation does not release player's pause")
-    game._pause_overlay.resume()
+    game.resume_match()
     for i in 4: await process_frame
-    check(game.player_one.is_visible_in_tree(), "Resume restores combat rendering")
+    check(not paused and game.player_one.is_visible_in_tree(), "Resume restores combat")
     var p = game.player_one
     game.player_two.set_physics_process(false)
     game.player_two.controls_enabled = true
@@ -47,12 +48,12 @@ func run():
     game.player_two.position = Vector3(0.6,0.1,0)
     await create_timer(0.5).timeout
     var zones = pad.regions(root.get_visible_rect().size)
-    var hp: float = game.player_two.health
+    var hp: float = game.player_two.damage_percent
     touch(1,zones.attack,true)
     await create_timer(0.45).timeout
     touch(1,zones.attack,false)
-    check(game.player_two.health < hp, "touch attack damages Bobo in published arena")
-    print("HP ",hp," -> ",game.player_two.health)
+    check(game.player_two.damage_percent > hp, "touch attack damages freeplay Bobo")
+    print("DAMAGE% ",hp," -> ",game.player_two.damage_percent)
     await create_timer(1).timeout
     p.reset_fighter(Vector3(-4,0.2,0),true)
     await create_timer(0.5).timeout
@@ -71,6 +72,7 @@ func run():
     touch(2,zones.special,false)
     for i in 4: await process_frame
     check(not p.charging and p.last_move != "CHARGING", "normal release commits special")
+    if failures == 0: print("V06_TOUCH_PAUSE_COMPLETE")
     quit(0 if failures == 0 else 1)
 func touch(index: int, point: Vector2, pressed: bool):
     var e := InputEventScreenTouch.new()
