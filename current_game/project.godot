@@ -10,10 +10,10 @@ config_version=5
 
 [application]
 
-config/name="NRCU v0.5"
-config/version="0.5"
+config/name="NRCU v0.6"
+config/version="0.6"
 config/use_custom_user_dir=true
-config/custom_user_dir_name="NRCU_v05"
+config/custom_user_dir_name="NRCU_v06"
 config/description="Original 2.5D NRCU platform-fighter prototype"
 run/main_scene="res://scenes/home.tscn"
 config/features=PackedStringArray("4.7")
@@ -21,6 +21,7 @@ config/features=PackedStringArray("4.7")
 [autoload]
 
 MobileTouch="*res://scripts/mobile_touch.gd"
+DevMode="*res://scripts/dev_mode.gd"
 
 [display]
 
