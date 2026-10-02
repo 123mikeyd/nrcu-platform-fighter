@@ -1,4 +1,4 @@
-extends "res://scripts/approved_crouch.gd"
+extends "res://scripts/crouch_pose.gd"
 # Girl2-only authored runtime skeletal crouch. Native Idle is the bind-aware
 # starting pose; analytic knees preserve limb lengths and exact foot transforms.
 # No imported rest, skin, scale, movement capsule or companion edits.

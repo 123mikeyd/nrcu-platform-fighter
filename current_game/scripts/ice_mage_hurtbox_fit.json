@@ -1,0 +1,320 @@
+{
+ "policy": "PROVISIONAL (not Mike-reviewed). Native CPU-skinned dominant-bone samples (w>=.25, active blendshapes) at idle; SVD axis, trimmed 10-90 pct extent, 75th pct radius (trimmed cores, not triangle-exact). Fitted by Hermes 2026-09-29 from the current NRCU_Platform_Fighter ice_mage_combat.glb idle with the same method/params as the approved Witcheer fit.",
+ "regions": [
+  {
+   "name": "Head",
+   "bone": "Head",
+   "a": [
+    -0.34,
+    11.45,
+    -6.28
+   ],
+   "b": [
+    -0.71,
+    7.11,
+    1.77
+   ],
+   "radius": 9.17
+  },
+  {
+   "name": "Neck",
+   "bone": "neck",
+   "a": [
+    -0.17,
+    5.77,
+    -9.6
+   ],
+   "b": [
+    -2.18,
+    6.88,
+    -3.53
+   ],
+   "radius": 6.06
+  },
+  {
+   "name": "Pelvis",
+   "bone": "Hips",
+   "a": [
+    -0.65,
+    2.43,
+    3.95
+   ],
+   "b": [
+    0.83,
+    -3.44,
+    -5.87
+   ],
+   "radius": 18.71
+  },
+  {
+   "name": "Abdomen",
+   "bone": "Spine01",
+   "a": [
+    -2.15,
+    5.78,
+    -9.41
+   ],
+   "b": [
+    -0.25,
+    9.78,
+    9.69
+   ],
+   "radius": 12.49
+  },
+  {
+   "name": "Chest",
+   "bone": "Spine02",
+   "a": [
+    -7.14,
+    8.33,
+    3.76
+   ],
+   "b": [
+    6.96,
+    8.07,
+    1.53
+   ],
+   "radius": 13.78
+  },
+  {
+   "name": "LeftShoulder",
+   "bone": "LeftShoulder",
+   "a": [
+    11.14,
+    6.39,
+    -1.93
+   ],
+   "b": [
+    -5.4,
+    9.88,
+    -2.76
+   ],
+   "radius": 8.54
+  },
+  {
+   "name": "RightShoulder",
+   "bone": "RightShoulder",
+   "a": [
+    -10.73,
+    7.94,
+    -1.62
+   ],
+   "b": [
+    3.17,
+    11.38,
+    -3.52
+   ],
+   "radius": 7.95
+  },
+  {
+   "name": "LeftUpperArm",
+   "bone": "LeftArm",
+   "a": [
+    -1.8,
+    18.25,
+    2.48
+   ],
+   "b": [
+    5.67,
+    4.84,
+    1.45
+   ],
+   "radius": 11.09
+  },
+  {
+   "name": "LeftForearm",
+   "bone": "LeftForeArm",
+   "a": [
+    -1.86,
+    19.09,
+    1.06
+   ],
+   "b": [
+    3.81,
+    3.79,
+    3.89
+   ],
+   "radius": 8.98
+  },
+  {
+   "name": "LeftHand",
+   "bone": "LeftHand",
+   "a": [
+    1.82,
+    9.63,
+    -1.95
+   ],
+   "b": [
+    0.32,
+    16.37,
+    1.89
+   ],
+   "radius": 7.94
+  },
+  {
+   "name": "RightUpperArm",
+   "bone": "RightArm",
+   "a": [
+    -4.36,
+    6.92,
+    0.44
+   ],
+   "b": [
+    0.9,
+    18.96,
+    4.14
+   ],
+   "radius": 10.98
+  },
+  {
+   "name": "RightForearm",
+   "bone": "RightForeArm",
+   "a": [
+    1.78,
+    18.14,
+    1.16
+   ],
+   "b": [
+    -4.29,
+    2.53,
+    3.01
+   ],
+   "radius": 8.85
+  },
+  {
+   "name": "RightHand",
+   "bone": "RightHand",
+   "a": [
+    -0.31,
+    14.62,
+    3.05
+   ],
+   "b": [
+    -2.14,
+    8.43,
+    -2.18
+   ],
+   "radius": 7.88
+  },
+  {
+   "name": "LeftThigh",
+   "bone": "LeftUpLeg",
+   "a": [
+    -5.01,
+    20.56,
+    -0.86
+   ],
+   "b": [
+    -0.02,
+    9.81,
+    1.9
+   ],
+   "radius": 14.77
+  },
+  {
+   "name": "LeftShin",
+   "bone": "LeftLeg",
+   "a": [
+    -1.09,
+    9.9,
+    5.33
+   ],
+   "b": [
+    -0.6,
+    30.02,
+    3.85
+   ],
+   "radius": 10.73
+  },
+  {
+   "name": "LeftFoot",
+   "bone": "LeftFoot",
+   "a": [
+    -0.14,
+    8.53,
+    0.22
+   ],
+   "b": [
+    0.72,
+    1.82,
+    7.38
+   ],
+   "radius": 8.25
+  },
+  {
+   "name": "LeftToes",
+   "bone": "LeftToeBase",
+   "a": [
+    -3.07,
+    6.32,
+    0.36
+   ],
+   "b": [
+    4.43,
+    5.62,
+    0.95
+   ],
+   "radius": 4.65
+  },
+  {
+   "name": "RightThigh",
+   "bone": "RightUpLeg",
+   "a": [
+    0.82,
+    9.8,
+    -0.7
+   ],
+   "b": [
+    1.29,
+    25.61,
+    1.14
+   ],
+   "radius": 13.31
+  },
+  {
+   "name": "RightShin",
+   "bone": "RightLeg",
+   "a": [
+    -0.14,
+    29.62,
+    3.97
+   ],
+   "b": [
+    0.33,
+    10.17,
+    4.36
+   ],
+   "radius": 10.92
+  },
+  {
+   "name": "RightFoot",
+   "bone": "RightFoot",
+   "a": [
+    -1.66,
+    2.22,
+    7.81
+   ],
+   "b": [
+    0.14,
+    8.87,
+    1.27
+   ],
+   "radius": 8.26
+  },
+  {
+   "name": "RightToes",
+   "bone": "RightToeBase",
+   "a": [
+    -3.9,
+    5.68,
+    0.32
+   ],
+   "b": [
+    3.74,
+    5.4,
+    -0.05
+   ],
+   "radius": 4.81
+  }
+ ]
+}

@@ -1,7 +1,7 @@
 extends Node3D
 # Approved Girl2 is the only visible girl. Old rigs are hidden motion carriers.
-const MODEL=preload("res://story_boss/assets/mephisto/mephisto_girl.glb")
-const PAIR=preload("res://story_boss/assets/mephisto_paired/paired_v003.glb")
+const MODEL=preload("res://assets/mephisto/mephisto_girl.glb")
+const PAIR=preload("res://assets/mephisto_paired/paired_v003.glb")
 const VISUAL_SCALE=1.25
 const FLOOR_OFFSET=.04
 var model:Node3D
@@ -31,7 +31,7 @@ var native_reel=""
 var footless_player:AnimationPlayer
 var palm_samples=[]
 static var palm_binding_cache={}
-var native_catalog=JSON.parse_string(FileAccess.get_file_as_string("res://story_boss/assets/mephisto_girl2/phase_catalog.json"))
+var native_catalog=JSON.parse_string(FileAccess.get_file_as_string("res://assets/mephisto_girl2/phase_catalog.json"))
 const NATIVE_BONES={"Hips":"DEF-spine","Spine":"DEF-spine.001","Spine1":"DEF-spine.002","Spine2":"DEF-spine.003","neck":"DEF-spine.004","Head":"DEF-spine.005","LeftUpLeg":"DEF-thigh.L","RightUpLeg":"DEF-thigh.R","LeftLeg":"DEF-shin.L","RightLeg":"DEF-shin.R","LeftFoot":"DEF-foot.L","RightFoot":"DEF-foot.R","LeftToeBase":"DEF-toe.L","RightToeBase":"DEF-toe.R","LeftArm":"DEF-upper_arm.L","RightArm":"DEF-upper_arm.R","LeftForeArm":"DEF-forearm.L","RightForeArm":"DEF-forearm.R","LeftHand":"DEF-hand.L","RightHand":"DEF-hand.R"}
 func native_pose(clip:String,time:float,loop=false):
  if not native_player or not native_catalog.has(clip):return
@@ -108,13 +108,13 @@ func _ready():
  pair_player=pair.find_children("*","AnimationPlayer",true,false)[0]
  demon=pair.get_node("rig/Skeleton3D");pair_girl=pair.get_node("01_A1_11_Girl_PlacementRoot")
  girl=pair_girl.get_node("01_A1_11_Girl_Rig/Skeleton3D")
- native_model=preload("res://story_boss/assets/mephisto_girl2/girl2_native.glb").instantiate();native_model.name="ApprovedGirl2";add_child(native_model);native_model.scale=Vector3.ONE*.45
+ native_model=preload("res://assets/mephisto_girl2/girl2_native.glb").instantiate();native_model.name="ApprovedGirl2";add_child(native_model);native_model.scale=Vector3.ONE*.45
  native_player=native_model.find_children("*","AnimationPlayer",true,false)[0]
  native_reel=native_player.get_animation_list()[0]
- native_player.add_animation_library("kick",preload("res://story_boss/assets/mephisto_girl2/goalkeeper_kick.tres"))
+ native_player.add_animation_library("kick",preload("res://assets/mephisto_girl2/goalkeeper_kick.tres"))
  native_skeleton=native_model.find_children("*","Skeleton3D",true,false)[0]
  footless_player=AnimationPlayer.new();footless_player.name="FootlessPlayer";add_child(footless_player)
- footless_player.add_animation_library("",preload("res://story_boss/assets/mephisto_paired/footless_pair.tres"))
+ footless_player.add_animation_library("",preload("res://assets/mephisto_paired/footless_pair.tres"))
  var smoke=preload("res://story_boss/scripts/mephisto_footless_smoke.gd").new();smoke.name="FootlessSmoke";add_child(smoke);smoke.setup(self)
  demon_palm_points() # cache before combat, never scan dense meshes on impact
  old_geometry_hidden()

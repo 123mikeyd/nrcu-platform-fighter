@@ -1,0 +1,65 @@
+{
+ "policy": "GGB rigid mesh (no skeleton): per-node capsules fitted in mesh-local space from native vertices; body split at world y 0.78 (main body / head feature); k-means clusters, trimmed 10-90 pct extent, 75th pct radius. Wings follow their hinge meshes. Fitted by Hermes 2026-09-27 for review.",
+ "regions": [
+  {
+   "name": "Body",
+   "node": "Gumy_Mascot",
+   "a": [
+    0.0466,
+    -0.2547,
+    -0.2882
+   ],
+   "b": [
+    0.0,
+    -0.2873,
+    0.3157
+   ],
+   "radius": 0.7096
+  },
+  {
+   "name": "Head",
+   "node": "Gumy_Mascot",
+   "a": [
+    -0.254,
+    0.467,
+    0.0576
+   ],
+   "b": [
+    0.1973,
+    0.455,
+    -0.0038
+   ],
+   "radius": 0.2756
+  },
+  {
+   "name": "Wing_L",
+   "node": "Gumy_Wing_L",
+   "a": [
+    0.1807,
+    -0.0,
+    -0.0
+   ],
+   "b": [
+    -0.1807,
+    -0.0,
+    -0.0
+   ],
+   "radius": 0.2608
+  },
+  {
+   "name": "Wing_R",
+   "node": "Gumy_Wing_R",
+   "a": [
+    0.1807,
+    -0.0,
+    -0.0
+   ],
+   "b": [
+    -0.1807,
+    -0.0,
+    -0.0
+   ],
+   "radius": 0.2608
+  }
+ ]
+}

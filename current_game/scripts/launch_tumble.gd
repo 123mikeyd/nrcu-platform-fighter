@@ -38,7 +38,7 @@ func ignore_fighters():
   other.add_collision_exception_with(actor)
   ignored.append(other)
 func clear():
- if actor and actor.has_node("ReviewAir"):actor.get_node("ReviewAir").finish()
+ if actor and actor.has_node("AirReaction"):actor.get_node("AirReaction").finish()
  restore_players()
  active=false;clock=0;pause_remaining=0;source=null;recipients.clear()
  if effects:effects.clear()
@@ -87,12 +87,12 @@ func tick(delta: float) -> bool:
  actor.hitstun=maxf(saved,.001)
  actor._update_move_visuals(delta)
  actor.hitstun=saved
- if actor.fitted_reaction:
+ if actor.fitted_reaction and actor.character_id!="ice_mage":
   if actor.character_id=="doge_man":actor.fitted_reaction.trial_present(clock,true)
   else:
    actor.fitted_reaction.begin("body",signf(actor.velocity.x))
    actor.fitted_reaction.present_sample(minf(clock,.18))
- if actor.has_node("ReviewAir"):actor.get_node("ReviewAir").present(clock,true)
+ if actor.has_node("AirReaction"):actor.get_node("AirReaction").present(clock,true)
  if actor.hitstun<=0 or actor.is_grounded() or clock>=MAX_TIME:
   # This tick already moved and latched blocked inputs. Keep its true return:
   # ordinary control resumes next tick, never a second gravity/movement pass.

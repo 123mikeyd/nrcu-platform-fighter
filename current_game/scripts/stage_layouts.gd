@@ -7,6 +7,10 @@ static func surfaces(id: String) -> Array:
         "toy_room":
             # One longer combat shelf; background collection shelf is scenery.
             return [[Vector3(0,-0.55,0),Vector3(24,1,5)]]
+        "weaver":
+            # Hermes Weaver: one solid marble deck at Hermes's hips (x -7..7, top y=0).
+            # Its two elliptical movers are owned by weaver_stage.gd, not these bodies.
+            return [[Vector3(0,-0.5,0),Vector3(14,1,4)]]
         "sky":
             # Broad flight deck, two raised side lookouts, ten-unit open center.
             # Equal top heights leave headroom and remain double-jump reachable.

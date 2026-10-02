@@ -1,15 +1,17 @@
 extends Control
+const Unlocks = preload("res://scripts/unlocks.gd")
 
 const Config = preload("res://scripts/match_config.gd")
 signal start_requested(slots: Array, teams: bool)
 signal story_requested
+signal heavy_bag_requested
 signal back_requested
 const Style = preload("res://scripts/demo_style.gd")
 var help_page: Control
 var rows: Array = []
 var mode: OptionButton
 var level: OptionButton
-const LEVEL_IDS = ["debug", "toy_room", "sky", "hall", "meadow"]
+const LEVEL_IDS = ["debug", "toy_room", "weaver", "hall", "meadow"]  # Hermes Weaver replaced Sky Sanctuary; hall/meadow are the public v0.5 freeplay worlds
 var error_label: Label
 
 func _ready() -> void:
@@ -56,7 +58,7 @@ func _ready() -> void:
     var level_label := Label.new()
     level_label.text = "    LEVEL    "
     mode_row.add_child(level_label)
-    level = _choice(mode_row, ["Fortress", "Toy Shelf / Bedroom", "Sky (legacy freeplay)", "Turbo Music Hall", "GGB Flower Meadow"], 300)
+    level = _choice(mode_row, ["Fortress", "Toy Shelf / Bedroom", "Hermes Weaver", "Turbo Music Hall", "GGB Flower Meadow"], 300)
     level.name = "LevelSelect"
     var stages := HBoxContainer.new()
     stages.add_theme_constant_override("separation", 18)
@@ -77,7 +79,7 @@ func _ready() -> void:
         picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card.add_child(picture)
         var caption := Label.new()
-        caption.text = ["Fortress", "Toy Shelf", "Sky (legacy)", "Music Hall", "Flower Meadow"][i]
+        caption.text = ["Fortress", "Toy Shelf", "Hermes Weaver", "Music Hall", "Flower Meadow"][i]
         caption.position = Vector2(5,100)
         caption.size.x = 204
         caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -96,8 +98,16 @@ func _ready() -> void:
         row.add_child(label)
         var kind := _choice(row, ["Human", "Bot", "Empty"], 110)
         kind.select(0 if i == 0 else 1)
-        var character := _choice(row, Config.NAMES, 160)
-        character.select(i)
+        # Ice Mage is Story-only; locked fighters show as ??? (scripts/unlocks.gd).
+        var character := _choice(row, [], 160)
+        # Item index == Config.CHARACTERS index; Ice Mage's slot is a blank separator.
+        for c in Config.CHARACTERS.size():
+            if Config.CHARACTERS[c] in Unlocks.NEVER_PLAYABLE and Unlocks.hide_npcs():
+                character.add_separator()
+                continue
+            character.add_item(Config.NAMES[c])
+            character.set_item_metadata(character.item_count - 1, Config.CHARACTERS[c])
+        _select_default_character(character, i)
         var difficulty := _choice(row, ["Easy", "Normal", "Hard"], 110)
         difficulty.select(1)
         var team := _choice(row, ["Team A", "Team B"], 120)
@@ -133,9 +143,15 @@ func _ready() -> void:
     var story := Button.new()
     story.name = "StoryModeButton"
     story.text = "Story Mode"
-    story.custom_minimum_size = Vector2(400, 48)
+    story.custom_minimum_size = Vector2(230, 48)
     story.pressed.connect(func(): story_requested.emit())
     actions.add_child(story)
+    var bag := Button.new()
+    bag.name = "HeavyBagButton"
+    bag.text = "Heavy Bag"
+    bag.custom_minimum_size = Vector2(170, 48)
+    bag.pressed.connect(func(): heavy_bag_requested.emit())
+    actions.add_child(bag)
     var navigation := HBoxContainer.new()
     column.add_child(navigation)
     var back := Button.new()
@@ -174,15 +190,40 @@ func _refresh() -> void:
         row.device.disabled = row.kind.selected != 0
         row.character.disabled = row.kind.selected == 2
         row.team.disabled = mode.selected == 0 or row.kind.selected == 2
+        Unlocks.apply_to_option(row.character, [], _versus_names(row.character))
+
+func _notification(what: int) -> void:
+    # Re-check unlocks (Story clears / Dev Mode) whenever setup is shown again.
+    if what == NOTIFICATION_VISIBILITY_CHANGED and visible and not rows.is_empty():
+        _refresh()
 
 func _start() -> void:
     var slots: Array = []
     for row in rows:
-        slots.append({"kind": ["human", "bot", "empty"][row.kind.selected], "character": Config.CHARACTERS[row.character.selected], "difficulty": Config.DIFFICULTIES[row.difficulty.selected], "team": row.team.selected, "device": row.device.get_item_metadata(row.device.selected)})
+        slots.append({"kind": ["human", "bot", "empty"][row.kind.selected], "character": row.character.get_selected_metadata(), "difficulty": Config.DIFFICULTIES[row.difficulty.selected], "team": row.team.selected, "device": row.device.get_item_metadata(row.device.selected)})
     var error := Config.validate(slots, mode.selected == 1)
+    for slot in slots:
+        if error.is_empty() and slot.kind != "empty" and (not slot.character is String or Unlocks.is_locked(slot.character)):
+            error = "That fighter is still locked."
     error_label.text = error
     if error.is_empty():
         start_requested.emit(slots, mode.selected == 1)
 
 func selected_level() -> String:
     return LEVEL_IDS[level.selected]
+
+# Default P1-P4 fighters: the slot's usual pick when unlocked, else the next starter.
+const DEFAULT_PICKS := [["teknium"], ["doge_man"], ["ggb", "turbofit"], ["turbofit", "teknium"]]
+func _select_default_character(option: OptionButton, slot: int) -> void:
+    for id in DEFAULT_PICKS[slot] + Unlocks.STARTERS:
+        for i in option.item_count:
+            if option.get_item_metadata(i) == id and not Unlocks.is_locked(id):
+                option.select(i)
+                return
+
+func _versus_names(option: OptionButton) -> Array:
+    var names: Array = []
+    for i in option.item_count:
+        var id = option.get_item_metadata(i)
+        names.append(Config.NAMES[Config.CHARACTERS.find(id)] if id is String else "")
+    return names

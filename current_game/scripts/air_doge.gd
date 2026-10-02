@@ -10,6 +10,9 @@ const RADIUS=0.36
 const FORWARD=0.16
 const BONUS=2.5
 const GLOVE=Vector3(3.42368269,9.83053112,0.96084452)
+const HELPLESS_CLIP="HelplessFall"
+const HELPLESS_BLEND=0.15
+const LANDING_BLEND=0.10
 var actor
 var view
 var skeleton:Skeleton3D
@@ -33,24 +36,13 @@ var cue_count=0
 var contact_log=[]
 var added_actor_exception=false
 var added_victim_exception=false
-var debug_visible=false
-var debug_mesh:MeshInstance3D
-var debug_sweep:MeshInstance3D
 var ggb_receivers={}
 var audio:AudioStreamPlayer
 func _ready():
  actor=get_parent();view=actor._visual_root.get_node("DogeVisual")
  skeleton=view.model.find_children("*","Skeleton3D",true,false)[0];bone=skeleton.find_bone("RightHand")
- debug_mesh=MeshInstance3D.new();debug_mesh.mesh=SphereMesh.new();debug_mesh.mesh.radius=RADIUS;debug_mesh.mesh.height=RADIUS*2
- var mat=StandardMaterial3D.new();mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA;mat.albedo_color=Color(0,1,1,.22);debug_mesh.material_override=mat
- actor.add_child(debug_mesh);debug_mesh.visible=false
- debug_sweep=MeshInstance3D.new();debug_sweep.mesh=CapsuleMesh.new();debug_sweep.mesh.radius=RADIUS;debug_sweep.material_override=mat;actor.add_child(debug_sweep);debug_sweep.visible=false
  audio=AudioStreamPlayer.new();audio.stream=load("res://assets/airdoge_shutter.wav");audio.volume_db=-15;add_child(audio)
 func active():return phase!="idle"
-func _input(event):
- if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_F8:
-  debug_visible=not debug_visible
-  if not debug_visible:debug_mesh.visible=false;debug_sweep.visible=false
 func valid_actor():
  return is_instance_valid(actor) and actor.controls_enabled and actor.stocks>0 and actor.hitstun<=0 and actor.freeze_remaining<=0 and not is_instance_valid(actor.caught_by)
 func start():
@@ -84,11 +76,28 @@ func present():
  if not active():return
  actor.facing=facing;actor._visual_root.scale=Vector3.ONE;actor._visual_root.rotation=Vector3.ZERO
  view.flight_root.rotation=Vector3.ZERO;view.model.rotation.y=facing*PI/2
- var clip="AirDoge_"+kind+"_"+branch
- if view.current_clip!=clip:view.animation_player.play(clip,0)
- view.current_clip=clip;view.animation_player.speed_scale=0;view.animation_player.seek((source_frame()-1)/30.0,true)
- debug_mesh.visible=debug_visible and phase=="catch";debug_mesh.global_position=center()
- if phase!="catch":debug_sweep.visible=false
+ if phase=="fall":
+  # Helpless (special) fall after a miss or a released catch: the approved
+  # skydiver wiggle loop plays on its own clock instead of the old
+  # tuck/extension cycle. Short blend so the catch/throw pose eases in.
+  if view.current_clip!=HELPLESS_CLIP:
+   view.animation_player.speed_scale=1;view.animation_player.play(HELPLESS_CLIP,HELPLESS_BLEND)
+  view.current_clip=HELPLESS_CLIP;view.animation_player.speed_scale=1
+ else:
+  var clip="AirDoge_"+kind+"_"+branch
+  if phase=="landing":
+   # Ease from the helpless loop into the approved feet-first landing.
+   # AnimationPlayer blends advance on its own clock (stalled at speed 0),
+   # so the landing runs at the rate that covers source frames 88..114 in
+   # LANDING_RECOVERY_TIME, and its final frame is pinned on release.
+   var rate=(26.0/30.0)/LANDING_RECOVERY_TIME
+   if view.current_clip!=clip:
+    view.animation_player.play(clip,LANDING_BLEND*rate);view.animation_player.seek(87.0/30.0,false)
+   view.current_clip=clip;view.animation_player.speed_scale=rate
+   if elapsed>=LANDING_RECOVERY_TIME-0.000001:view.animation_player.seek(113.0/30.0,true)
+  else:
+   if view.current_clip!=clip:view.animation_player.play(clip,0)
+   view.current_clip=clip;view.animation_player.speed_scale=0;view.animation_player.seek((source_frame()-1)/30.0,true)
 func watchdog():
  if not active():return
  if not valid_actor() or actor.stocks!=actor_stock:cancel();return
@@ -159,9 +168,6 @@ func capture():
   q.shape=CapsuleShape3D.new();q.shape.radius=RADIUS;q.shape.height=distance+2*RADIUS
   q.transform=Transform3D(Basis(Quaternion(Vector3.UP,(c-old).normalized())),(c+old)*.5)
  Receivers.prepare(actor,q)
- debug_sweep.visible=debug_visible and distance>.000001
- if debug_sweep.visible:
-  debug_sweep.mesh.height=distance+2*RADIUS;debug_sweep.global_transform=q.transform
  var space=actor.get_world_3d().direct_space_state
  var hits=space.intersect_shape(q,64)
 
@@ -204,8 +210,6 @@ func release_success():
 func cancel():
  query_hulls(false)
  detach();phase="idle";elapsed=0;previous_valid=false
- if debug_mesh:debug_mesh.visible=false
- if debug_sweep:debug_sweep.visible=false
  if view:view.current_clip=""
  if audio:audio.stop()
 func _exit_tree():

@@ -40,7 +40,7 @@ func _ready():
 func start():
  if active:return
  active=true;elapsed=0;direction=actor.facing;targets.clear();contacts.clear();entry.clear()
- for b in bones:entry.append(actor.approved_crouch.endpoint[b])
+ for b in bones:entry.append(actor.crouch_pose.endpoint[b])
  actor.doge_tyson_followup=false;actor.doge_punch_buffered=false
  actor.attack_cooldown=DURATION;actor.last_move="LOW CAPE SPIN";actor.attack_flash_time=0
  if actor._attack_flash:actor._attack_flash.visible=false
@@ -65,8 +65,8 @@ func pose_at(t:float):
   var s=Vector3(a[7],a[8],a[9]).lerp(Vector3(b[7],b[8],b[9]),w)
   var pose=Transform3D(Basis(q).scaled(s),p)
   if t<ENTRY:pose=entry[n].interpolate_with(pose,smoothstep(0,ENTRY,t))
-  if t>SWEEP_END:pose=pose.interpolate_with(actor.approved_crouch.endpoint[bones[n]],smoothstep(SWEEP_END,DURATION,t))
-  if t<=0 or t>=DURATION:pose=actor.approved_crouch.endpoint[bones[n]]
+  if t>SWEEP_END:pose=pose.interpolate_with(actor.crouch_pose.endpoint[bones[n]],smoothstep(SWEEP_END,DURATION,t))
+  if t<=0 or t>=DURATION:pose=actor.crouch_pose.endpoint[bones[n]]
   skeleton.set_bone_pose(bones[n],pose)
  skeleton.force_update_all_bone_transforms()
 func cape_at(t:float)->PackedVector3Array:
@@ -125,4 +125,4 @@ func after_tick(delta:float):
  if elapsed>=DURATION-.000001:
   cancel()
   # Finish the whole attack before either held crouch or released-Down rise.
-  actor.approved_crouch.amount=1;actor.approved_crouch.phase="hold"
+  actor.crouch_pose.amount=1;actor.crouch_pose.phase="hold"

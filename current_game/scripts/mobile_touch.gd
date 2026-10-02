@@ -35,8 +35,9 @@ func _process(_delta: float):
         scene_id = next_id
 
     var active := false
-    if is_instance_valid(scene) and scene.has_method("start_match"):
-        active = not scene.setup.visible and not scene.story_panel.visible and scene.screen in ["battle","freeplay","practice"] and not scene.match_over and is_instance_valid(scene.player_one) and scene.player_one.controls_enabled and scene.player_one.control_type == "human" and scene.player_one.player_index == 1
+    # Arena contract: the battle scene exposes match_active() (live fight, no menu/result on top).
+    if is_instance_valid(scene) and scene.has_method("start_match") and scene.has_method("match_active"):
+        active = scene.match_active() and is_instance_valid(scene.player_one) and scene.player_one.controls_enabled and scene.player_one.control_type == "human" and scene.player_one.player_index == 1
     # Own only our rotate pause; never resume a player's existing Pause menu.
     var rotate_block := touch_mode and portrait() and active
     if rotate_block and not get_tree().paused:
@@ -156,10 +157,10 @@ func _input(event: InputEvent):
     var view_size := get_viewport().get_visible_rect().size
     if Rect2(view_size.x-150,20,126,52).has_point(event.position):
         var scene = get_tree().current_scene
-        if is_instance_valid(scene) and scene.has_method("show_setup"):
+        if is_instance_valid(scene) and scene.has_method("pause_match"):
             cancel_contacts()
             set_gameplay_enabled(false)
-            scene.pause_game()
+            scene.pause_match()
             get_viewport().set_input_as_handled()
         return
     var zones := regions(view_size)

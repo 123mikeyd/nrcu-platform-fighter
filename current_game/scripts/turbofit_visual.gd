@@ -8,13 +8,85 @@ const MOSH_IDLE = preload("res://assets/turbofit/mosh_idle_v004.tres")
 var model: Node3D
 var animation_player: AnimationPlayer
 var current_clip := ""
+# Identity node for ledge_grab.gd, which reads view.flight_root (Doge's up-flight pivot).
+# TurboFit has no flight pivot: the model is NOT parented to it, it stays at identity.
+var flight_root: Node3D
 var palette := Color.WHITE
 var falling := false
 var landing_remaining := 0.0
 var _kick_skeleton: Skeleton3D
 var _kick_foot := -1
 var _kick_toe := -1
-var guitar_review
+var guitar_moves
+# v3b hair: 5 bone chains under mixamorig_Head, driven by Godot spring bones.
+# Mike picked "A": bouncy, big whips on mosh/kick moves. Presentation only.
+const HAIR_CHAINS := [
+    ["Hair_Back_C_01", "Hair_Back_C_04"], ["Hair_Back_L_01", "Hair_Back_L_04"], ["Hair_Back_R_01", "Hair_Back_R_04"],
+    ["Hair_Side_L_01", "Hair_Side_L_03"], ["Hair_Side_R_01", "Hair_Side_R_03"],
+]
+const HAIR_STIFFNESS := 1.0
+const HAIR_DRAG := 0.3
+const HAIR_GRAVITY := 0.0 # gravity made the chains creep/sag over time
+const HAIR_RADIUS := 2.5 # skeleton units (cm)
+# Keep hair out of his back/shoulders/head: [bone, radius, height] in skeleton units (cm).
+const HAIR_COLLIDERS := [
+    ["mixamorig_Head", 9.0, 0.0], ["mixamorig_Neck", 6.0, 14.0],
+    ["mixamorig_Spine2", 13.0, 34.0], ["mixamorig_Spine1", 12.0, 30.0], ["mixamorig_Spine", 12.0, 30.0],
+    ["mixamorig_LeftShoulder", 6.0, 18.0], ["mixamorig_RightShoulder", 6.0, 18.0],
+]
+var hair_spring: SpringBoneSimulator3D
+var _hair_facing := 0.0
+
+func _process(_delta: float) -> void:
+    _hair_check()
+
+func _hair_check() -> void:
+    # Facing flips are instant 180 degree turns; without a reset the world-space
+    # springs whip the hair through his body. Snap it behind him on each flip.
+    if hair_spring == null or model == null:
+        return
+    var f := signf(sin(model.rotation.y))
+    if f != 0.0 and f != _hair_facing:
+        if _hair_facing != 0.0:
+            hair_spring.reset()
+        _hair_facing = f
+
+func _setup_hair_spring(skeleton: Skeleton3D) -> void:
+    if skeleton.find_bone(HAIR_CHAINS[0][0]) < 0:
+        return
+    hair_spring = SpringBoneSimulator3D.new()
+    hair_spring.name = "HairSpring"
+    skeleton.add_child(hair_spring)
+    hair_spring.setting_count = HAIR_CHAINS.size()
+    # SpringBoneSimulator3D works in WORLD units; the constants above are skeleton cm.
+    var k := skeleton.global_transform.basis.get_scale().x if skeleton.is_inside_tree() else 0.0125
+    for i in HAIR_CHAINS.size():
+        hair_spring.set_root_bone_name(i, HAIR_CHAINS[i][0])
+        hair_spring.set_end_bone_name(i, HAIR_CHAINS[i][1])
+        hair_spring.set_extend_end_bone(i, true)
+        hair_spring.set_end_bone_direction(i, SpringBoneSimulator3D.BONE_DIRECTION_FROM_PARENT)
+        hair_spring.set_end_bone_length(i, 12.0 * k)
+        hair_spring.set_stiffness(i, HAIR_STIFFNESS)
+        hair_spring.set_drag(i, HAIR_DRAG)
+        hair_spring.set_gravity(i, HAIR_GRAVITY)
+        hair_spring.set_radius(i, HAIR_RADIUS * k)
+        hair_spring.set_enable_all_child_collisions(i, true)
+    for c in HAIR_COLLIDERS:
+        if skeleton.find_bone(c[0]) < 0:
+            continue
+        var col: SpringBoneCollision3D
+        if c[2] <= 0.0:
+            var sphere := SpringBoneCollisionSphere3D.new()
+            sphere.radius = c[1] * k
+            col = sphere
+        else:
+            var capsule := SpringBoneCollisionCapsule3D.new()
+            capsule.radius = c[1] * k
+            capsule.height = c[2] * k
+            col = capsule
+        col.name = "HairCol_" + c[0]
+        hair_spring.add_child(col)
+        col.bone_name = c[0]
 
 # Approved Power Chord presentation: uncapped anticipation, immediate contact.
 # The combat controller retains the original charge, damage and cooldown clocks.
@@ -39,16 +111,16 @@ func begin_power_chord() -> void:
     power_source_frame = 1.0
 
 func power_chord_contact(direction: float) -> void:
-    if guitar_review:
-        guitar_review.present(false, false, false, "POWER CHORD", "", 0)
+    if guitar_moves:
+        guitar_moves.present(false, false, false, "POWER CHORD", "", 0)
     power_released = true
     power_returning = false
     power_release_facing = direction
     power_chord_pose_frame(20.0, direction)
 
 func cancel_power_chord() -> void:
-    if guitar_review and guitar_review.mode == "power":
-        guitar_review.hide_now()
+    if guitar_moves and guitar_moves.mode == "power":
+        guitar_moves.hide_now()
     power_released = false
     power_hold_clock = 0.0
     power_returning = false
@@ -59,12 +131,13 @@ func power_chord_pose_frame(frame: float, direction: float) -> void:
     power_source_frame = frame
     current_clip = "TwoHandCombo"
     model.rotation.y = direction * PI / 2.0
+    _hair_check()
     animation_player.play("TwoHandCombo", 0, 1)
     animation_player.speed_scale = 0
     animation_player.seek((frame - 1.0) / 30.0, true)
     _kick_skeleton.force_update_all_bone_transforms()
-    if guitar_review and guitar_review.mode == "power":
-        guitar_review.update_attachment()
+    if guitar_moves and guitar_moves.mode == "power":
+        guitar_moves.update_attachment()
 
 func present_power_chord(charging: bool, cooldown: float, active_move: String, facing: float, delta: float) -> bool:
     if active_move == "CHARGING" and charging:
@@ -93,6 +166,9 @@ func _ready() -> void:
     model = MODEL.instantiate()
     add_child(model)
     model.rotation.y = PI / 2.0
+    flight_root = Node3D.new()
+    flight_root.name = "LedgeFlightRoot"
+    add_child(flight_root)
     for skeleton in model.find_children("*", "Skeleton3D", true, false):
         var foot: int = skeleton.find_bone("mixamorig_RightFoot")
         var toe: int = skeleton.find_bone("mixamorig_RightToe_End")
@@ -100,6 +176,7 @@ func _ready() -> void:
             _kick_skeleton = skeleton
             _kick_foot = foot
             _kick_toe = toe
+            _setup_hair_spring(skeleton)
             break
     for node in model.find_children("*", "AnimationPlayer", true, false):
         animation_player = node
@@ -133,9 +210,9 @@ func _ready() -> void:
                 material.emission_texture = material.albedo_texture
                 material.emission_energy_multiplier = 0.25
                 mesh.set_surface_override_material(surface, material)
-    guitar_review = preload("res://scripts/guitar_review.gd").new()
-    guitar_review.name = "GuitarReview"
-    add_child(guitar_review)
+    guitar_moves = preload("res://scripts/turbofit_guitar.gd").new()
+    guitar_moves.name = "TurboFitGuitar"
+    add_child(guitar_moves)
     sync_pose(true, Vector3.ZERO, false, false, "", Vector3.RIGHT, 1.0, 0.0)
 
 func air_side_kick_volume(elapsed: float, duration: float, facing: float) -> Dictionary:
@@ -178,23 +255,23 @@ func choose_clip(grounded: bool, interrupted: bool, shielding: bool, active_move
     return "Idle"
 
 func sync_pose(grounded: bool, motion: Vector3, interrupted: bool, shielding: bool, active_move: String, attack_direction: Vector3, facing: float, delta: float, attack_clip := "", attack_elapsed := 0.0, attack_duration := 1.0) -> void:
-    if guitar_review:
+    if guitar_moves:
         # Side-B-only visual recovery; a new action or locomotion cancels it.
-        if active_move.is_empty() and motion.length() > 0.15 and guitar_review.mode == "wave":
-            guitar_review.hide_now()
-        guitar_review.present(grounded, interrupted, shielding, active_move, attack_clip, delta)
-        if active_move.is_empty() and guitar_review.mode == "wave":
+        if active_move.is_empty() and motion.length() > 0.15 and guitar_moves.mode == "wave":
+            guitar_moves.hide_now()
+        guitar_moves.present(grounded, interrupted, shielding, active_move, attack_clip, delta)
+        if active_move.is_empty() and guitar_moves.mode == "wave":
             active_move = "SOUND WAVE"
     if animation_player == null:
         return
-    if guitar_review and guitar_review.mode == "play":
+    if guitar_moves and guitar_moves.mode == "play":
         cancel_power_chord()
-        guitar_review.rock_pose(facing)
+        guitar_moves.rock_pose(facing)
         return
     if interrupted or shielding:
         cancel_power_chord()
     elif present_power_chord(power_charging, power_cooldown, active_move, facing, delta):
-        if guitar_review: guitar_review.update_attachment()
+        if guitar_moves: guitar_moves.update_attachment()
         return
     # Keep the visible horizontal strike aimed at its committed damage side.
     # Movement may turn freely; ordinary/interrupted poses use current facing.
@@ -202,6 +279,7 @@ func sync_pose(grounded: bool, motion: Vector3, interrupted: bool, shielding: bo
     if not interrupted and not shielding and active_move == "GUITAR SWING" and absf(attack_direction.x) > 0.1 and absf(attack_direction.y) <= 0.1:
         pose_facing = signf(attack_direction.x)
     model.rotation.y = pose_facing * PI / 2.0
+    _hair_check()
     if not interrupted and not attack_clip.is_empty():
         # Preserve the landing episode when the airborne kick meets the floor.
         falling = attack_clip in ["AirSideKick", "AirDownKick"] and not grounded

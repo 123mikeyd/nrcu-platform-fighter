@@ -4,7 +4,7 @@ extends RefCounted
 ## Current v3 self-cast restraint precedes hitstun; retain that ordering explicitly.
 const LOCOMOTION := ["idle", "run", "rising", "falling"]
 const ACTION := ["neutral", "movement_lock", "landing_lock"]
-const STATUS := ["normal", "disabled", "hitstun", "casting", "caught", "frozen"]
+const STATUS := ["normal", "disabled", "hitstun", "casting", "caught", "frozen", "sleeping"]
 var locomotion := "idle"
 var action := "neutral"
 var status := "normal"
@@ -42,13 +42,15 @@ func reconcile(actor) -> void:
     if not actor.controls_enabled: next_status = "disabled"
     elif actor.freeze_remaining > 0: next_status = "frozen"
     elif is_instance_valid(actor.caught_by): next_status = "caught"
+    elif actor.get("sleep_remaining") != null and actor.sleep_remaining > 0: next_status = "sleeping"
     elif actor.teknium_magic and actor.teknium_magic.phase != "idle": next_status = "casting"
     elif actor.hitstun > 0: next_status = "hitstun"
     transition("status", next_status, "current v3 control priority")
     if status != "normal": return
     action_owner = "counter" if actor.doge_counter and actor.doge_counter.phase != "idle" else "special" if actor.teknium_specials and actor.teknium_specials.phase != "idle" else "input"
-    if actor.ggb_combat_review and actor.ggb_combat_review.committed(): action_owner = "special"
+    if actor.ggb_combat and actor.ggb_combat.committed(): action_owner = "special"
     if actor.air_doge and actor.air_doge.active(): action_owner = "special"
+    if actor.turbofit_snapline and actor.turbofit_snapline.active(): action_owner = "special"
     scripted_axis = (actor.mephisto_moves != null and not actor.mephisto_moves.move.is_empty()) or (actor.doge_ground_rush != null and actor.doge_ground_rush.phase != "idle")
     var next_action := "landing_lock" if actor.landing_lag > 0 else "movement_lock" if actor.charging or actor.shielding or scripted_axis or action_owner != "input" else "neutral"
     # Explicit release reconciles an expired landing lock before a new action.

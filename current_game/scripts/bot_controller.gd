@@ -52,17 +52,6 @@ func read(fighter: Node3D, delta: float) -> Dictionary:
                 intent.special = sequence % 6 == 0 and fighter.attack_cooldown <= 0
         elif nearest < 7.0:
             intent.special = sequence % (5 if fighter.bot_difficulty == "easy" else 3) == 0
-        if fighter.prototype_fire and nearest < 6.5 and absf(target.global_position.y - fighter.global_position.y) < 0.6:
-            # Prototype ranged spacing; don't walk past the cast's release point
-            # or consume its special edge with a basic cooldown.
-            intent.attack = false
-            intent.shield = false
-            intent.up = false
-            intent.down = false
-            intent.left = dx > 0 if nearest < 2.2 else (dx < 0 and nearest > 4.0)
-            intent.right = dx < 0 if nearest < 2.2 else (dx > 0 and nearest > 4.0)
-            fighter.facing = signf(dx)
-            intent.special = nearest >= 2.2 and sequence % 3 == 0 and fighter.attack_cooldown <= 0 and fighter.ice_cast_cooldown <= 0
     return intent
 
 func reset() -> void:

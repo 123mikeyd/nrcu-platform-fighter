@@ -1,4 +1,4 @@
-NRCU v0.5 ASSET NOTICES
+NRCU v0.6 ASSET NOTICES
 
 Arts Bro: frontend portrait and layout adaptation.
 Quarker (Quark): current fighter state-coordinator adaptation from contribution 09970e27. Experimental combat and collision-authoring applications are not included.

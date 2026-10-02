@@ -29,8 +29,9 @@ static func box(color: Color, border := Color.TRANSPARENT, width := 0) -> StyleB
     s.content_margin_top = 8
     s.content_margin_bottom = 8
     return s
-const CONTROLS = "P1  WASD move / aim · Space or W jump\n    F basic · G special\n\nP2  Arrows move / aim · Enter or Up jump\n    K basic · L special\n\nPAD Stick / D-pad aim · A jump · X basic\n    B special\n\nDirection + attack changes your move.\nTap down on an upper platform to drop.\nEsc: match setup · R after winner: rematch.\nConnect controllers before launching.\nNo universal shield; defensive specials remain.\nTouch: pad + Attack/Special; Up jumps."
-const MOVES = "TEKNIUM · G hold/release charge shot\nWhile charging: fresh direction stores; Up/Jump jumps\nRelease, press G to resume; initial chords stay specials\nA/D+G Shadow Kick · W+G aim recovery\nS+G grenade; next fresh S+G detonates\n\nDOGE MAN · S+G finite counter, hit during flash: hook\nA/D+G flying tackle · airborne A/D+F Superman\n\nGGB REVIEW · Five jumps; hold jump to float\nF double chomp · A/D+F short sting\nG sticky goo · Side+G UNASSIGNED\nW+G wing rise / flip / dive / ripple\nS+G Steel; release G, fresh S+G cancels\nSteel: 3s max, 40% resistance; any hit breaks\nTURBOFIT · G charged chord · A/D+G wave\nS+G sound reflector · W+G recovery\n\nMEPHISTO · Girl G barrier · A/D+G ember\nW+G paired teleport · ground S+G switches lead\nDemon G smoke · A/D+G chain · W+G paired vanish\nICE MAGE · G Frost Bolt · W+G Frost Rise\nWITCHEER · A/D+G coin · W+G swim · S+G absorb"
+const CONTROLS = "P1  WASD move / aim · Space or W jump\n    F basic · G special\n\nP2  Arrows move / aim · Enter or Up jump\n    K basic · L special\n\nPAD Stick / D-pad aim · A jump · X basic\n    B special\n\nDirection + attack changes your move.\nTap down on an upper platform to drop.\nEsc: pause · Options → Dev Mode · R after winner: rematch.\nConnect controllers before launching.\nNo universal shield; defensive specials remain.\nTouch: pad + Attack/Special; Up jumps."
+const MOVES = "LEDGES (Tek, Doge, Turbo) · auto-grab\n  ↑/toward climb · Space jump · ↓ drop\nTEKNIUM · F jab > straight > scoop kick\n  G Laser Blast, works in air; jump or G again\n  before the white flash cancels\n  ↔+G Shadow Kick · ↑+G aim recovery\n  ↓+G remote grenade; next fresh ↓+G detonates\nDOGE MAN · F 6-hit combo · ↔+G flying tackle\n  ↑+G Air Doge: Jordan leap, catch + spike down\n  ↓+G finite counter, hit during flash: hook\nGGB · Five jumps; hold jump to float\n  F double chomp · ↔+F short sting\n  G sticky goo · ↔+G Wing Gust (no damage)\n  ↑+G wing rise / flip / dive / ripple\n  ↓+G Steel: 3s max, 40% resist; any hit breaks\nTURBOFIT · G charged chord · ↔+G wave\n  ↓+G sound reflector · ↑+G Snapline grapple\nBOBO · G Charge Blast · ↔+G Rocket Dash\n  ↑+G Thruster Rise · ↔+F Thrust Slash\n  ↓+F Low Claw\nMEPHISTO · G barrier · ↔+G ember\n  ↑+G paired teleport · ↓+G Dream Grasp (sleep)\nWITCHEER · ↔+G coin · ↑+G swim · ↓+G absorb\nICE MAGE (CPU) · G Frost Bolt · ↑+G Frost Rise"
+const KEY_TEXTURE = preload("res://assets/menu/help_key_legend.png")
 static func help(parent: Control, closed: Callable) -> Control:
     var page := Panel.new()
     page.name = "HelpPage"
@@ -50,6 +51,17 @@ static func help(parent: Control, closed: Callable) -> Control:
         label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
         label.add_theme_font_size_override("font_size",18 if i == 0 else 16)
         page.add_child(label)
+    # Map-style KEY legend in the empty lower-left: WASD arrows, F attack, G special.
+    var key := TextureRect.new()
+    key.name = "HelpKeyLegend"
+    key.texture = KEY_TEXTURE
+    key.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    key.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    key.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+    key.position = Vector2(66,492)
+    key.size = Vector2(540,130)
+    key.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    page.add_child(key)
     var back := Button.new()
     back.text = "Back"
     back.name = "HelpBack"

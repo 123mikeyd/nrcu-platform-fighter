@@ -11,6 +11,13 @@ var travel=Vector3.UP
 const DEPART=16.0/24.0
 const VANISH=.16
 const ARRIVE=20.0/24.0
+# Sleep kit Side-B: the steerable ember became a Din's-Fire-style SLUMBER ember.
+# Hold/steer/release/terrain rules are unchanged; its burst now does less damage
+# and knockback and puts every opponent it hits to sleep (duration scales with %).
+const SLUMBER_DAMAGE=7.0
+const SLUMBER_KB=1.1
+const SLUMBER_ORB_COLOR=Color(.78,.5,1.0,.92)
+const SLUMBER_BURST_COLOR=Color(.62,.38,1.0,.5)
 func actor():return moves.actor
 func view():return moves.view()
 func protected_window()->bool:
@@ -34,8 +41,8 @@ func cancel():
 func release():
  if moves.elapsed<.75:released_early=true;return
  actor().charging=false;actor().charge_time=0
- moves.move="EmberRelease";moves.elapsed=0;actor().attack_cooldown=moves.duration();actor().last_move="EMBER BURST"
- sphere(.65,Color(1,.28,.04,.52));fx.global_position=ember
+ moves.move="EmberRelease";moves.elapsed=0;actor().attack_cooldown=moves.duration();actor().last_move="SLUMBER BURST"
+ sphere(.65,SLUMBER_BURST_COLOR);fx.global_position=ember
 func present():
  var v=view();var t=moves.elapsed
  if moves.move=="PairVanish":
@@ -74,7 +81,7 @@ func tick(delta:float):
   "EmberHold":
    if t>=.75:
     if not is_instance_valid(fx):
-     sphere(.15,Color(1,.25,.035,.9));ember=view().girl_point("RightHand");ember.z=actor().global_position.z;origin=ember
+     sphere(.15,SLUMBER_ORB_COLOR);ember=view().girl_point("RightHand");ember.z=actor().global_position.z;origin=ember
     var input=actor()._read_raw_controls(0)
     var vertical=float(int(input.up)-int(input.down))
     var next=ember+Vector3(moves.facing*2.8,vertical*2.2,0)*delta
@@ -85,7 +92,12 @@ func tick(delta:float):
     if released_early or not input.special or t>=3.25 or ember.distance_to(origin)>=7.0 or not hit.is_empty():release()
   "EmberRelease":
    if t>=.18 and t<=.32:
-    moves.query_hand(ember,.65,11.0,Vector3(moves.facing,.35,0),4.2)
+    var before=moves.targets.duplicate()
+    moves.query_hand(ember,.65,SLUMBER_DAMAGE,Vector3(moves.facing,.25,0),SLUMBER_KB)
+    for target in moves.targets:
+     if target in before or not is_instance_valid(target):continue
+     var slept=target.apply_sleep(actor())
+     if not moves.contacts.is_empty():moves.contacts[-1]["slept"]=slept;moves.contacts[-1]["sleep_total"]=target.sleep_total
    if is_instance_valid(fx):
     fx.scale=Vector3.ONE*(.23 if t<.18 else 1.0+minf(t-.18,.22)*1.5)
     fx.material_override.albedo_color.a=maxf(0,.52*(1-t/.5))
