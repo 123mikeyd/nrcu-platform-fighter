@@ -88,5 +88,6 @@ Tell Mike what you find. Every bug report makes the next patch better. 🙏
 - **Hermes Weaver** gets a glow-up: a more dramatic, cinematic stage.
 - **Crouching attacks** are getting fixed.
 - **Downward air attacks** are getting reworked.
+- **Teknium's up-air backflip kick** is getting a full rework: bigger arcing hit, smoother timing, and no more stutter on phones.
 
 <sub>Also on the way: more ledges (GGB?), more moves, more fighters. Stay tuned.</sub>
