@@ -1,27 +1,78 @@
-# Tester controls
+# 🎮 NRCU Platform Fighter — How to Play
 
-| Action | P1 | P2 | Controller |
-|---|---|---|---|
-| Move / aim | WASD | Arrows | Stick / D-pad |
-| Jump | Space / W | Enter / Up | A / Up |
-| Basic | F | K | X |
-| Special | G | L | B |
-| Drop through upper platform | fresh Down | fresh Down | fresh Down |
+## Buttons
 
-Escape pauses. Touch uses the existing left directional pad and right Attack/Special contacts; Up jumps. Direction + attack chooses directional moves with vertical priority. No universal Shield: E/O and shoulders do nothing.
+| | Move / aim | Jump | Basic | Special |
+|---|---|---|---|---|
+| **Player 1 (keyboard)** | WASD | Space or W | F | G |
+| **Player 2 (keyboard)** | Arrow keys | Enter or Up | K | L |
+| **Gamepad** | Stick or D-pad | A | X | B |
+| **Touch (phone)** | On-screen pad | Up | Attack | Special |
 
-## Teknium charge storage
+- **Direction + attack changes your move.** Neutral, side, up and down each do something different, on the ground and in the air.
+- **Arrows below mean a direction:** ↔ = side (A/D) · ↑ = up (W) · ↓ = down (S). On a gamepad that's the stick or D-pad. Example: **↔+G** = hold left or right and press G for a side special.
+- **Drop through a platform:** tap down while standing on an upper platform.
+- **Pause:** Esc (keyboard). Gamepads don't have a pause button yet.
+- **Rematch:** press R after a winner is shown.
+- **Dev Mode:** Options → Dev Mode shows move text and unlocks everyone.
+- **Players 3 and 4** need their own gamepads. Plug controllers in **before** you launch the game.
+- There's no universal shield. Some fighters have their own defensive specials instead.
 
-Hold neutral Special. **After charging starts**, freshly press Left, Right, Up, Down or dedicated Jump to store. Up/Jump also requests an ordinary jump; Down storage does not fire or drop through on that edge. Merely held directions are not fresh. Release and freshly press Special to resume neutral charge or choose a directional special. Normal uncancelled release shoots. From idle, direction + Special retains Shadow Kick / Holy Ignition / grenade routes. Initial Jump + neutral Special charges; repress Jump to store. Touch cancellation aborts/stores instead of firing.
+## Ledges
 
-## Defensive specials
+Teknium, Doge Man and TurboFit grab ledges automatically.
+- **↑** or **toward the stage:** climb up
+- **Space:** jump off
+- **↓** or **away:** let go
+- After 4 seconds you drop, and a hit knocks you off.
 
-Doge Down+Special: finite counter; an incoming hit during its window triggers retaliation. Turbo Down+Special: sound reflector. Mephisto girl neutral Special: finite barrier. These are not a shared shield mechanic.
+## Fighters
 
-## Story and revival
+Moves below use Player 1 keys (F = basic, G = special).
 
-Story: defeat Bobo's 400 HP, choose Next Encounter, then Start the Normal Ice Mage fight with fresh stocks and the same hero. Retry repeats the current encounter. Final victory offers Restart Run. R activates the Story result's primary action; visible buttons also support touch.
+**⚡ Teknium**
+- F: jab → straight → scoop kick
+- G: Laser Blast. A warning line, then the beam. Works in the air. Jump or press G again before the white flash to cancel.
+- ↔+G: Shadow Kick · ↑+G: aimed recovery
+- ↓+G: remote grenade. Press ↓+G again to detonate.
 
-After a non-final stock loss, Return to Sender places you on a temporary protected platform. Move/jump to depart after orientation, or wait for timeout. Departure protection expires shortly and attacking ends it immediately.
+**🐕 Doge Man**
+- F: 6-hit boxing combo. Keep tapping F.
+- ↔+G: flying tackle
+- ↑+G: Air Doge. A Jordan-style leap that catches an opponent and spikes them down. Afterwards he falls helpless until he lands or grabs a ledge.
+- ↓+G: counter. Get hit during the flash and he answers with a hook.
 
-[Known issues and verification limits](RELEASE_NOTES_v0.3-web.4.md).
+**🐝 GGB**
+- Five jumps; hold jump to float down slowly
+- F: double chomp · ↔+F: short sting · G: sticky goo
+- ↔+G: Wing Gust. Tap to shove, hold to blow them away. No damage.
+- ↑+G: wing rise / flip / dive / ripple
+- ↓+G: Steel form. Up to 3 s, 40% damage resistance, and any hit breaks it.
+
+**🎸 TurboFit**
+- G: charged power chord · ↔+G: sound wave
+- ↓+G: sound reflector · ↑+G: Snapline grapple recovery
+
+**🥊 Bobo**
+- G: Charge Blast (hold, then release) · ↔+G: Rocket Dash
+- ↑+G: Thruster Rise recovery
+- ↔+F: Thrust Slash · ↓+F: Low Claw
+
+**😈 Mephisto**
+- G: barrier · ↔+G: ember
+- ↑+G: paired teleport
+- ↓+G: Dream Grasp. Her shadow demon grabs the opponent and puts them to sleep.
+
+**🦆 Witcheer**
+- ↔+G: coin toss · ↑+G: swim recovery · ↓+G: absorb
+
+**❄️ Ice Mage** (CPU only, Story mode)
+- Frost Bolt · Frost Rise
+
+## Modes
+
+- **Versus:** up to 4 slots. Each can be a human, a CPU (easy / normal / hard) or empty. Everyone has 3 stocks. Teams need at least 3 fighters, and friendly fire is off.
+- **Story:** fight through a run of encounters. Clear it to unlock challengers.
+- **Heavy Bag:** 15 seconds, one bag. How hard can you hit?
+
+Some fighters start locked. Play the game to unlock them.
