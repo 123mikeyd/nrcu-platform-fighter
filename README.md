@@ -8,7 +8,7 @@
 
 ### [▶️ PLAY IN YOUR BROWSER](https://123mikeyd.github.io/nrcu-platform-fighter/)
 
-[🪟 Windows download](https://github.com/123mikeyd/nrcu-platform-fighter/releases/latest) · [📜 Patch v0.6 notes](PATCH_NOTES_v0.6.md) · [🃏 Full roster](ROSTER.md)
+[🪟 Windows download](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.6) · [📜 Patch v0.6 notes](PATCH_NOTES_v0.6.md) · [🃏 Full roster](ROSTER.md)
 
 <sub>🚧 Alpha — it's unfinished, it's chaotic, and that's half the fun. First load is big; grab a snack.</sub>
 
