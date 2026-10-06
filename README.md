@@ -4,7 +4,7 @@
 
 ## **A chaotic Smash-style party brawler starring the Nous Research Cinematic Universe.**
 
-Big personalities. Weird powers. Unlockable challengers. Ledges, lasers, guitar riffs, gummy bees, shadow demons, and a Heavy Bag that is absolutely judging you.
+Big personalities. Weird powers. Unlockable challengers. Ledges, lasers, guitar riffs, gummy bees, shadow guardians, and a Heavy Bag that is absolutely judging you.
 
 <a href="https://123mikeyd.github.io/nrcu-platform-fighter/">
   <img src="images/play_browser_button.svg" alt="Play now in your browser" width="900">
