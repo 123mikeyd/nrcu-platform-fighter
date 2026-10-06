@@ -40,7 +40,7 @@ Pick a starter, fight friends or CPUs, unlock challengers, run Story mode, chase
 <a href="ROSTER.md#-ggb--the-gifted-gummy-bee"><img src="images/roster/ggb.png" height="150" alt="GGB"></a>
 <a href="ROSTER.md#-bobo--the-designer"><img src="images/roster/bobo.png" height="150" alt="Bobo"></a>
 <a href="ROSTER.md#-witcheer--the-luck-merchant"><img src="images/roster/witcheer.png" height="150" alt="Witcheer"></a>
-<a href="ROSTER.md#-mephisto--the-girl-and-her-shadow"><img src="images/roster/mephisto.png" height="150" alt="Mephisto"></a>
+<a href="ROSTER.md#-mephisto--the-young-woman-and-her-shadow-guardian"><img src="images/roster/mephisto.png" height="150" alt="Mephisto"></a>
 
 **Teknium · TurboFit · Doge Man** are ready to go.<br>
 **GGB · Bobo · Witcheer · Mephisto** have to be *earned*. 🔓

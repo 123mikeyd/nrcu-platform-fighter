@@ -16,7 +16,7 @@ Miss the stage by a hair? Not anymore.
 Not everyone shows up on day one anymore.
 - **Starters:** Teknium, TurboFit and Doge Man.
 - **GGB, Bobo, Witcheer and Mephisto** have to be earned. Meet the secret condition, survive a challenger fight, and they join your roster.
-- Mephisto is the hardest one to unlock. Good luck. 😈
+- Mephisto is the hardest one to unlock. Good luck. 🌘
 - Want hints? They're hidden as spoilers on the [roster page](ROSTER.md).
 
 ## 🎬 Story Mode Glow-Up
@@ -59,8 +59,8 @@ Not everyone shows up on day one anymore.
 ### ❄️ Ice Mage (Story)
 - Full movement kit: jump, a frosty double jump, **Frost Rise** up-special, and proper hurt/tumble/landing animations. He's still CPU-only, holding the frosty slot until a real ice fighter shows up.
 
-### 😈 Mephisto
-- **NEW Dream Grasp** (↓+G): her shadow demon grabs you… and puts you to sleep.
+### 🌘 Mephisto
+- **NEW Dream Grasp** (↓+G): her shadow guardian reaches out and lulls the opponent to sleep.
 
 ---
 

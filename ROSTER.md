@@ -113,15 +113,15 @@ A slick, cunning, charismatic trickster from the House of Gold. Cream-white feat
 
 <img src="images/roster/mephisto.png" align="left" height="260" alt="Mephisto">
 
-### 😈 Mephisto — The Girl and Her Shadow
+### 🌘 Mephisto — The Young Woman and Her Shadow Guardian
 *"It isn't evil. It's mine."*
 
-A determined, pensive girl with orange hair — and the shadow "demon" she's befriended and practically bonded with. It moves like smooth claws and living shadow; its face is calm, not snarling. Is it truly not evil? Some say so. The rest of the story is still being written…
+A determined, pensive young woman with orange hair — and the shadow guardian she has befriended and bonded with. It looks frightening at first, but its face is calm, not cruel. It moves like smooth claws and drifting shadow, staying close behind her like a silent protector. The rest of the story is still being written…
 
-**Playstyle:** the girl fights, her shadow demon has her back
+**Playstyle:** she leads, her shadow guardian protects her back
 - **Barrier** (G) · **Ember** (↔+G)
 - **Paired Teleport** (↑+G)
-- **Dream Grasp** (↓+G): the demon grabs you… and puts you to sleep
+- **Dream Grasp** (↓+G): her shadow reaches out and lulls the opponent to sleep
 
 <details><summary>🔒 How to unlock (spoiler)</summary>The hardest gate: clear Story with all three starters AND unlock GGB, Bobo and Witcheer.</details>
 
