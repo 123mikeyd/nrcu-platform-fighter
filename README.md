@@ -2,17 +2,31 @@
 
 # ⚔️ NRCU Platform Fighter
 
-**A Smash-style party brawler starring the Nous Research Cinematic Universe.**
+## **A chaotic Smash-style party brawler starring the Nous Research Cinematic Universe.**
 
-<!-- Hero gameplay GIF goes here (6–10 s loop). -->
+Big personalities. Weird powers. Unlockable challengers. Ledges, lasers, guitar riffs, gummy bees, shadow demons, and a Heavy Bag that is absolutely judging you.
 
-### [▶️ PLAY IN YOUR BROWSER](https://123mikeyd.github.io/nrcu-platform-fighter/)
+<a href="https://123mikeyd.github.io/nrcu-platform-fighter/">
+  <img src="images/play_browser_button.png" alt="Play now in your browser" width="900">
+</a>
 
-[🪟 Windows download](https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.6) · [📜 Patch v0.6 notes](PATCH_NOTES_v0.6.md) · [🃏 Full roster](ROSTER.md) · [📖 Meet the cast in the NRCU Vault](https://123mikeyd.github.io/Nous_Research_Cinematic_Universe/library/)
+<a href="https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.6">
+  <img src="images/download_windows_button.png" alt="Download the Windows tester build" width="680">
+</a>
 
-<sub>🚧 Alpha — it's unfinished, it's chaotic, and that's half the fun. First load is big; grab a snack.</sub>
+[📜 Patch v0.6 notes](PATCH_NOTES_v0.6.md) · [🃏 Full roster](ROSTER.md) · [📖 Meet the cast in the NRCU Vault](https://123mikeyd.github.io/Nous_Research_Cinematic_Universe/library/)
+
+<sub>🚧 Public alpha / friend demo. It is unfinished, it is chaotic, and that is half the fun. Browser first load is big; grab a snack.</sub>
 
 </div>
+
+---
+
+## 🔥 What is this?
+
+**NRCU Platform Fighter** is a playable alpha for Mike's Nous Research Cinematic Universe fighter: a fast, ridiculous, community-character brawler built in Godot.
+
+Pick a starter, fight friends or CPUs, unlock challengers, run Story mode, chase Heavy Bag scores, and please report whatever breaks in the funniest way possible.
 
 ---
 
@@ -28,7 +42,7 @@
 <a href="ROSTER.md#-witcheer--the-luck-merchant"><img src="images/roster/witcheer.png" height="150" alt="Witcheer"></a>
 <a href="ROSTER.md#-mephisto--the-girl-and-her-shadow"><img src="images/roster/mephisto.png" height="150" alt="Mephisto"></a>
 
-**Teknium · TurboFit · Doge Man** are ready to go.
+**Teknium · TurboFit · Doge Man** are ready to go.<br>
 **GGB · Bobo · Witcheer · Mephisto** have to be *earned*. 🔓
 
 [Meet the fighters →](ROSTER.md)
@@ -41,23 +55,46 @@
 
 <img src="images/controls.png" alt="Teknium's Dojo: how to play NRCU with an Xbox controller, keyboard, or phone" width="100%">
 
-**P1:** WASD move/aim · Space jump · **F** basic · **G** special
-**P2:** Arrows · Enter jump · **K** basic · **L** special
-**Gamepad** works too. Direction + attack changes your move. Esc pauses.
+**P1:** WASD move/aim · Space jump · **F** basic · **G** special<br>
+**P2:** Arrows · Enter jump · **K** basic · **L** special<br>
+**Gamepad:** supported. Direction + attack changes your move. Esc pauses.
 
 ---
 
 ## 🕹️ Modes
 
-- **Versus:** up to 4 fighters — friends, CPUs (easy / normal / hard), or teams. Pick a fighter, throw hands.
-- **Story:** battle through a run of encounters, one rival at a time. Clear it to unlock new challengers.
-- **Heavy Bag:** how hard can you hit? (Somebody's watching that score…)
+- **Versus:** up to 4 fighters — friends, CPUs, teams, chaos.
+- **Story:** win encounters, reveal locked challengers, and clear the run.
+- **Heavy Bag:** 15 seconds to break the bag and flex your score.
+
+---
+
+## ✨ Current public build: v0.6
+
+**Ledges are here.** Story mode got a glow-up. Teknium dances on victory. TurboFit has hair motion. GGB can Wing Gust people away. Doge Man throws hands. Heavy Bag is live. The public browser build is playable now.
+
+Read the full notes here: **[Patch v0.6 — Ledges Are Here!](PATCH_NOTES_v0.6.md)**
 
 ---
 
 ## 💥 Please break this
 
-Found a bug? Fell through the floor? Got launched into orbit? Tell Mike — that's the whole point of an alpha.
+This is an alpha. If you fall through the floor, unlock somebody in a cursed way, get launched into orbit, or discover the funniest bug possible, tell Mike.
+
+Useful reports:
+- what mode you were in
+- who you were playing
+- browser or Windows build
+- what happened right before it broke
+
+---
+
+## 🛠️ Code / build notes
+
+This repo is the public tester build and source snapshot. Build and verification details live in:
+
+- [TESTING.md](TESTING.md)
+- [WEB_BUILD.md](WEB_BUILD.md)
 
 ---
 
@@ -68,4 +105,4 @@ Found a bug? Fell through the floor? Got launched into orbit? Tell Mike — that
 - **Quarker:** state-coordinator work
 - **Hermes Agent:** built alongside Mike
 
-<sub>Made with Godot. No blanket asset license is granted — please don't reuse the character art separately. Build and test docs: [TESTING.md](TESTING.md) · [WEB_BUILD.md](WEB_BUILD.md).</sub>
+<sub>Made with Godot. No blanket asset license is granted — please do not reuse the character art separately.</sub>
