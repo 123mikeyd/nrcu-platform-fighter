@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="190" viewBox="0 0 1100 190" role="img" aria-label="Play now in your browser">
+  <defs>
+    <linearGradient id="rim" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#11ff63"/><stop offset="0.55" stop-color="#15d7b6"/><stop offset="1" stop-color="#eefcff"/></linearGradient>
+    <filter id="glow" x="-10%" y="-25%" width="120%" height="150%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect x="10" y="10" width="1080" height="170" rx="34" fill="url(#rim)" filter="url(#glow)"/>
+  <rect x="27" y="27" width="1046" height="136" rx="24" fill="#0d1117"/>
+  <path d="M80 55 L80 135 L154 95 Z" fill="#b7ff4a"/>
+  <text x="192" y="90" fill="#d8ffe8" font-size="36" font-family="Arial, Helvetica, sans-serif" font-weight="800">PLAY NOW</text>
+  <text x="192" y="140" fill="#ffffff" font-size="56" font-family="Arial, Helvetica, sans-serif" font-weight="900">IN YOUR BROWSER</text>
+  <text x="782" y="86" fill="#b7ff4a" font-size="28" font-family="Arial, Helvetica, sans-serif" font-weight="900">FREE ALPHA</text>
+  <text x="735" y="130" fill="#d8ffe8" font-size="25" font-family="Arial, Helvetica, sans-serif" font-weight="700">no install · just hit start</text>
+</svg>

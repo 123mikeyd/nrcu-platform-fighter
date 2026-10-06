@@ -7,11 +7,11 @@
 Big personalities. Weird powers. Unlockable challengers. Ledges, lasers, guitar riffs, gummy bees, shadow demons, and a Heavy Bag that is absolutely judging you.
 
 <a href="https://123mikeyd.github.io/nrcu-platform-fighter/">
-  <img src="images/play_browser_button.png" alt="Play now in your browser" width="900">
+  <img src="images/play_browser_button.svg" alt="Play now in your browser" width="900">
 </a>
 
 <a href="https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.6">
-  <img src="images/download_windows_button.png" alt="Download the Windows tester build" width="680">
+  <img src="images/download_windows_button.svg" alt="Download the Windows tester build" width="680">
 </a>
 
 [📜 Patch v0.6 notes](PATCH_NOTES_v0.6.md) · [🃏 Full roster](ROSTER.md) · [📖 Meet the cast in the NRCU Vault](https://123mikeyd.github.io/Nous_Research_Cinematic_Universe/library/)
