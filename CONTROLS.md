@@ -58,10 +58,10 @@ Moves below use Player 1 keys (F = basic, G = special).
 - ↑+G: Thruster Rise recovery
 - ↔+F: Thrust Slash · ↓+F: Low Claw
 
-**😈 Mephisto**
+**🌘 Mephisto**
 - G: barrier · ↔+G: ember
 - ↑+G: paired teleport
-- ↓+G: Dream Grasp. Her shadow demon grabs the opponent and puts them to sleep.
+- ↓+G: Dream Grasp. Her shadow guardian reaches out and lulls the opponent to sleep.
 
 **🦆 Witcheer**
 - ↔+G: coin toss · ↑+G: swim recovery · ↓+G: absorb
