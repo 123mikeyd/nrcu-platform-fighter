@@ -119,9 +119,11 @@ A slick, cunning, charismatic trickster from the House of Gold. Cream-white feat
 A determined, pensive young woman with orange hair — and the shadow guardian she has befriended and bonded with. It looks frightening at first, but its face is calm, not cruel. It moves like smooth claws and drifting shadow, staying close behind her like a silent protector. The rest of the story is still being written…
 
 **Playstyle:** she leads, her shadow guardian protects her back
-- **Barrier** (G) · **Ember** (↔+G)
+- **Barrier / reflect** (G) · **Slumber Ember** (↔+G): steerable sleep projectile
 - **Paired Teleport** (↑+G)
-- **Dream Grasp** (↓+G): her shadow reaches out and lulls the opponent to sleep
+- **Dream Hand** (↓+G; called Dream Grasp in older builds): her shadow reaches out and lulls the opponent to sleep
+
+[Current kit and Story presentation](docs/MEPHISTO_CURRENT_DESIGN.md): Boss_Meph keeps the current kit with a raised-hand carrying/meditation presentation, not the historical demon moveset. Design direction and released gameplay are tracked separately.
 
 <details><summary>🔒 How to unlock (spoiler)</summary>The hardest gate: clear Story with all three starters AND unlock GGB, Bobo and Witcheer.</details>
 

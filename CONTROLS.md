@@ -59,9 +59,11 @@ Moves below use Player 1 keys (F = basic, G = special).
 - ↔+F: Thrust Slash · ↓+F: Low Claw
 
 **🌘 Mephisto**
-- G: barrier · ↔+G: ember
+- G: barrier / reflect · ↔+G: steerable sleep ember
 - ↑+G: paired teleport
-- ↓+G: Dream Grasp. Her shadow guardian reaches out and lulls the opponent to sleep.
+- ↓+G: Dream Hand (called Dream Grasp in older builds). Her shadow guardian reaches out and lulls the opponent to sleep.
+
+See [current Mephisto design](docs/MEPHISTO_CURRENT_DESIGN.md) for the regular kit, the Boss_Meph carrying presentation, and what is still awaiting integration. This documentation does not update the released game.
 
 **🦆 Witcheer**
 - ↔+G: coin toss · ↑+G: swim recovery · ↓+G: absorb
