@@ -66,13 +66,14 @@ class RunnerTests(unittest.TestCase):
             (root / 'project.godot').write_text('; TEST FIXTURE')
             for name, _ in r.CONTRACTS:
                 (root / 'tests' / (name + '.gd')).write_text('; TEST FIXTURE')
-            output = Path(tmp) / 'evidence'
+            # Exercise an alias spelling: the runner resolves output before use.
+            output = root / '..' / 'evidence'
             calls = []
             def child(command, log, timeout, marker=None, env=None):
                 if calls:
                     self.assertEqual(len(json.loads((output / 'results.json').read_text())), len(calls))
-                self.assertTrue(Path(env['APPDATA']).is_relative_to(output))
-                self.assertTrue(Path(env['NRCU_CAPTURE_DIR']).is_relative_to(output))
+                self.assertTrue(Path(env['APPDATA']).is_relative_to(output.resolve()))
+                self.assertTrue(Path(env['NRCU_CAPTURE_DIR']).is_relative_to(output.resolve()))
                 self.assertNotIn('--headless', command)
                 calls.append(command)
                 return {'exit': 1 if len(calls) == 1 else 0, 'passed': len(calls) != 1, 'completion_count': 1}
