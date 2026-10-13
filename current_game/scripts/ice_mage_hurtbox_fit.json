@@ -1,5 +1,4 @@
 {
- "policy": "PROVISIONAL (not Mike-reviewed). Native CPU-skinned dominant-bone samples (w>=.25, active blendshapes) at idle; SVD axis, trimmed 10-90 pct extent, 75th pct radius (trimmed cores, not triangle-exact). Fitted by Hermes 2026-09-29 from the current NRCU_Platform_Fighter ice_mage_combat.glb idle with the same method/params as the approved Witcheer fit.",
  "regions": [
   {
    "name": "Head",

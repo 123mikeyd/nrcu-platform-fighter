@@ -1,8 +1,6 @@
 extends Control
-# Story VS splash (Mike 2026-09-30): hero card slides in from the left, opponent
 # from the right, VS slams in. An opponent you haven't unlocked yet arrives as a
 # black silhouette with "???" and is revealed as VS lands ("Who's that Pokemon").
-# Slides/fades/slam only: no flashing overlays (Mike's rule).
 # The match is already loaded underneath; main.gd holds READY until this ends.
 signal finished
 
@@ -103,7 +101,7 @@ static func display(id: String) -> String:
 
 func _set_card(art: TextureRect, id: String, on_left: bool) -> void:
 	var path := PORTRAIT % id
-	art.texture = load(path) if ResourceLoader.exists(path) else null   # Ice Mage: no picture (Mike)
+	art.texture = load(path) if ResourceLoader.exists(path) else null
 	art.flip_h = (id not in DRAWN_ON_LEFT) if on_left else (id in DRAWN_ON_LEFT)
 
 func play(hero: String, opponent: String, locked_opponent: bool, step_text: String) -> void:

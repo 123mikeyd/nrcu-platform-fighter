@@ -1,5 +1,4 @@
 extends Control
-# Final Story clear (Mike 2026-09-30): the victory screen holds "STORY COMPLETE?",
 # then a slow fade to black and the credits roll. Fades and a steady scroll only,
 # no flashing. Enter / click skips to the end.
 signal finished

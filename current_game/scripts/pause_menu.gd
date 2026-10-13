@@ -13,11 +13,12 @@ var options_box: VBoxContainer
 var dev_toggle: CheckButton
 var layer_checks := {}
 var layer_box: VBoxContainer
+var guide: Control
 
 func _ready() -> void:
 	name = "PauseMenu"
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = DemoStyle.make()
 	var shade := ColorRect.new()
 	shade.color = Color(0, 0, 0, 0.55)
@@ -31,6 +32,7 @@ func _ready() -> void:
 	add_child(panel)
 	main_box = _column(panel, "PAUSED")
 	for entry in [["Resume", "ResumeButton", func(): resume_requested.emit()],
+			["Controls / Moves", "ControlsButton", open_guide],
 			["Options", "OptionsButton", open_options],
 			["Match Setup", "SetupButton", func(): setup_requested.emit()],
 			["Quit to Home", "HomeButton", func(): home_requested.emit()]]:
@@ -79,8 +81,26 @@ func _column(panel: Panel, title: String) -> VBoxContainer:
 	return box
 
 func open() -> void:
+	clear_guide()
 	close_options()
 	show()
+	main_box.get_node("ResumeButton").grab_focus()
+
+func open_guide() -> void:
+	if is_instance_valid(guide): return
+	main_box.hide()
+	options_box.hide()
+	guide = DemoStyle.help(self, _guide_closed)
+	guide.process_mode = Node.PROCESS_MODE_ALWAYS
+
+func _guide_closed() -> void:
+	guide = null
+	main_box.show()
+	main_box.get_node("ControlsButton").grab_focus()
+
+func clear_guide() -> void:
+	if is_instance_valid(guide): guide.queue_free()
+	guide = null
 
 func open_options() -> void:
 	main_box.hide()
@@ -102,5 +122,23 @@ func _sync() -> void:
 
 ## Esc inside the menu: leave Options first, otherwise resume.
 func back() -> void:
-	if options_box.visible: close_options()
+	if is_instance_valid(guide):
+		clear_guide()
+		_guide_closed()
+	elif options_box.visible: close_options()
 	else: resume_requested.emit()
+
+func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree(): return
+	if event is InputEventJoypadButton:
+		var keys = {JOY_BUTTON_A: KEY_ENTER, JOY_BUTTON_DPAD_LEFT: KEY_LEFT, JOY_BUTTON_DPAD_RIGHT: KEY_RIGHT, JOY_BUTTON_DPAD_UP: KEY_UP, JOY_BUTTON_DPAD_DOWN: KEY_DOWN}
+		if event.button_index in keys:
+			var navigation := InputEventKey.new()
+			navigation.keycode = keys[event.button_index]
+			navigation.pressed = event.pressed
+			get_viewport().push_input(navigation)
+			get_viewport().set_input_as_handled()
+			return
+	if event.is_action_pressed("ui_cancel") or (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_B):
+		back()
+		get_viewport().set_input_as_handled()

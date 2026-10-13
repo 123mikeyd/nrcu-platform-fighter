@@ -1,5 +1,4 @@
 extends Node3D
-## Hermes Weaver stage (replaces Sky, Mike 2026-09-30: "add it and replace the sky level").
 ## Ported from the Hermes Weaver greybox trial. Collision authority:
 ##  - MainPlatform = the arena's existing solid body (stage_layouts "weaver"), so ledge grab works on it.
 ##  - Two elliptical one-way movers are AnimatableBody3D in pass_through_platforms, owned here.

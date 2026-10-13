@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="92" viewBox="0 0 180 92"><path d="M10 5 H151 L174 28 V64 L151 87 H10 V69 H2 V23 H10 Z" fill="#18383a" stroke="#d9b576" stroke-width="2"/>
+<path d="M17 14 H147 L164 31 V61 L147 78 H17" fill="none" stroke="#567b72"/>
+<path d="M23 26 H42 V62 H23 M36 34 H46 V54 H36 M153 26 H134 V62 H153 M140 34 H130 V54 H140" fill="none" stroke="#d9b576" stroke-width="3"/>
+<path d="M55 58 V25 L119 58 V25" fill="none" stroke="#f4e8c9" stroke-width="7"/>
+<text x="88" y="76" text-anchor="middle" font-family="monospace" font-size="13" letter-spacing="5" fill="#d9b576">NRCU</text></svg>

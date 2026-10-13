@@ -22,7 +22,6 @@ var walk_clock=0.0
 var walking=false
 # Approved Rust review size. Source rigs/Actions remain in their original units.
 const APPROVED_GIRL_SCALE=.71926
-# Sleep-kit pass (Mike 09-29 "she is still too small"): uniform girl-only size-up
 # about the same evaluated sole/hip pivots. Rest bones, weights, Actions, companion
 # and the movement capsule are unchanged; receiving capsules follow her bones.
 const GIRL_SIZE_UP=1.15

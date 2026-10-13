@@ -1,4 +1,7 @@
 extends Node3D
+const CostumeMaterials = preload("res://scripts/costume_materials.gd")
+var costume_id := "01"
+const COSTUME_ATLASES := {"01":"Burgundy_Charcoal", "02":"Midnight_Violet", "03":"Emerald_Forest", "04":"Tangerine_Eggshell"}
 
 # Presentation only: existing Fighter remains the sole gameplay clock/physics owner.
 const MODEL = preload("res://assets/teknium/teknium_animations.glb")
@@ -63,16 +66,35 @@ func _ready() -> void:
             library.add_animation(clip, animation)
         animation_player.remove_animation_library(library_name)
         animation_player.add_animation_library(library_name, library)
+    var selected_id: String = costume_id if COSTUME_ATLASES.has(costume_id) else "01"
+    var atlas := CostumeMaterials.texture("res://assets/costumes/teknium/%s_%s.png" % [selected_id, COSTUME_ATLASES[selected_id]])
     for mesh in model.find_children("*", "MeshInstance3D", true, false):
         for surface in mesh.mesh.get_surface_count():
             var material: StandardMaterial3D = mesh.get_active_material(surface).duplicate()
             # Preserve the authored green skin/leafage and connected orange glasses.
+            material.albedo_texture = atlas
+            material.albedo_color = Color.WHITE
             material.metallic = 0.0
             material.roughness = 0.75
             material.emission_enabled = false
             mesh.set_surface_override_material(surface, material)
     sync_pose(true, Vector3.ZERO, false, false, "", 1.0, 0.0)
     _setup_laser()
+    animation_player.add_animation_library("polish", load("res://assets/teknium/polish/crouch_kick_planted.tres"))
+
+# Tek-only derivative of his native Kick: exact approved crouch endpoints,
+# planted support ankle, untouched native contact joint rotations. No physics writes.
+func present_crouch_kick(time: float, facing: float) -> void:
+    position.y = 0.0
+    placement_from = 0.0
+    placement_target = 0.0
+    placement_elapsed = 0.06
+    model.rotation.y = facing * PI / 2.0
+    current_clip = "polish/CrouchKick"
+    animation_player.speed_scale = 1.0
+    animation_player.play(current_clip, 0.0)
+    animation_player.seek(clampf(time, 0.0, 0.32), true)
+    animation_player.pause()
 
 # ---- Laser Blast: clip library + bone-mounted holo gun (hidden unless the move shows it) ----
 const LASER_LIB := preload("res://assets/teknium/laser/laser_blast_20260928.tres")
@@ -128,7 +150,8 @@ func choose_clip(grounded: bool, motion: Vector3, interrupted: bool, shielding: 
         "CHARGE RELEASE": return "MageSpell"
         "RISING STRIKE": return "RaiseWall"
         "LOW SWEEP", "DOWN STRIKE": return "Kick"
-        "SIDE STRIKE", "AIR STRIKE", "UPPERCUT", "UP AIR": return "Punch"
+        # Native uppercut owns its pose; its residual clock is not a jab.
+        "SIDE STRIKE", "AIR STRIKE", "UP AIR": return "Punch"
     if not grounded: return "Jump"
     if grounded and absf(motion.x) > 0.2:
         return "Run" if absf(motion.x) >= 4.0 else "Walk"

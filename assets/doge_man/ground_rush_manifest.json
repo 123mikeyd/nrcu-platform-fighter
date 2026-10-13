@@ -3,8 +3,6 @@
   "input": "Grounded: hold S+G (Down+special), release G; Down may be released first. Air Down+G remains prior no-op.",
   "charge": {
     "clip": "GroundCharge",
-    "source_action": "Armature|Indoor_Play|baselayer",
-    "source_rig": "charge_up_frames102-end",
     "source_frames": [
       102,
       156
@@ -16,14 +14,12 @@
   },
   "rush": {
     "clip": "GroundRush",
-    "source_action": "Armature|Female_Bow_Charge_Left_Hand|baselayer",
-    "source_rig": "charged_tackle",
     "source_frames": [
       0.8000000715255737,
       12.80000114440918
     ],
     "source_duration_seconds": 0.5000000447034836,
-    "duration_seconds_min_max": [0.3, 0.75],
+    "duration_seconds_min_max": [0.3,0.75],
     "speed_min_max": [
       7,
       18

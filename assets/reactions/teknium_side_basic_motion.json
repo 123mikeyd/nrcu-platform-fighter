@@ -1535,10 +1535,7 @@
     "neck": "Neck"
   },
   "scale": 1.0625,
-  "source_action": "mixamo.com",
   "source_end": 176,
-  "source_rig": "backflip_triple_uppercut",
   "source_start": 81,
-  "vertical_support": "Retargeted soles preserve native evaluated source sole-height trace, not per-frame floor clamping",
-  "approval": "User approved live Blender preview range81\u2013176 at30FPS"
+  "vertical_support": "Retargeted soles preserve native evaluated source sole-height trace, not per-frame floor clamping"
 }

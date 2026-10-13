@@ -161,6 +161,8 @@ func tick(delta):
   if elapsed>=.27 and elapsed<.34:
    cues.spark.visible=true;cues.spark.global_position=center+Vector3(facing*1.36,.06,0);cues.spark.scale=Vector3.ONE*.28
 func query(shape,point,damage,push,strike,basis=Basis.IDENTITY):
+ var cv:Array=preload("res://scripts/ssb_clank.gd").shape_volume(shape,point,basis)
+ preload("res://scripts/ssb_clank.gd").strike(actor,"ggb:"+str(phase)+":"+str(strike),cv[0],cv[1],cv[2],float(damage)) # SSB clank volume
  var ray=PhysicsRayQueryParameters3D.create(view.body_center_world(),point,2);ray.exclude=[actor.get_rid()]
  var space=actor.get_world_3d().direct_space_state
  if not space.intersect_ray(ray).is_empty():return

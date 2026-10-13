@@ -1,7 +1,6 @@
 extends Node3D
 # Double-jump air cushion. Visual only: not a platform,
 # no physics. One soft fade per air jump, no flashing. Fixed-size pool, no leaks.
-# Styles (Mike 2026-09-30): Tek "ring" (soft ring), Doge "puff" (dust puff),
 # TurboFit "whoosh" (two rings sinking away). Neutral color for everyone.
 const LIFE := {"ring": 0.36, "puff": 0.38, "whoosh": 0.38}
 const FOLLOW := 0.07  # ride the feet for ~2 frames, then stay behind in the air

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="170" viewBox="0 0 160 170">
+<title>The overqualified glove — clenched edition</title>
+<desc>Eight digits: one straight pointing index, six tightly folded fingers and a tucked crooked thumb.</desc>
+<g stroke="#142f35" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round">
+<!-- Cuff and swollen palm. -->
+<path fill="#9caeaa" d="M47 129 Q78 120 111 132 L114 158 Q82 167 49 157 Z"/>
+<path fill="#fff5df" d="M44 130 Q80 121 114 134 L114 150 Q78 160 46 148 Z"/>
+<path fill="#e8e9de" d="M39 76 Q43 61 67 64 Q104 54 124 84 Q145 112 119 133 Q98 149 62 138 Q37 125 35 100 Z"/>
+<!-- Only the index is extended; exact pointer hotspot remains 49,5. -->
+<path id="digit-2" fill="#fff9eb" d="M38 104 Q39 79 41 59 L42 20 Q41 7 49 5 C58 3 63 10 62 20 L61 57 Q64 64 74 70 L71 105 Q54 116 38 104 Z"/>
+<!-- Every extra finger turns back into the palm, with visible folded pads. -->
+<path id="digit-8" fill="#d6dfd6" d="M103 112 C122 109 133 121 126 132 Q121 142 109 138 L98 131 Q91 126 97 120 Q102 116 109 123 L114 127 Q118 121 108 119"/>
+<path id="digit-7" fill="#e2e5d9" d="M115 95 C137 96 147 111 137 123 Q130 132 117 125 L105 117 Q99 111 105 105 Q110 101 118 109 L125 114 Q130 107 119 104"/>
+<path id="digit-6" fill="#ecebdd" d="M115 79 C134 78 145 93 139 107 Q133 119 119 111 L105 102 Q99 96 105 90 Q112 86 120 95 L125 99 Q132 93 120 88"/>
+<path id="digit-5" fill="#f3efdf" d="M104 66 C119 65 133 76 127 92 Q122 104 109 97 L95 89 Q88 83 94 77 Q99 72 107 81 L114 85 Q119 77 108 75"/>
+<path id="digit-4" fill="#faf3e3" d="M86 57 C103 52 118 64 113 80 Q109 92 96 88 L83 82 Q76 77 81 70 Q86 64 94 72 L99 76 Q105 66 92 66"/>
+<path id="digit-3" fill="#fff9eb" d="M67 56 C81 49 99 58 96 73 Q94 86 81 83 L68 79 Q59 76 63 68 Q67 63 75 68 L81 71 Q85 63 73 64"/>
+<!-- Thumb is folded inward across the fist, not an extra pointing prong. -->
+<path id="digit-1" fill="#faf3e3" d="M42 91 C22 85 19 107 33 120 Q47 132 64 119 L77 107 Q83 100 76 94 Q70 89 64 96 L51 105 Q40 110 37 102"/>
+<g fill="none" stroke="#849c96" stroke-width="1.8">
+<path d="M48 65 Q53 62 59 65 M47 72 Q53 69 59 72 M29 104 Q29 112 37 116 M54 115 L62 108"/>
+<path d="M68 60 L73 58 M88 61 L95 61 M108 70 L113 74 M123 85 L128 91 M130 107 L132 112 M116 128 L120 130"/>
+<path d="M67 119 Q75 122 83 119 M65 125 Q80 132 92 127 M54 144 Q77 150 104 143"/>
+</g>
+<path fill="none" stroke="#fff" stroke-width="3" d="M49 18 L48 53 M29 100 Q27 106 33 110"/>
+<!-- Proper gold Nous pin on the tiny tailored cuff. -->
+<circle cx="82" cy="143" r="10" fill="#d9b576" stroke="#315654" stroke-width="2"/>
+<path d="M78 148 L78 138 L86 148 L86 138" fill="none" stroke="#234447" stroke-width="2.3"/>
+</g></svg>

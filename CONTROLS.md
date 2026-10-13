@@ -1,5 +1,7 @@
 # 🎮 NRCU Platform Fighter — How to Play
 
+Current instructions for the **v0.6.9.42.0 candidate**, not an announcement of a published download. See the [draft release notes and current playtest checklist](RELEASE_NOTES_v0.6.9.42.0_DRAFT.md). These mappings are checked against candidate source; that is not exported-package or physical-device verification.
+
 ## Buttons
 
 | | Move / aim | Jump | Basic | Special |
@@ -32,15 +34,18 @@ Moves below use Player 1 keys (F = basic, G = special).
 
 **⚡ Teknium**
 - F: jab → straight → scoop kick
-- G: Laser Blast. A warning line, then the beam. Works in the air. Jump or press G again before the white flash to cancel.
+- G: Laser Blast. A warning line, then the beam. Works in the air. A fresh jump or fresh G press before the white flash cancels. No stored charge: every use starts fresh; holding G does not extend the warning line or cancel the move.
+- Grounded ↓+F: planted low sweep. Airborne ↓+F: descending stamp (provisional motion, awaiting art review).
 - ↔+G: Shadow Kick · ↑+G: aimed recovery
 - ↓+G: remote grenade. Press ↓+G again to detonate.
 
 **🐕 Doge Man**
 - F: 6-hit boxing combo. Keep tapping F.
+- Grounded neutral G: Super Doge Punch. Tap to start a committed windup and punch; no hold-charge or voluntary early cancel. Hits and other interruptions can stop it.
+- Grounded ↓+F: cape attack, not the historical Tyson route.
 - ↔+G: flying tackle
 - ↑+G: Air Doge. A Jordan-style leap that catches an opponent and spikes them down. Afterwards he falls helpless until he lands or grabs a ledge.
-- ↓+G: counter. Get hit during the flash and he answers with a hook.
+- ↓+G: finite counter. Get hit during the flash and he answers with a hook.
 
 **🐝 GGB**
 - Five jumps; hold jump to float down slowly
@@ -51,22 +56,28 @@ Moves below use Player 1 keys (F = basic, G = special).
 
 **🎸 TurboFit**
 - G: charged power chord · ↔+G: sound wave
-- ↓+G: sound reflector · ↑+G: Snapline grapple recovery
+- Grounded ↓+G: Sound Orb. Hold both Down and Special to sustain the orb and guitar performance. Release either button to end it; interruption or leaving the ground also ends the held orb. It pushes nearby opponents and reflects reflectable projectiles, not universal melee invulnerability.
+- ↑+G: Snapline grapple recovery
 
 **🥊 Bobo**
 - G: Charge Blast (hold, then release) · ↔+G: Rocket Dash
 - ↑+G: Thruster Rise recovery
-- ↔+F: Thrust Slash · ↓+F: Low Claw
+- Grounded ↔+F: Thrust Slash · grounded ↓+F: Low Claw
+- Airborne ↓+F: dedicated down-air. This is a basic attack, not a Down-special; Bobo has no ↓+G move.
 
 **🌘 Mephisto**
+- Grounded ↓+F: low basic attack · airborne ↓+F: Meteor Heel. Ground and air basics use the regular companion kit.
 - G: barrier / reflect · ↔+G: steerable sleep ember
 - ↑+G: paired teleport
 - ↓+G: Dream Hand (called Dream Grasp in older builds). Her shadow guardian reaches out and lulls the opponent to sleep.
 
-See [current Mephisto design](docs/MEPHISTO_CURRENT_DESIGN.md) for the regular kit, the Boss_Meph carrying presentation, and what is still awaiting integration. This documentation does not update the released game.
+See [current Mephisto design](docs/MEPHISTO_CURRENT_DESIGN.md) for candidate installation status and the separate Boss_Meph presentation direction. Installed routing does not mean final approval of every basic or a naturally completed Story run.
 
 **🦆 Witcheer**
+- Grounded F: cane swipe · ↑+F: rising cane · ↓+F: low cane poke. Grounded ↔+F remains a kick.
+- On solid ground, hold Down to crouch and release it to rise. Use a fresh F press for the poke; holding F does not repeat it. On pass-through platforms, Down drops first, before the attack routes. These cane mappings are grounded basics, not replacements for the aerial kit.
 - ↔+G: coin toss · ↑+G: swim recovery · ↓+G: absorb
+- Candidate caveat: cane idle/airborne lifecycle verification is pending; these source mappings do not claim that issue is resolved.
 
 **❄️ Ice Mage** (CPU only, Story mode)
 - Frost Bolt · Frost Rise

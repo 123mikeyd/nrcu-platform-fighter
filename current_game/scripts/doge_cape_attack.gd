@@ -12,6 +12,10 @@ const DURATION=SWEEP_END+EXIT
 const ENTRY=0.06
 const ACTIVE=Vector2(21.0/30.0,34.0/30.0) # Released cape sweep, not planted push-off.
 static var data:Dictionary={}
+# Perf caches derived once from data (identical float32 values).
+static var cape_packed:Array=[]
+static var cape_aabbs:Array=[]
+static var cape_index_packed:PackedInt32Array
 var actor
 var view
 var skeleton:Skeleton3D
@@ -25,10 +29,21 @@ var contacts=[]
 var bones=[]
 var entry=[]
 var vertices:PackedVector3Array
+var cape_mesh:Mesh
+var cape_mesh_vertices:PackedVector3Array
 func _ready():
  actor=get_parent();view=actor._visual_root.get_node("DogeVisual")
  skeleton=view.model.find_children("*","Skeleton3D",true,false)[0]
  if data.is_empty():data=JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
+ if cape_packed.is_empty():
+  for frame in data.cape_frames:
+   var packed=PackedVector3Array();packed.resize(frame.size())
+   for n in frame.size():
+    var v=frame[n];packed[n]=Vector3(v[0],v[1],v[2])
+   var box=AABB(packed[0],Vector3.ZERO)
+   for v in packed:box=box.expand(v)
+   cape_packed.append(packed);cape_aabbs.append(box)
+  cape_index_packed=PackedInt32Array(data.cape_indices)
  for name in data.bones:
   var b=skeleton.find_bone(name)
   assert(b>=0,"V5 native bone missing: "+name)
@@ -71,11 +86,17 @@ func pose_at(t:float):
  skeleton.force_update_all_bone_transforms()
 func cape_at(t:float)->PackedVector3Array:
  var sample=clampf(t*30,0,60);var i=int(sample);var j=mini(i+1,60);var w=sample-i
- var result=PackedVector3Array();result.resize(data.cape_frames[i].size())
+ var a:PackedVector3Array=cape_packed[i];var b:PackedVector3Array=cape_packed[j]
+ var result=PackedVector3Array();result.resize(a.size())
  for n in result.size():
-  var a=data.cape_frames[i][n];var b=data.cape_frames[j][n]
-  result[n]=Vector3(a[0],a[1],a[2]).lerp(Vector3(b[0],b[1],b[2]),w)
+  result[n]=a[n].lerp(b[n],w)
  return result
+# Conservative world box around every point cape_at(t) can return (a lerp stays
+# inside the box of its two source frames). Used only to skip impossible shapes.
+func cape_world_bounds(t:float)->AABB:
+ var sample=clampf(t*30,0,60);var i=int(sample);var j=mini(i+1,60)
+ var local:AABB=cape_aabbs[i].merge(cape_aabbs[j])
+ return cape.global_transform*local
 func present(t:float):
  if not active:return
  actor._visual_root.scale=Vector3.ONE;view.model.rotation.y=direction*PI/2
@@ -91,13 +112,19 @@ func present(t:float):
   for n in vertices.size():
    vertices[n]+=actual-source
    if t>SWEEP_END:vertices[n]=vertices[n].lerp(actual,smoothstep(SWEEP_END,DURATION,t))
- var arrays=[];arrays.resize(Mesh.ARRAY_MAX);arrays[Mesh.ARRAY_VERTEX]=vertices;arrays[Mesh.ARRAY_INDEX]=PackedInt32Array(data.cape_indices)
- var mesh=ArrayMesh.new();mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
- var surface=SurfaceTool.new();surface.create_from(mesh,0);surface.generate_normals();mesh=surface.commit()
- cape.mesh=mesh;cape.visible=t<DURATION
+ # The cape mesh is a pure function of these vertices (indices are constant):
+ # rebuild only when they differ from the last build (present runs twice a frame).
+ if cape_mesh==null or vertices!=cape_mesh_vertices:
+  var arrays=[];arrays.resize(Mesh.ARRAY_MAX);arrays[Mesh.ARRAY_VERTEX]=vertices;arrays[Mesh.ARRAY_INDEX]=cape_index_packed
+  var mesh=ArrayMesh.new();mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+  var surface=SurfaceTool.new();surface.create_from(mesh,0);surface.generate_normals();mesh=surface.commit()
+  cape_mesh=mesh;cape_mesh_vertices=vertices
+ cape.mesh=cape_mesh;cape.visible=t<DURATION
 func query_contact(t:float):
  if not active or t<ACTIVE.x or t>ACTIVE.y:return
- var points=cape_at(t)
+ var points:PackedVector3Array;var have_points=false
+ var bounds=cape_world_bounds(t)
+ preload("res://scripts/ssb_clank.gd").strike(actor,"doge:cape",bounds.get_center(),bounds.get_center(),maxf(bounds.size.x,bounds.size.y)*.5,10.0) # SSB clank volume
  for target in get_tree().get_nodes_in_group("fighters"):
   if target in targets or not actor.can_hit(target) or actor.global_position.distance_to(target.global_position)>3:continue
   for shape in target.get_hurtbox_shapes():
@@ -105,6 +132,10 @@ func query_contact(t:float):
    var cap:CapsuleShape3D=shape.shape;var tr:Transform3D=shape.global_transform
    var half=maxf(0,cap.height*.5-cap.radius);var a=tr*Vector3(0,-half,0);var b=tr*Vector3(0,half,0)
    var radius=cap.radius*maxf(tr.basis.x.length(),tr.basis.z.length())
+   # Skip only if no cape point can be within reach (box grown by reach + 1 cm margin).
+   var reach=bounds.grow(radius+.035+.01)
+   if not reach.has_point(a) and not reach.has_point(b) and not reach.intersects_segment(a,b):continue
+   if not have_points:points=cape_at(t);have_points=true
    for local in points:
     var point=cape.global_transform*local
     var receiver=Geometry3D.get_closest_point_to_segment(point,a,b)

@@ -3,11 +3,9 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b44efmcysblvk"
-path.s3tc="res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.s3tc.ctex"
-path.etc2="res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.etc2.ctex"
+path="res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc", "etc2_astc"],
-"vram_texture": true
+"vram_texture": false
 }
 generator_parameters={
 "md5": "2ec651161c5b3c53dd09de0e1519fee2"
@@ -16,13 +14,13 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/mephisto/mephisto_girl_texture_0.png"
-dest_files=["res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.s3tc.ctex", "res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.etc2.ctex"]
+dest_files=["res://.godot/imported/mephisto_girl_texture_0.png-8097ed338c3376b5cb0d5ed22c4885b1.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=1
 compress/high_quality=false
-compress/lossy_quality=0.7
+compress/lossy_quality=0.9
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1

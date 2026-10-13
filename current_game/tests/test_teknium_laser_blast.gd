@@ -1,5 +1,4 @@
 extends "res://tests/test_teknium_kit_rework.gd"
-# Laser Blast (Tek neutral special, 2026-09-28). Real key input through the ordinary match.
 func laser_fx(kit, n): return kit.fx.get(n) if kit.fx.has(n) else null
 func run():
     arena = load("res://scenes/main.tscn").instantiate(); root.add_child(arena); await process_frame

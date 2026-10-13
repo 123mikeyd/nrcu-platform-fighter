@@ -61,13 +61,13 @@ func run_test():
 	arena.story_action.pressed.emit(); await frames(2); arena.story_vs.skip(); await frames(125)
 	check(arena.player_two.character_id == "ice_mage" and arena.player_one.character_id == "turbofit", "Ice Mage starts with retained hero")
 	arena.player_one.stocks = 1; arena.player_one.global_position = Vector3(0, -40, 0)
-	await frames(4)
+	await frames(60) # Current KO beat waits 45 physics ticks before stock loss.
 	check(arena.story_state == "lost" and arena.story_encounter == 1, "physics last-stock loss keeps the encounter")
 	arena.story_action.pressed.emit(); await frames(125)
 	check(arena.player_one.stocks == 3 and arena.player_two.stocks == 3, "retry gives fresh stocks")
-	arena.player_two.global_position = Vector3(0, -40, 0); await frames(4)
+	arena.player_two.global_position = Vector3(0, -40, 0); await frames(60) # Current KO beat waits 45 physics ticks before stock loss.
 	check(arena.story_state == "playing" and arena.player_two.stocks == 2 and not arena.match_over, "non-final stock revives without a result")
-	arena.player_two.reset_fighter(Vector3(0, -40, 0), false); arena.player_two.stocks = 1; await frames(4)
+	arena.player_two.reset_fighter(Vector3(0, -40, 0), false); arena.player_two.stocks = 1; await frames(60) # Current KO beat waits 45 physics ticks before stock loss.
 	check(arena.story_state == "stage_complete" and arena.story_encounter == 1, "physics enemy last stock resolves once")
 	print("STEP 3")
 	# 3) TurboFit side special: real swept sound-wave projectile kills Bobo.

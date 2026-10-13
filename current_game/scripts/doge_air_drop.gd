@@ -63,7 +63,9 @@ func before_move():
   # Carry the previous post-collision horizontal velocity through ordinary
   # input deceleration. Walls may stop it; held/reverse input cannot add speed.
   actor.velocity.x=travel_speed
+var hurt_synced:=false
 func present(time:float):
+ hurt_synced=false
  actor._visual_root.scale=Vector3.ONE;actor._visual_root.rotation=Vector3.ZERO
  view.model.rotation.y=direction*PI/2
  if actor.character_id=="teknium":view.position.y=0
@@ -83,17 +85,20 @@ func query_shin(knee:Vector3,ankle:Vector3,radius:float,time:float):
  query_shape(shape,Transform3D(orientation,center),center,radius,time)
 func query_shape(shape:Shape3D,transform:Transform3D,point:Vector3,radius:float,time:float):
  var q=PhysicsShapeQueryParameters3D.new();q.shape=shape;q.transform=transform;q.collision_mask=7;q.margin=0
- HURT.prepare(actor,q)
+ if hurt_synced:HURT.prepare_presynced(actor,q)
+ else:HURT.prepare(actor,q);hurt_synced=true
  for hit in actor.get_world_3d().direct_space_state.intersect_shape(q,64):
   var target=HURT.resolve(hit.collider)
   if actor.can_hit(target) and target not in targets:
    targets.append(target)
    contacts.append({"time":time,"source_frame":minf(39,27+time*30),"point":str(point),"radius":radius,"target":target.character_id,"collider":str(hit.collider.name),"shape":hit.shape,"receiver":"fitted anatomy" if hit.collider.has_meta("hurtbox_actor") else "existing movement capsule"})
+   hurt_synced=false
    hit.position=point;HURT.deliver(target,8.0,Vector3(direction,0,0),3.8,hit, actor)
 func after_tick(delta:float):
  if not active:return
  travel_speed=actor.velocity.x
- if actor.is_grounded() or not actor.controls_enabled or actor.hitstun>0 or actor.freeze_remaining>0 or actor.magic_locked():cancel();return
+ if not actor.controls_enabled or actor.hitstun>0 or actor.freeze_remaining>0 or actor.magic_locked():cancel();return
+ if actor.is_grounded():cancel();actor._update_move_visuals();return
  if phase=="unwind":
   unwind_elapsed+=delta;present_unwind();return
  landing_prediction=predict_landing()

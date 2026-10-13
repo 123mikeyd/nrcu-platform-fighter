@@ -80,4 +80,4 @@ func after_tick(delta:float):
    var radius=minf(.10,elbow.distance_to(wrist)*.25)
    for fraction in [0.0,.25,.5,.75,1.0]:query(elbow.lerp(wrist,fraction),radius,t)
  elapsed=end;present(elapsed)
- if elapsed>=DURATION:cancel();actor._update_move_visuals(0,true)
+ if elapsed>=DURATION:cancel();actor._update_move_visuals()

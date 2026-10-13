@@ -1,5 +1,4 @@
 {
- "policy": "GGB rigid mesh (no skeleton): per-node capsules fitted in mesh-local space from native vertices; body split at world y 0.78 (main body / head feature); k-means clusters, trimmed 10-90 pct extent, 75th pct radius. Wings follow their hinge meshes. Fitted by Hermes 2026-09-27 for review.",
  "regions": [
   {
    "name": "Body",

@@ -28,6 +28,10 @@ var story_detail: Label
 var story_action: Button
 var story_back: Button
 var story_character: OptionButton
+var story_costume: OptionButton
+var story_costume_memory := {}
+var story_costume_character := ""
+var story_hero_costume := "01"
 var story_choice_row: HBoxContainer
 var hud_title: Label
 var hud_controls: Label
@@ -46,14 +50,12 @@ var pause_menu: Control
 var dev_overlay: Node3D
 var heavy_bag_mode: Node   # Heavy Bag mini-game round (null outside the mini-game)
 
-# Fighter unlocks + Story gauntlet (Mike 2026-09-30). See scripts/unlocks.gd.
 const Unlocks = preload("res://scripts/unlocks.gd")
 # Provisional order, not a difficulty ranking. The chosen hero is skipped.
-# Mephisto (preserved form-switching Story version) is the placeholder last slot.
-const STORY_ORDER := ["bobo", "ice_mage", "witcheer", "ggb", "turbofit", "doge_man", "teknium", "mephisto"]
+# Rejected Boss_Meph encounter removed; no replacement boss introduced.
+const STORY_ORDER := ["bobo", "ice_mage", "witcheer", "ggb", "turbofit", "doge_man", "teknium"]
 const StoryCredits = preload("res://scripts/story_credits.gd")
 var story_route: Array = []
-# Story glow-up (Mike 2026-09-30): VS splash before each fresh encounter, the
 # victory screen after Story wins, and the STORY COMPLETE? ending + credits roll.
 var story_vs: Control
 var story_ending: Control
@@ -65,7 +67,6 @@ var challenger_screen: Control
 var challenger_id := ""
 var challenger_hero := "teknium"
 var _challenger_serial := 0
-var _story_boss_next := false
 # Public v0.5 freeplay worlds (character_world.gd); Story/Challenger/Heavy Bag use Fortress there.
 const FREEPLAY_WORLDS := ["hall", "meadow"]
 var _special_mode_start := false
@@ -73,7 +74,7 @@ var world: Node3D
 var world_environment: Dictionary = {}
 
 func _ready() -> void:
-    DisplayServer.window_set_title("NRCU — v0.6")
+    DisplayServer.window_set_title("NRCU — v0.6.9.42.0")
     if not OS.has_feature("web"): get_window().min_size = Vector2i(800,450)
     _build_environment()
     _build_stage()
@@ -123,17 +124,26 @@ func _ready() -> void:
     dev_overlay.name = "DevOverlay"
     dev_overlay.main = self
     add_child(dev_overlay)
-    # Public home routes straight into Story / Heavy Bag; otherwise match setup.
     if get_tree().has_meta("nrcu_entry"):
-        var entry = get_tree().get_meta("nrcu_entry")
+        var entry: String = get_tree().get_meta("nrcu_entry")
         get_tree().remove_meta("nrcu_entry")
         if entry == "story": open_story()
         elif entry == "heavy_bag": open_heavy_bag()
+        var curtain := CanvasLayer.new()
+        curtain.layer = 100
+        add_child(curtain)
+        var black := ColorRect.new()
+        black.color = Color("020509")
+        black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        black.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        curtain.add_child(black)
+        var reveal := create_tween()
+        reveal.tween_property(black, "modulate:a", 0.0, 0.28)
+        reveal.tween_callback(curtain.queue_free)
 
 func _process(_delta: float) -> void:
     var mobile = get_node_or_null("/root/MobileTouch")
     var touch_hud: bool = mobile != null and mobile.touch_mode
-    # Mike's rule: no text on screen during gameplay unless Dev Mode is on.
     # Damage/stocks, P1 markers, READY/GO and results stay.
     var dev = get_node_or_null("/root/DevMode")
     var dev_on: bool = dev != null and dev.enabled
@@ -191,6 +201,7 @@ func resume_match() -> void:
             fighter._down_was_down = held.down
 
 func _close_pause() -> void:
+    pause_menu.clear_guide()
     pause_menu.hide()
     DevMode.set_menu_paused(false)
 
@@ -200,7 +211,9 @@ func back_to_menu() -> void:
     get_tree().change_scene_to_file("res://scenes/home.tscn")
 
 func show_setup() -> void:
-    if pause_menu: pause_menu.hide()
+    if pause_menu:
+        pause_menu.clear_guide()
+        pause_menu.hide()
     _challenger_serial += 1
     if challenger_screen: challenger_screen.hide()
     DevMode.reset_match_state()
@@ -225,6 +238,7 @@ func show_setup() -> void:
     match_over = false
     winner_label.visible = false
     setup.show()
+    setup.return_to_fighters()
     setup.find_child("StartMatchButton",true,false).grab_focus()
 
 func start_match(slots: Array, teams: bool, bobo_encounter := false, heavy_bag := false) -> bool:
@@ -263,6 +277,7 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, heavy_bag :
             continue
         var fighter = _create_fighter(slot, i, bobo_encounter, heavy_bag)
         fighter.character_id = slot.character
+        fighter.costume_id = str(slot.get("costume", Config.default_costume(slot.character)))
         fighter.fighter_name = roster.display_name(slot.character).to_upper()
         fighter.player_index = i + 1
         var palette_index: int = palette_counts.get(slot.character, 0)
@@ -275,9 +290,12 @@ func start_match(slots: Array, teams: bool, bobo_encounter := false, heavy_bag :
         fighter.position = Vector3([-6.5, -2.2, 2.2, 6.5][i], 0.2, 0)
         add_child(fighter)
         fighter.eliminated.connect(_on_fighter_eliminated)
-        hud_labels[fighters.size()].modulate = fighter.body_color
+        hud_labels[fighters.size()].modulate = Config.PLAYER_COLORS[i]
+        var player_marker: Label3D = fighter.get_node_or_null("PlayerLabel")
+        if player_marker:
+            player_marker.modulate = Config.PLAYER_COLORS[i]
+            player_marker.text = "P%d" % [i + 1] + (" · " + ("A" if slot.team == 0 else "B") if teams else "")
         fighters.append(fighter)
-    _story_boss_next = false
     player_one = fighters[0]
     player_two = fighters[1]
     setup.hide()
@@ -344,6 +362,15 @@ func _build_story_panel(layer: CanvasLayer) -> void:
         story_character.set_item_metadata(story_character.item_count - 1, id)
     story_character.select(playable_ids.find("turbofit"))
     story_choice_row.add_child(story_character)
+    story_costume = OptionButton.new()
+    story_costume.name = "StoryCostumeSelect"
+    story_costume.custom_minimum_size = Vector2(260, 48)
+    story_costume.clip_text = true
+    story_costume.fit_to_longest_item = false
+    story_choice_row.add_child(story_costume)
+    story_character.item_selected.connect(func(_index): _refresh_story_costumes())
+    story_costume.item_selected.connect(func(_index): _refresh_story_costumes())
+    _refresh_story_costumes()
     story_action = Button.new()
     story_action.custom_minimum_size.y = 54
     story_action.pressed.connect(start_story)
@@ -354,6 +381,20 @@ func _build_story_panel(layer: CanvasLayer) -> void:
     story_back.pressed.connect(show_setup)
     column.add_child(story_back)
     story_panel.hide()
+
+func _refresh_story_costumes() -> void:
+    if story_costume == null: return
+    var id: String = str(story_character.get_selected_metadata())
+    if story_costume_character == id and story_costume.item_count > 0:
+        story_costume_memory[id] = story_costume.get_selected_metadata()
+    story_costume_character = id
+    var selected: String = story_costume_memory.get(id, Config.default_costume(id))
+    story_costume.clear()
+    for costume in Config.costume_ids(id):
+        story_costume.add_item(Config.costume_name(id, costume))
+        story_costume.set_item_metadata(story_costume.item_count - 1, costume)
+        if costume == selected: story_costume.select(story_costume.item_count - 1)
+    story_costume.disabled = story_costume.item_count < 2
 
 ## compact = victory screen visible behind a bottom bar (Story wins).
 func _layout_story_panel(compact: bool) -> void:
@@ -367,8 +408,8 @@ func _layout_story_panel(compact: bool) -> void:
 func _show_story_victory(headline: String, opponent: String) -> void:
     if victory_screen == null: return
     _layout_result(true)
-    victory_screen.show_results([{"id": story_hero, "color": player_one.body_color}],
-        [{"id": opponent, "color": player_two.body_color}], headline)
+    victory_screen.show_results([{"id": story_hero, "color": player_one.body_color, "costume": player_one.costume_id}],
+        [{"id": opponent, "color": player_two.body_color, "costume": player_two.costume_id}], headline)
 
 func _on_story_vs_finished() -> void:
     # Skipped early: READY keeps its normal length.
@@ -427,7 +468,7 @@ func apply_level(id: String) -> void:
             body.set_meta("half_width", surfaces[i][1].x * 0.5)
     for visual in debug_visuals: visual.visible = id == "debug"
     if id == "weaver":
-        stage_theme = preload("res://scripts/weaver_stage.gd").new()
+        stage_theme = preload("res://scripts/weaver_match_stage.gd").new()
         add_child(stage_theme)
     elif id != "debug":
         stage_theme = preload("res://scripts/stage_theme.gd").new()
@@ -455,7 +496,7 @@ func open_story() -> void:
     setup.hide()
     story_state = "ready"
     story_title.text = "STORY 01 / BOBO"
-    story_detail.text = "THE GAUNTLET · 7 encounters ending with Mephisto · your hero is skipped\n\nFirst up: Bobo, a big goofball with a slow two-hit claw attack.\nDeplete Bobo's 400 HP. Dodge his claws, then punish the recovery!\nHe stays put. You have three stocks — watch the edges!\n\n" + _story_controls_text()
+    story_detail.text = "THE GAUNTLET · your hero is skipped\n\nFirst up: Bobo, a big goofball with a slow two-hit claw attack.\nDeplete Bobo's 400 HP. Dodge his claws, then punish the recovery!\nHe stays put. You have three stocks — watch the edges!\n\n" + _story_controls_text()
     story_choice_row.show()
     Unlocks.apply_to_option(story_character, [])
     story_action.text = "START ENCOUNTER"
@@ -489,8 +530,6 @@ func _show_story_briefing() -> void:
     var lines := "Defeat the Normal %s bot.\nBoth fighters start fresh with three stocks." % _story_display(opponent)
     if opponent == "ice_mage":
         lines = "Defeat the Normal Ice Mage. Watch for freezing Frost Bolts!\nBoth fighters start fresh with three stocks."
-    elif opponent == "mephisto":
-        lines = "LAST ENCOUNTER\nMephisto shifts between his girl and demon forms.\nBoth fighters start fresh with three stocks."
     story_detail.text = "%s\n\nCLEARED %d / %d\n\n%s" % [lines, story_encounter, story_route.size(), _story_controls_text()]
     story_action.text = "START ENCOUNTER"
 
@@ -525,10 +564,13 @@ func start_story() -> void:
                     story_character.select(index)
                     break
         story_hero = selected
+        _refresh_story_costumes()
+        story_hero_costume = str(story_costume.get_selected_metadata())
         story_route = STORY_ORDER.duplicate()
         story_route.erase(story_hero)
     var opponent := story_opponent()
     slots[0].character = story_hero
+    slots[0].costume = story_hero_costume
     slots[0].kind = "human"
     slots[0].device = -1
     slots[1].character = opponent
@@ -536,7 +578,6 @@ func start_story() -> void:
     slots[1].difficulty = "normal"
     slots[2].kind = "empty"
     slots[3].kind = "empty"
-    _story_boss_next = opponent == "mephisto"
     _special_mode_start = true
     var started := start_match(slots, false, opponent == "bobo")
     _special_mode_start = false
@@ -555,14 +596,10 @@ func start_story() -> void:
             ready_remaining += story_vs.SECONDS
             ready_label.hide()
             story_vs.play(story_hero, opponent, Unlocks.is_locked(opponent), "STORY %02d / %02d" % [story_encounter + 1, story_route.size()])
-    _story_boss_next = false
 
 func _create_fighter(slot: Dictionary, index: int, bobo_encounter: bool, heavy_bag: bool) -> Node:
     if heavy_bag and index == 1: return load("res://scripts/heavy_bag.gd").new()
     if bobo_encounter and index == 1: return load("res://scripts/bobo_fighter.gd").new()
-    # Preserved form-switching Story Mephisto (story_boss/, isolated from playable Mephisto).
-    if _story_boss_next and index == 1 and slot.character == "mephisto":
-        return load("res://story_boss/scripts/fighter.gd").new()
     if slot.character == "bobo": return load("res://scripts/bobo_player.gd").new()
     return FighterScript.new()
 
@@ -836,7 +873,6 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
         var last := story_encounter >= story_route.size() - 1
         var opponent := story_opponent()
         story_state = ("complete" if last else "stage_complete") if won else "lost"
-        # Smash-style: the winner's name on the victory screen. Final clear: "STORY COMPLETE?" (Mike).
         story_title.text = ("STORY COMPLETE?" if last else "%s WINS!" % _story_name(story_hero)) if won else "TRY AGAIN"
         story_choice_row.hide()
         winner_label.visible = false
@@ -881,7 +917,7 @@ func _show_victory(survivors: Array) -> void:
     var winners: Array = []
     var losers: Array = []
     for fighter in fighters:
-        var entry := {"id": fighter.character_id, "color": fighter.body_color}
+        var entry := {"id": fighter.character_id, "color": fighter.body_color, "costume": fighter.costume_id}
         if fighter in survivors or (teams_enabled and fighter.team_id == survivors[0].team_id): winners.append(entry)
         else: losers.append(entry)
     victory_screen.show_results(winners, losers, winner_label.text)
@@ -971,6 +1007,8 @@ func start_heavy_bag() -> void:
         selected = "turbofit"
     var slots := Config.default_slots()
     slots[0].character = selected
+    _refresh_story_costumes()
+    slots[0].costume = str(story_costume.get_selected_metadata()) if selected == story_character.get_selected_metadata() else Config.default_costume(selected)
     slots[0].kind = "human"
     slots[0].device = -1
     slots[1].character = "teknium"   # placeholder id for validation; the bag replaces it

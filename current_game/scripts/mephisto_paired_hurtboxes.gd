@@ -11,11 +11,18 @@ func _ready():
  for n in ["GirlBody","GirlHead","GirlLeftLeg","GirlRightLeg"]:
   var shape=CollisionShape3D.new();shape.name=n;shape.shape=CapsuleShape3D.new();body.add_child(shape);shapes.append(shape)
  sync()
+var _shape_cache := {}
 func fit(i:int,a:Vector3,b:Vector3,r:float):
- var c=shapes[i];c.shape.radius=r;c.shape.height=maxf(r*2,a.distance_to(b)+r*2)
+ var c=shapes[i];var h=maxf(r*2,a.distance_to(b)+r*2)
  var axis=b-a
- c.global_transform=Transform3D(Basis.IDENTITY if axis.length_squared()<.0000001 else Basis(Quaternion(Vector3.UP,axis.normalized())),(a+b)*.5)
+ var xf=Transform3D(Basis.IDENTITY if axis.length_squared()<.0000001 else Basis(Quaternion(Vector3.UP,axis.normalized())),(a+b)*.5)
+ # Perf: skip identical re-writes (sync() runs before every attack query).
+ var key=[body.global_transform,r,h,xf]
+ if _shape_cache.get(i)==key:return
+ c.shape.radius=r;c.shape.height=h
+ c.global_transform=xf
  c.force_update_transform()
+ _shape_cache[i]=key
 func sync():
  if not view or not view.native_skeleton:return
  body.global_transform=Transform3D.IDENTITY;body.collision_layer=4 if actor.controls_enabled and actor.stocks>0 else 0

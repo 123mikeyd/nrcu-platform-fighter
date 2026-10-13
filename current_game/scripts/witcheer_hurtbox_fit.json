@@ -1,5 +1,4 @@
 {
- "policy": "Native CPU-skinned dominant-bone samples (w>=.25, active blendshapes) at idle; SVD axis, trimmed 10-90 pct extent, 75th pct radius (trimmed cores, not triangle-exact). Fitted by Hermes 2026-09-27 for review.",
  "regions": [
   {
    "name": "Head",

@@ -1,13 +1,14 @@
 extends Node3D
+const CostumeMaterials = preload("res://scripts/costume_materials.gd")
 # Approved Gumy mesh and manually reviewed hinge placement; no skeletal retarget.
 const MODEL=preload("res://assets/ggb/ggb.glb")
 # Source scene named GGB / Tek evaluated heights:
 # 0.91314601898 / 1.89958596230, antenna included; replaces the old attachment.
 # Placement only: no controller, collider, hit geometry, material or wing changes.
-const PRESENTATION_SCALE := 0.48186128424 * 1.02 # Mike 2026-09-27: ~2% bigger (review)
+const PRESENTATION_SCALE := 0.48186128424 * 1.02
 # Provisional in-game review values, not final art approval. Parent-space units
 # keep hover presentation-only; steel retains the approved floor placement.
-const NORMAL_HOVER := 0.426 # Mike 2026-09-30: +0.026 so idle bob spans ~1.30-1.42 (was 0.40; review)
+const NORMAL_HOVER := 0.426
 const IDLE_FLAP_AMPLITUDE := 0.30 # buzzier grounded wings (was 0.14; review)
 # Grounded bee bob in WORLD units (converted through PRESENTATION_SCALE). Review values.
 const IDLE_BOB_WORLD := 0.06
@@ -22,9 +23,19 @@ var phase:=0.0
 var is_lead:=false
 var lead_material: StandardMaterial3D
 var model: Node3D
+var costume_id := "01"
 var reaction_samples = JSON.parse_string(FileAccess.get_file_as_string("res://assets/ggb/electrocution_samples.json"))
 var reaction_originals := {}
 var frozen_reaction_originals := {}
+const WING_FACTORS := {
+    "05": Color(0.68, 0.72, 0.78, 0.38),
+    "02": Color(0.055, 0.09, 0.16, 0.38),
+    "03": Color(0.32, 0.4, 0.55, 0.38),
+    "06": Color(0.82, 0.9, 1.0, 0.38),
+    "07": Color(0.15, 0.18, 0.22, 0.38),
+}
+func wing_factor(id: String) -> Color:
+    return WING_FACTORS.get(id, Color.WHITE).linear_to_srgb()
 func freeze_reaction() -> void:
     frozen_reaction_originals = reaction_originals.duplicate()
     reaction_originals.clear()
@@ -55,10 +66,32 @@ func _ready():
     for side in ["L","R"]:
         wings.append(model.find_child("Gumy_WingHinge_"+side,true,false))
         meshes.append(model.find_child("Gumy_Wing_"+side,true,false))
-    for mesh in meshes:
-        var material=mesh.get_active_material(0).duplicate()
-        mesh.set_surface_override_material(0,material)
-        originals.append(material)
+    var body_albedo := CostumeMaterials.texture("res://assets/costumes/ggb/%s/Baked_BaseColor.png" % costume_id)
+    var body_metal_rough := CostumeMaterials.texture("res://assets/costumes/ggb/%s/Baked_MetallicRoughness.png" % costume_id)
+    var body_material := meshes[0].get_active_material(0).duplicate()
+    if body_material is StandardMaterial3D:
+        if body_albedo: body_material.albedo_texture = body_albedo
+        if body_metal_rough: body_material.metallic_texture = body_metal_rough
+    meshes[0].set_surface_override_material(0, body_material)
+    originals.append(body_material)
+    for wing_index in range(1, meshes.size()):
+        # Original keeps its installed native blue emissive wing material.
+        if costume_id == "01":
+            var original_wing = meshes[wing_index].get_active_material(0).duplicate()
+            meshes[wing_index].set_surface_override_material(0, original_wing)
+            originals.append(original_wing)
+            continue
+        var wing_material := meshes[wing_index].get_active_material(0).duplicate()
+        if wing_material is StandardMaterial3D:
+            wing_material.albedo_texture = null
+            wing_material.albedo_color = wing_factor(costume_id)
+            wing_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+            wing_material.metallic = 0.05
+            wing_material.roughness = 0.15
+            wing_material.emission_enabled = false
+            wing_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+        meshes[wing_index].set_surface_override_material(0, wing_material)
+        originals.append(wing_material)
     lead_material=StandardMaterial3D.new()
     lead_material.albedo_color=Color(0.31,0.31,0.33)
     lead_material.metallic=0.72
@@ -94,7 +127,6 @@ func sync_pose(grounded:bool,velocity:Vector3,drop:bool,facing:float,delta:float
         model.position.y=0.025*sin(phase*0.5)
     model.rotation.z=clampf(-velocity.x*0.009,-0.08,0.08) if not grounded and not is_lead else 0.0
 
-# Wing Gust pose (Mike's Blender lean X8 Y-60 Z-16, facing right; mirrored for left).
 # amount 0..1(+overshoot) scales the lean; wing = hinge flap value; recoil = metres backward.
 const GUST_LEAN_DEG := Vector3(8.0, -60.0, -16.0) # Blender XYZ euler on the lean empty
 func apply_gust_pose(amount: float, wing: float, recoil: float, facing: float) -> void:

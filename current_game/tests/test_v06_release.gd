@@ -63,8 +63,8 @@ func run_suite():
 	# ---- Home front door (public presentation, rewired to the live game)
 	var home = load("res://scenes/home.tscn").instantiate(); root.add_child(home); current_scene = home
 	await frames(2)
-	check(home.state == "opening", "home opens on the opening page")
-	home.show_page("title"); check(home.buttons.has("start"), "title Press Start")
+	check(home.state == "home", "authored frontend opens on home after startup")
+	check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/startup.tscn", "startup logo owns the launch route")
 	home.show_page("home")
 	for id in ["story", "play", "bag", "help", "quit"]: check(home.buttons.has(id), "home button " + id)
 	check(not home.buttons.has("lab"), "v0.5 Battle Lab retired from home")
@@ -90,7 +90,7 @@ func run_suite():
 	check(arena.SetupScript.LEVEL_IDS == ["debug", "toy_room", "weaver", "hall", "meadow"], "stage list: Fortress, Toy, Weaver, Hall, Meadow (no Sky)")
 	arena.setup.level.select(arena.SetupScript.LEVEL_IDS.find("weaver"))
 	check(freeplay("teknium", "doge_man"), "Weaver freeplay starts"); await frames(3)
-	check(arena.active_level == "weaver" and is_instance_valid(arena.stage_theme) and arena.stage_theme.get_script().resource_path.ends_with("weaver_stage.gd"), "Hermes Weaver stage loads")
+	check(arena.active_level == "weaver" and is_instance_valid(arena.stage_theme) and arena.stage_theme.get_script().resource_path.ends_with("weaver_match_stage.gd"), "Hermes Weaver stage loads")
 	arena.setup.level.select(arena.SetupScript.LEVEL_IDS.find("toy_room"))
 	check(freeplay("teknium", "doge_man"), "Toy freeplay starts"); await frames(3)
 	check(arena.active_level == "toy_room", "Toy stage loads after Weaver")
@@ -145,13 +145,13 @@ func run_suite():
 	for hero in heroes:
 		arena.open_story(); select_story_hero(hero)
 		arena.story_action.pressed.emit(); await process_frame
-		check(arena.story_hero == hero and arena.story_route.size() == 7 and not hero in arena.story_route, "route skips hero " + hero)
-		check(arena.story_route[-1] == ("teknium" if hero == "mephisto" else "mephisto"), "final opponent " + hero)
+		check(arena.story_hero == hero and arena.story_route == ["bobo", "ice_mage", "witcheer", "ggb", "turbofit", "doge_man", "teknium"].filter(func(id): return id != hero), "route skips hero " + hero)
+		check(arena.story_route[-1] == ("doge_man" if hero == "teknium" else "teknium"), "final opponent " + hero)
 		while true:
 			arena.story_vs.skip(); arena._cancel_ready()
 			var opp: String = arena.story_opponent()
 			check(arena.story_state == "playing" and arena.player_one.character_id == hero and arena.player_two.character_id == opp, "real actors %s vs %s" % [hero, opp])
-			if opp == "mephisto": check(arena.player_two.get_script().resource_path == "res://story_boss/scripts/fighter.gd", "Story Mephisto uses the story_boss fighter")
+			check(opp != "mephisto", "rejected Mephisto boss absent from the Story route")
 			if hero == "mephisto": check(arena.player_one.get_script().resource_path == "res://scripts/fighter.gd", "playable Mephisto independent of story boss")
 			if arena.story_encounter == 0 and hero == heroes[0]:
 				arena.player_one.stocks = 1; arena.player_one._handle_blast_zone()

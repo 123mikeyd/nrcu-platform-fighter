@@ -1,6 +1,5 @@
 {
   "clip": "ThrustSlash",
-  "source_action": "Armature|Thrust_Slash|baselayer",
   "source_range": [
     0.8000000715255737,
     72.80000305175781
@@ -8,9 +7,6 @@
   "source_fps": 24,
   "native_duration": 3.0,
   "duration": 4.4,
-  "timing_policy": "Native first 0.6s takes 1.2s; later motion source speed; final pose held 0.8s. Provisional tuning.",
-  "contacts_reason": "Right thrust extension plateau source19.2-24; left cross-body downward sweep48.8-52. Derived full native world wrists and >65% hand-weight surface bounds; no scene opponent implies contact windows are provisional, not authored impact markers.",
-  "geometry": "Convex hull of original hand-owned source vertices transformed by actual visible bone; convex fills claw concavities, no extra radius.",
   "hits": [
     {
       "bone": "RightHand",

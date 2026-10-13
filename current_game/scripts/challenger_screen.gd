@@ -1,7 +1,6 @@
 extends Control
 # "A NEW FIGHTER APPROACHES!" (Smash-style challenger) and the matching
 # "JOINS THE BATTLE!" / "GOT AWAY" result cards. Dark fades and a slam-in
-# title only: no flashing overlays (Mike's rule).
 signal fight_requested(id: String)
 signal later_requested
 signal continue_requested

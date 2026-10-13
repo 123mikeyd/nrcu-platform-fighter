@@ -107,6 +107,9 @@ func rock_pose(facing):
  skeleton.force_update_all_bone_transforms()
  var standing=[]
  for i in skeleton.get_bone_count():standing.append(skeleton.get_bone_global_pose(i))
+ view.animation_player.play("GuitarSourceIdle",0)
+ view.animation_player.seek(0,true)
+ skeleton.force_update_all_bone_transforms()
  var feet={}
  for side in ["Left","Right"]:
   var foot=bone_world(side+"Foot")
@@ -178,18 +181,29 @@ func apply_playing_grip():
  var local_pose=Transform3D(rotation*0.64,hips+Vector3(-0.03,0.23,0.18))
  guitar.global_transform=view.model.global_transform*local_pose
  var gb=guitar.global_transform.basis.orthonormalized()
- var right_target=guitar.to_global(Vector3(0.11,0.43,0.04))
- var left_target=guitar.to_global(Vector3(-0.11-0.055*sin(clock*TAU*5),-0.42,0.025))
- var right_basis=Basis(gb.y,-gb.x,gb.z)
- var left_basis=Basis(-gb.y,gb.x,gb.z)
- solve_arm("Right",right_target,right_basis,view.model.to_global(hips+Vector3(-0.62,-0.08,0.25)))
+ var right_target=guitar.to_global(Vector3(-0.14,0.43,-0.15))
+ var left_target=guitar.to_global(Vector3(0.14+0.055*sin(clock*TAU*5),-0.42,0.115))
+ var right_basis=Basis(gb.z,gb.x,gb.y)
+ var left_basis=Basis(-gb.z,-gb.x,gb.y)
+ solve_arm("Right",right_target,right_basis,guitar.to_global(Vector3(-0.64,0.43,-0.15)))
  solve_arm("Left",left_target,left_basis,view.model.to_global(hips+Vector3(0.55,-0.08,0.25)))
+ # Approved stage-two axial-roll distribution, exact original33 limb targets.
+ for side in ["Right","Left"]:
+  var a=bone_world(side+"Arm");var b=bone_world(side+"ForeArm");var h=bone_world(side+"Hand")
+  var axis=(h.origin-b.origin).normalized()
+  var x=b.basis.x.normalized();var goal=h.basis.x.normalized()
+  goal=(goal-axis*goal.dot(axis)).normalized();x=(x-axis*x.dot(axis)).normalized()
+  var angle=atan2(axis.dot(x.cross(goal)),x.dot(goal))
+  a.basis=Basis((b.origin-a.origin).normalized(),clampf(0.35*angle,-0.6,0.6))*a.basis
+  set_world_bone(side+"Arm",a)
+  b.basis=Basis(axis,angle*0.85)*b.basis
+  set_world_bone(side+"ForeArm",b);set_world_bone(side+"Hand",h)
  # Export has one grouped Index chain per hand, not independent five fingers.
  # Curl those real skinned joints: no invented finger rig or mesh replacement.
  for side in ["Right","Left"]:
   for segment in [1,2,3]:
    var name=side+"HandIndex"+str(segment)
    var pose=bone_world(name)
-   var axis=-gb.y if side=="Right" else gb.y
-   pose.basis=Basis(axis,0.65 if side=="Right" else 0.8)*pose.basis
+   var axis=-gb.y
+   pose.basis=Basis(axis,0.8 if side=="Right" else 0.3)*pose.basis
    set_world_bone(name,pose)

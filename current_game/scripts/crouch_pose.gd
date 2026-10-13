@@ -1,5 +1,4 @@
 extends Node
-# Mike's approved crouch holds (2026-09-28): Doge, Tek and TurboFit each use their own static hold
 # pose from the approved crouch library (approved_crouch_20260928.tres "Hold").
 # Entry/exit are a responsive reversible FK blend (gameplay transition, not authored animation):
 # Doge .18s, Tek/Turbo .30s. The previous authored Tek v004 / Turbo v005 libraries stay on disk.
@@ -53,7 +52,9 @@ func attack_started() -> bool:
 func cancel():
  if phase=="idle":return
  # A down-basic launched from the crouch starts on the crouch pose (Doge's cape attack does this itself).
- if actor.character_id!="doge_man" and amount>=.5 and attack_started():attack_modifier.start(ATTACK_BLEND*amount)
+ # Tek's planted derivative already has the exact crouch as its first pose.
+ # A second FK overlay would displace its anchored foot and replay the stand-up.
+ if actor.character_id!="doge_man" and not (actor.character_id=="teknium" and actor.last_move=="LOW SWEEP") and amount>=.5 and attack_started():attack_modifier.start(ATTACK_BLEND*amount)
  phase="idle";amount=0;hold_time=0
  view.current_clip=""
  view.animation_player.speed_scale=1

@@ -41,19 +41,31 @@ func point(bone: String) -> Vector3:
     var index := skeleton.find_bone(bone)
     assert(index >= 0, "Verified pilot bone missing: " + bone)
     return skeleton.global_transform * skeleton.get_bone_global_pose(index).origin
+# Perf: skip re-writing a shape/mesh when its inputs are bit-identical to the
+# last write (attacks call sync() before every query). Same values otherwise.
+var _shape_cache := {}
+var _mesh_cache := {}
 func fit(index: int, a: Vector3, b: Vector3, radius: float) -> void:
     var shape := shapes[index]
     # World-space endpoints include the imported centimeter/rotated parents.
     # Strip inherited scale from the damage body, not from the visible rig.
     var axis := b-a
-    shape.shape.radius = radius
-    shape.shape.height = maxf(radius*2, axis.length()+radius*2)
+    var height := maxf(radius*2, axis.length()+radius*2)
     var orientation := Basis.IDENTITY if axis.length_squared() < 0.00000001 else Basis(Quaternion(Vector3.UP,axis.normalized()))
-    shape.global_transform = Transform3D(orientation,(a+b)*0.5)
-    shape.force_update_transform()
-    meshes[index].global_transform = shape.global_transform
-    meshes[index].mesh.radius = radius
-    meshes[index].mesh.height = shape.shape.height
+    var target := Transform3D(orientation,(a+b)*0.5)
+    var shape_key := [body.global_transform, radius, height, target]
+    if _shape_cache.get(index) != shape_key:
+        shape.shape.radius = radius
+        shape.shape.height = height
+        shape.global_transform = target
+        shape.force_update_transform()
+        _shape_cache[index] = shape_key
+    var mesh_key := [global_transform, radius, shape.shape.height, shape.global_transform]
+    if _mesh_cache.get(index) != mesh_key:
+        meshes[index].global_transform = shape.global_transform
+        meshes[index].mesh.radius = radius
+        meshes[index].mesh.height = shape.shape.height
+        _mesh_cache[index] = mesh_key
     meshes[index].visible = debug_visible and actor.visible and actor.controls_enabled
 func sync() -> void:
     if not is_instance_valid(skeleton): return
@@ -149,6 +161,17 @@ static func shape_contact(space, query, hit, hits) -> Dictionary:
     var rest = space.get_rest_info(witness)
     if rest.is_empty() or rest.rid != hit.rid: return {}
     return {"collider":hit.collider,"shape":rest.shape,"position":rest.point}
+# Same exclusions as prepare() without re-syncing pilots. Only valid when the
+# caller already ran prepare() in this same animation sample and nothing that
+# can move a pose (a hit delivery) happened since.
+static func prepare_presynced(source, query, damage_active := true) -> void:
+    var excluded: Array[RID] = query.exclude
+    for fighter in source.get_tree().get_nodes_in_group("fighters"):
+        var pilot = fighter.get_node_or_null("BodyHurtboxes")
+        if pilot:
+            excluded.append(fighter.get_rid())
+            if not damage_active or not source.can_hit(fighter): excluded.append(pilot.body.get_rid())
+    query.exclude = excluded
 static func prepare(source, query, damage_active := true) -> void:
     var excluded: Array[RID] = query.exclude
     for fighter in source.get_tree().get_nodes_in_group("fighters"):

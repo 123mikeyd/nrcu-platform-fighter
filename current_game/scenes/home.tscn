@@ -1,5 +1,6 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 [ext_resource type="Script" path="res://scripts/home.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/menu/weaver_menu.webp" id="2"]
 [node name="Home" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -8,3 +9,4 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
+background_texture = ExtResource("2")

@@ -1,5 +1,4 @@
 extends RefCounted
-# Local fighter unlocks (Mike 2026-09-30). Smash-style: meet a condition, then a
 # "A NEW FIGHTER APPROACHES" challenger fight; beat them to unlock them.
 #   Starters: Teknium, TurboFit, Doge Man.
 #   GGB      - finish two versus matches.
@@ -15,7 +14,6 @@ const STARTERS := ["teknium", "turbofit", "doge_man"]
 const CHALLENGERS := ["ggb", "bobo", "witcheer", "mephisto"]   # check order
 const NEVER_PLAYABLE := ["ice_mage"]
 const GGB_MATCHES := 2
-# Scripted key-mash runs (2026-09-28) scored Tek 3865, Doge 1008, Turbo 4000.
 # 4500 means shattering the core quickly - better than plain mashing.
 const BOBO_SCORE := 4500
 const CHALLENGER_DIFFICULTY := {"ggb": "normal", "bobo": "normal", "witcheer": "normal", "mephisto": "hard"}

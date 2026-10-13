@@ -15,9 +15,9 @@ The reference is **Super Smash Bros. Ultimate Zelda**, adapted to NRCU's simplif
 - **Up special — Paired Teleport:** the young woman and guardian disappear and return together.
 - **Down special — Dream Hand:** the guardian reaches out, catches and lifts an opponent, then releases them asleep. Older release labels and internal identifiers use **Dream Grasp** for this move.
 
-The regular kit does not use voluntary lead switching. Its basic attacks are being developed as a Zelda-inspired caster kit, not as the historical demon-led brawler moveset. The revised Meteor Heel-inspired down-air has visual approval in a separate review build; that approval alone does not establish release installation or final approval of every other basic attack.
+The regular kit does not use voluntary lead switching. In the **v0.6.9.42.0 candidate**, all eight directional ground/air basic slots route to the regular caster kit, not the historical demon-led brawler moveset. Grounded Down+basic selects the low basic; airborne Down+basic selects **Meteor Heel** (internally `FallingStar`). Its controller is connected to that route. This establishes candidate source installation, not final art approval of every basic or verification of a downloadable package.
 
-## Story presentation — Boss_Meph
+## Story presentation direction — Boss_Meph (not installed-status evidence)
 
 The approved encounter has four stocks. The first three use the regular companion presentation. On the last stock, the guardian raises a supporting hand and carries the young woman meditating on its palm.
 
@@ -25,6 +25,10 @@ The approved encounter has four stocks. The first three use the regular companio
 
 ## Implementation boundary
 
-The provisional local Story implementation restored historical demon attack routing and therefore still needs correction to match the design above. Its earlier lifecycle tests do not certify this corrected kit. The new regular basics/down-air remain separate review work pending integration verification.
+The candidate's basic dispatcher calls the regular playable route before shared aerial routing. The move controller starts with demon form disabled, rejects lead-switch starts, and resets demon form on accepted move starts. Historical demon move definitions still present in source are not evidence that ordinary player input selects them.
+
+Story creates Mephisto through the same current fighter factory as Versus; there is no separate historical demon boss selected by that factory. The current Story text describes non-Bobo opponents as three-stock normal bots. Do not read the four-stock/last-stock carrying design above as a claim that it is installed in this candidate.
+
+Regular basics and Meteor Heel are therefore **installed in candidate source**, rather than merely waiting in a separate review build. Source inspection does not certify natural full Story completion, the Boss_Meph presentation direction, final visual approval of every basic, balance, or exported-package playback.
 
 This documentation update changes no game code, downloadable packages, save data, or deployed gameplay.

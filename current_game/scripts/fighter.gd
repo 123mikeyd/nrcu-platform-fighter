@@ -1,13 +1,19 @@
 class_name Fighter
 extends CharacterBody3D
 
+# Stable selected costume ID, assigned before this node enters the tree.
+var costume_id := "01"
+
 const CombatMathScript = preload("res://scripts/combat_math.gd")
 const ProjectileScript = preload("res://scripts/projectile.gd")
 const GooProjectileScript = preload("res://scripts/goo_projectile.gd")
 const BotScript = preload("res://scripts/bot_controller.gd")
+const SsbHitFeelScript = preload("res://scripts/ssb_hit_feel.gd")
+const SsbClankScript = preload("res://scripts/ssb_clank.gd")
 var revival
 var ggb_combat
 var ggb_basics
+var ggb_air  # GGB aerials (neutral spin / up bump / down stinger)
 
 func is_revival_protected() -> bool:
     return revival != null and revival.protected()
@@ -27,6 +33,7 @@ var humanoid_air_basic
 var humanoid_air_side
 var fitted_reaction
 var tumble
+var hit_feel # SSB64 hit feel (ssb_hit_feel.gd), created on first hit
 var ledge_grab
 var hit_source: Node
 var last_damage_source: Node
@@ -39,6 +46,7 @@ func receive_hit_from(amount: float, direction: Vector3, push: float, source: No
 
 # Contact routing affects presentation only; the native damage sink remains authoritative.
 func receive_contact_hit(amount: float, direction: Vector3, push: float, point: Vector3, region := "") -> void:
+    if SsbClankScript.blocks(self, hit_source): hit_source = null; return # SSB clank: this swing was cancelled
     var accepted = controls_enabled and stocks > 0 and not shielding and not is_knockdown_protected() and not is_revival_protected() and not is_ledge_intangible() and amount > 0
     var role = region if region in ["head", "body"] else (fitted_reaction.classify(point) if fitted_reaction else "")
     receive_hit(amount, direction, push)
@@ -66,6 +74,7 @@ func apply_burn(caster: Node3D) -> bool:
     return true
 
 var witcheer_clip := ""
+var witcheer_finished_pose := "" # Presentation-only owner of a natural grounded finish's residual cooldown.
 var witcheer_elapsed := 0.0
 var witcheer_facing := 1.0
 var witcheer_struck := false
@@ -84,6 +93,7 @@ func _latch_witcheer_inputs() -> void:
     _down_was_down = held.down
 
 func _start_witcheer(clip: String) -> void:
+    witcheer_finished_pose = ""
     witcheer_absorbing = false
     witcheer_clip = clip
     witcheer_elapsed = 0
@@ -97,9 +107,14 @@ func _start_witcheer(clip: String) -> void:
     _update_move_visuals()
 
 func _cancel_witcheer() -> void:
+    witcheer_finished_pose = ""
     if _visual_root:
         var visual = _visual_root.get_node_or_null("WitcheerVisual")
         if visual and visual.accent: visual.accent.visible = false
+        if visual and visual.cane and witcheer_clip in ["CaneNeutralV003", "CaneUpV002", "CaneDownPokeV002"]:
+            visual.cane.visible = false
+            visual.cane.transform = visual.cane_idle_transform
+            visual.position.y = visual.FLOOR_OFFSET
     witcheer_clip = ""
     witcheer_elapsed = 0
     witcheer_struck = false
@@ -140,18 +155,36 @@ func _tick_witcheer(delta: float) -> void:
     witcheer_elapsed += delta
     facing = witcheer_facing
     var move: Dictionary = witcheer_moves[witcheer_clip]
+    if witcheer_clip in ["CaneNeutralV003", "CaneUpV002", "CaneDownPokeV002"]:
+        if not is_grounded():
+            _cancel_witcheer()
+            return
+        preload("res://scripts/witcheer_cane_contacts.gd").sample(self, previous_source, witcheer_source_time())
+        if witcheer_source_time() >= float(move.duration):
+            var finished_poke := witcheer_clip == "CaneDownPokeV002"
+            var finished_clip := witcheer_clip
+            _cancel_witcheer()
+            if not finished_poke: witcheer_finished_pose = finished_clip
+            if finished_poke:
+                attack_cooldown = 0.0
+                crouch_pose.finish_poke()
+        return
     if witcheer_clip == "TurnaroundKick":
         preload("res://scripts/witcheer_basic_contacts.gd").sample(self,previous_source,witcheer_source_time())
         if witcheer_source_time() >= float(move.duration):
             facing = -witcheer_facing
             _cancel_witcheer()
+            witcheer_finished_pose = "TurnaroundKick"
         return
     if witcheer_clip in ["NeutralHook","HighKick"]:
         if not is_grounded():
             _cancel_witcheer()
             return
         preload("res://scripts/witcheer_basic_contacts.gd").sample(self,previous_source,witcheer_source_time())
-        if witcheer_source_time() >= float(move.duration): _cancel_witcheer()
+        if witcheer_source_time() >= float(move.duration):
+            var finished_clip := witcheer_clip
+            _cancel_witcheer()
+            witcheer_finished_pose = finished_clip
         return
     if not witcheer_struck and witcheer_source_time() + 0.000001 >= float(move.contact_time):
         witcheer_struck = true
@@ -184,7 +217,11 @@ func _tick_witcheer(delta: float) -> void:
                     if witcheer_clip == "SpinRise": direction = Vector3(facing*0.2,1,0)
                     target.receive_hit_from(7.0 if witcheer_clear else float(move.damage),direction,5.0 if witcheer_clear else 3.8, self)
         attack_flash_time = 0
-    if witcheer_source_time() >= float(move.duration): _cancel_witcheer()
+    if witcheer_source_time() >= float(move.duration):
+        var finished_clip := witcheer_clip
+        _cancel_witcheer()
+        if finished_clip in ["Celebration", "Toss"]:
+            witcheer_finished_pose = finished_clip
 
 var teknium_magic
 var teknium_specials
@@ -217,9 +254,33 @@ func _exit_tree() -> void:
     if teknium_specials: teknium_specials.clear()
     cancel_magic()
 
+# SSB clank rebound: stop the current move the same way receive_hit does, without damage/launch.
+func cancel_for_clank() -> void:
+    if not has_meta("ssb_rebound"): return
+    cancel_magic()
+    if ggb_combat: ggb_combat.cancel()
+    if ggb_basics: ggb_basics.cancel()
+    if ggb_air: ggb_air.cancel()
+    _cancel_witcheer()
+    _cancel_ice_attack()
+    _cancel_turbofit_attack()
+    _cancel_doge_attack()
+    _clear_sound_orb()
+    torpedo_phase = "idle"
+    torpedo_time = 0
+    tackle_active = 0.0
+    tackle_targets.clear()
+    swing_windup = 0.0
+    charging = false
+    charge_time = 0.0
+    recovery_active = 0.0
+    drop_committed = false
+    _update_move_visuals()
+
 func cancel_for_grab() -> void:
     if ggb_combat: ggb_combat.cancel()
     if ggb_basics: ggb_basics.cancel()
+    if ggb_air: ggb_air.cancel()
     if doge_counter: doge_counter.cancel()
     clear_counter_hitstop()
     if teknium_specials: teknium_specials.cancel()
@@ -293,6 +354,7 @@ func apply_freeze(caster: Node3D) -> bool:
         return false
     if ggb_combat: ggb_combat.cancel()
     if ggb_basics: ggb_basics.cancel()
+    if ggb_air: ggb_air.cancel()
     if _visual_root:
         var rigid_reaction = _visual_root.get_node_or_null("GGBVisual")
         if rigid_reaction: rigid_reaction.freeze_reaction()
@@ -327,7 +389,6 @@ func apply_freeze(caster: Node3D) -> bool:
 # Shared sleep status (Mephisto sleep kit). Modeled on freeze, but the visible
 # animation keeps idling. Any damaging hit wakes the sleeper; waking starts a
 # post-wake immunity so orb/grasp cannot loop forever. Duration scales with %.
-# Mike 09-29 curve: very short below 25%, then grows with a gentle bend so
 # ~200% sleeps ~2.75 s and ~1000% sleeps ~6.4 s (capped at 7 s).
 const SLEEP_MIN := 0.4
 const SLEEP_KNEE := 25.0
@@ -357,6 +418,7 @@ func apply_sleep(caster: Node3D, extra_hold := 0.0, anchor_owner = null) -> bool
     if not can_sleep(caster): return false
     if ggb_combat: ggb_combat.cancel()
     if ggb_basics: ggb_basics.cancel()
+    if ggb_air: ggb_air.cancel()
     cancel_magic()
     _cancel_witcheer()
     _cancel_ice_attack()
@@ -584,6 +646,7 @@ var doge_tyson_followup := false
 var doge_punch_buffered := false
 var doge_buffer_branch := ""
 var doge_counter
+var doge_super_punch
 var counter_hitstop := 0.0
 var _counter_paused_players: Array = []
 
@@ -596,6 +659,7 @@ func begin_counter_hitstop(seconds: float) -> void:
 
 func clear_counter_hitstop() -> void:
     counter_hitstop = 0
+    if has_meta("ssb_hitlag"): remove_meta("ssb_hitlag")
     for pair in _counter_paused_players:
         if is_instance_valid(pair[0]): pair[0].speed_scale = pair[1]
     _counter_paused_players.clear()
@@ -647,6 +711,7 @@ var controls_enabled := true:
         if character_id == "ggb" and not value:
             if ggb_combat: ggb_combat.cancel()
             if ggb_basics: ggb_basics.cancel()
+            if ggb_air: ggb_air.cancel()
             drop_committed = false
             _ggb_impact_pending = false
             _clear_ggb_dust()
@@ -760,7 +825,6 @@ var _move_status: Label3D
 var _sound_orb_visual: Node3D
 
 # Grey movement pill (radius, height); damage uses the pink BodyHurtboxes.
-# Review values 2026-09-30: GGB was standing-on-air tall, Bobo too small.
 const BODY_PILL_DEFAULT := Vector2(0.55, 1.8)
 const BODY_PILL := {"ggb": Vector2(0.55, 1.55), "bobo": Vector2(0.85, 2.6)}
 const MOVE_SPEED := 7.5
@@ -769,6 +833,8 @@ const AIR_ACCELERATION := 22.0
 const JUMP_SPEED := 10.5
 const GRAVITY := 25.0
 const MAX_FALL_SPEED := 18.0
+# SSB64 Batch 2 movement rules (jump squat, short hop, fast fall, landing lag, jump arc); switches live there.
+var ssb_movement: Node
 
 func get_hurtbox_shapes() -> Array:
     var pilot = get_node_or_null("BodyHurtboxes")
@@ -782,6 +848,9 @@ func _ready() -> void:
     tumble = preload("res://scripts/launch_tumble.gd").new()
     tumble.name = "LaunchTumble"
     add_child(tumble)
+    ssb_movement = preload("res://scripts/ssb_movement.gd").new()
+    ssb_movement.name = "SSBMovement"
+    add_child(ssb_movement)
     if character_id in preload("res://scripts/ledge_grab.gd").CONFIG:
         ledge_grab = preload("res://scripts/ledge_grab.gd").new()
         ledge_grab.name = "LedgeGrab"
@@ -809,6 +878,9 @@ func _ready() -> void:
         presenter.name="AirReaction"
         add_child(presenter)
     if character_id == "doge_man":
+        doge_super_punch = preload("res://scripts/doge_super_punch.gd").new()
+        doge_super_punch.name = "DogeSuperPunch"
+        add_child(doge_super_punch)
         doge_counter = preload("res://scripts/doge_counter.gd").new()
         doge_counter.name = "DogeCounter"
         add_child(doge_counter)
@@ -823,7 +895,7 @@ func _ready() -> void:
         add_child(doge_air_drop)
     if character_id in preload("res://scripts/humanoid_air_side.gd").VIEWS:
         humanoid_air_side = preload("res://scripts/humanoid_air_side.gd").new()
-        humanoid_air_basic = preload("res://scripts/humanoid_air_basic.gd").new()
+        humanoid_air_basic = preload("res://scripts/teknium_air_basic.gd").new() if character_id == "teknium" else preload("res://scripts/humanoid_air_basic.gd").new()
         if character_id == "mephisto":
             humanoid_air_side.free()
             humanoid_air_basic.free()
@@ -865,7 +937,6 @@ func _ready() -> void:
         paired_hurtboxes.name = "BodyHurtboxes"
         add_child(paired_hurtboxes)
     if character_id in ["witcheer", "bobo", "ggb", "ice_mage"]:
-        # Native-mesh fitted damage-only receivers (Mike-approved; ice_mage provisional).
         var fitted_hurtboxes = preload("res://scripts/fitted_body_hurtboxes.gd").new()
         fitted_hurtboxes.name = "BodyHurtboxes"
         add_child(fitted_hurtboxes)
@@ -876,6 +947,10 @@ func _ready() -> void:
         teknium_specials = preload("res://scripts/teknium_specials.gd").new()
         teknium_specials.name = "TekniumSpecials"
         add_child(teknium_specials)
+    if character_id == "witcheer":
+        crouch_pose = preload("res://scripts/witcheer_crouch.gd").new()
+        crouch_pose.name = "ApprovedCrouch"
+        add_child(crouch_pose)
     if character_id in ["teknium", "doge_man", "turbofit", "mephisto"]:
         crouch_pose = preload("res://scripts/mephisto_crouch.gd").new() if character_id == "mephisto" else preload("res://scripts/crouch_pose.gd").new()
         crouch_pose.name = "ApprovedCrouch"
@@ -917,13 +992,16 @@ func _input(event: InputEvent) -> void:
         _short_suppressed[action] = true
 
 func _short_eligible(action: String) -> bool:
+    if doge_super_punch and doge_super_punch.committed(): return false
     if not is_inside_tree() or get_tree().paused or not controls_enabled or stocks <= 0: return false
-    if freeze_remaining > 0 or sleep_remaining > 0 or hitstun > 0 or counter_hitstop > 0 or magic_locked(): return false
+    # SSB hitlag buffers presses (held for the first unfrozen frame); other hitstops still swallow them.
+    if freeze_remaining > 0 or sleep_remaining > 0 or hitstun > 0 or (counter_hitstop > 0 and not has_meta("ssb_hitlag")) or magic_locked(): return false
     if (revival and revival.phase != "idle") or (tumble and tumble.active): return false
     if reaction_recovery and not reaction_recovery.knockdown_phase.is_empty(): return false
     if (doge_counter and doge_counter.phase != "idle") or (teknium_specials and teknium_specials.phase != "idle"): return false
     if action == "special" and character_id == "ggb" and drop_committed: return true
-    if landing_lag > 0 or _torpedo_committed(): return false
+    # The short SSB64 landing lag buffers its presses (ssb_movement) instead of swallowing them.
+    if (landing_lag > 0 and not (ssb_movement and ssb_movement.owns_landing_lag())) or _torpedo_committed(): return false
     if action == "special" and not doge_attack_clip.is_empty(): return true
     # Jump/store direction permission is not generic attack recovery permission.
     # try_jump and the charge/side-chain owners retain their existing gates.
@@ -969,6 +1047,11 @@ func _notification(what: int) -> void:
         _clear_short_input()
 
 func _physics_process(delta: float) -> void:
+    # Guard before hitstop, grab, ledge and tumble early returns. Ordinary hitlag
+    # retains its clock; actual ownership loss must never resume a stale strike.
+    if witcheer_clip in ["CaneNeutralV003", "CaneUpV002", "CaneDownPokeV002"] and (hitstun > 0 or freeze_remaining > 0 or magic_locked() or not controls_enabled or stocks <= 0 or (tumble and tumble.active)):
+        _cancel_witcheer()
+    if doge_super_punch: doge_super_punch.before_tick()
     _guard_held_sound_orb()
     if air_doge: air_doge.watchdog()
     if air_doge: air_doge.before_input(delta)
@@ -981,6 +1064,7 @@ func _physics_process(delta: float) -> void:
         if not _short_eligible(action): _sample_short.erase(action)
     if ggb_combat: ggb_combat.before_tick()
     if ggb_basics: ggb_basics.before_tick()
+    if ggb_air: ggb_air.before_tick()
     var revival_input: Dictionary = {}
     if revival and controls_enabled:
         # Only the platform hold consumes controls early; ordinary combat keeps
@@ -988,6 +1072,10 @@ func _physics_process(delta: float) -> void:
         if revival.phase != "idle": revival_input = read_controls(delta)
         if revival.tick(delta, revival_input): return
     if counter_hitstop > 0:
+        # SSB hitlag: short presses made during the freeze are kept for the first unfrozen frame.
+        if has_meta("ssb_hitlag"):
+            for action in _sample_short.keys():
+                if not _pending_short.has(action): _pending_short[action] = _sample_short[action]
         counter_hitstop = maxf(0,counter_hitstop-delta)
         if counter_hitstop <= 0: clear_counter_hitstop()
         return
@@ -1047,7 +1135,8 @@ func _physics_process(delta: float) -> void:
     if _shield_visual:
         _shield_visual.visible = shielding and hitstun <= 0.0
 
-    velocity.y = maxf(velocity.y - GRAVITY * delta, -MAX_FALL_SPEED)
+    if ssb_movement: ssb_movement.step(delta, input)
+    else: velocity.y = maxf(velocity.y - GRAVITY * delta, -MAX_FALL_SPEED)
     if is_grounded() and velocity.y <= 0.0:
         reset_air_resources()
 
@@ -1083,7 +1172,9 @@ func _physics_process(delta: float) -> void:
     elif control_lane == "casting":
         velocity.x = move_toward(velocity.x, 0, GROUND_ACCELERATION * delta)
     elif control_lane == "hitstun":
+        SsbClankScript.rebound_step(self, delta) # SSB clank rebound slide friction (no-op otherwise)
         hitstun -= delta
+        if hit_feel: hit_feel.flinch_step(delta)
     elif control_lane == "counter":
         velocity.x = 0
     elif control_lane == "special":
@@ -1093,6 +1184,10 @@ func _physics_process(delta: float) -> void:
             if return_aim.y > .1: start_special(return_aim)
     else:
         var move_axis: float = decision.intent_axis(float(int(right_down) - int(left_down)))
+        # Tek's .32s planted low kick owns horizontal travel/facing only.
+        # Jump/hit/freeze/special lifecycle still uses the existing control lanes.
+        var tek_planted_kick := character_id == "teknium" and last_move == "LOW SWEEP" and attack_cooldown > 0.0 and is_grounded()
+        if tek_planted_kick: move_axis = 0.0
         var aim := Vector2(move_axis, float(int(down_down) - int(up_down)))
         # Capture opposite+basic before movement auto-turns; no held-input retrigger.
         var attack_aim: Vector2 = _sample_short.get("attack", aim)
@@ -1148,6 +1243,7 @@ func _physics_process(delta: float) -> void:
     if doge_air_drop: doge_air_drop.before_move()
     if doge_ground_basic: doge_ground_basic.before_move()
     if doge_cape_attack: doge_cape_attack.before_move()
+    if doge_super_punch: doge_super_punch.before_move()
     if air_doge: air_doge.before_move(delta, input)
     if turbofit_snapline: turbofit_snapline.before_move(delta)
     if teknium_specials: teknium_specials.before_move(delta, input)
@@ -1186,6 +1282,7 @@ func _physics_process(delta: float) -> void:
     if air_doge: air_doge.after_move(delta)
     if turbofit_snapline: turbofit_snapline.after_move(delta)
     if ggb_basics: ggb_basics.tick(delta)
+    if ggb_air: ggb_air.tick(delta)
     if ggb_combat: ggb_combat.tick(delta)
     # Imported aerial kicks query the current combat-clock pose AFTER movement
     # and landing cancellation, never yesterday's skeleton/pre-move position.
@@ -1208,11 +1305,12 @@ func _physics_process(delta: float) -> void:
     if doge_counter:
         doge_counter.tick(delta)
         doge_counter.present()
+    if doge_super_punch: doge_super_punch.after_tick(delta)
     if crouch_pose: crouch_pose.sync_receivers()
     global_position.z = 0.0
     if ledge_grab: ledge_grab.after_move()
     if global_position.y < -8.0 or absf(global_position.x) > 16.0 or global_position.y > 15.0:
-        _handle_blast_zone()
+        if not preload("res://scripts/ssb_presentation.gd").begin_ko(self): _handle_blast_zone()
 
 func can_hit(target: Node) -> bool:
     if is_instance_valid(target) and target.has_method("is_revival_protected") and target.is_revival_protected(): return false
@@ -1319,6 +1417,7 @@ func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -
     hit_source = null
     collateral_hit = false
     counter_blocked_hit = false
+    if SsbClankScript.blocks(self, source): return # SSB clank: this swing was cancelled against us
     if is_revival_protected(): return
     if is_ledge_intangible(): return
     counter_blocked_hit = doge_counter != null and doge_counter.intercept(hit_damage,source)
@@ -1336,6 +1435,7 @@ func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -
         _wake(true)
     if ggb_combat: ggb_combat.cancel()
     if ggb_basics: ggb_basics.cancel()
+    if ggb_air: ggb_air.cancel()
     _cancel_witcheer()
     _cancel_ice_attack()
     _cancel_turbofit_attack()
@@ -1353,17 +1453,23 @@ func receive_hit(hit_damage: float, direction: Vector3, base_knockback: float) -
     var damage_scale := 0.35 if shielding else 1.0
     var knockback_scale := 0.28 if shielding else 1.0
     damage_percent = CombatMathScript.apply_damage(damage_percent, hit_damage * damage_scale)
-    var strength: float = CombatMathScript.knockback_strength(damage_percent, hit_damage, base_knockback) * knockback_scale
+    if hit_feel == null: hit_feel = SsbHitFeelScript.new(self)
+    var strength: float = hit_feel.launch_speed(damage_percent, hit_damage, base_knockback) * knockback_scale
     if mephisto_moves and mephisto_moves.demon_form: strength *= 0.80
     if collateral: strength = minf(strength, 4.0)
-    velocity = direction.normalized() * strength
-    hitstun = 0.08 + strength * 0.025
+    hitstun = hit_feel.hitstun_for(strength, hit_damage)
+    velocity = hit_feel.ground_direction(direction, strength, hit_damage).normalized() * strength
+    hit_feel.begin_launch(velocity, hit_damage)
+    hit_feel.prepare_hitlag(hit_damage)
     if tumble: tumble.begin(source, collateral)
     if character_id == "doge_man" and _visual_root:
         _visual_root.get_node("DogeVisual").begin_hit()
     _update_move_visuals()
     if reaction_recovery: reaction_recovery.after_hit(episode, old_reaction_facing)
+    hit_feel.apply_hitlag(source, collateral)
+    SsbClankScript.on_real_hit(self) # a real hit replaces a clank rebound
     state_changed.emit()
+    preload("res://scripts/ssb_presentation.gd").on_hit(self, source, hit_damage, base_knockback)
 
 func lose_stock() -> void:
     _clear_move_state()
@@ -1406,14 +1512,19 @@ func reset_air_resources() -> void:
 
 func _clear_move_state() -> void:
     _clear_short_input()
+    if ssb_movement: ssb_movement.reset()
     state_coordinator.reset()
     if ggb_combat: ggb_combat.cancel()
     if ggb_basics: ggb_basics.cancel()
+    if ggb_air: ggb_air.cancel()
     if revival: revival.clear()
+    preload("res://scripts/ssb_presentation.gd").cancel_ko(self)
     clear_counter_hitstop()
     counter_blocked_hit = false
     if teknium_specials: teknium_specials.clear()
     if tumble: tumble.clear()
+    if hit_feel: hit_feel.clear()
+    SsbClankScript.on_real_hit(self)
     if ledge_grab: ledge_grab.cancel()
     hit_source = null
     last_damage_source = null
@@ -1482,6 +1593,7 @@ func ground_speed_multiplier() -> float:
     return multiplier
 
 func try_jump() -> bool:
+    if doge_super_punch and doge_super_punch.committed(): return false
     if ggb_combat and ggb_combat.committed(): return false
     if revival and revival.phase != "idle": return false
     if doge_counter and doge_counter.phase != "idle": return false
@@ -1495,10 +1607,12 @@ func try_jump() -> bool:
         return false
     if _torpedo_committed() or landing_lag > 0 or drop_committed or tackle_active > 0 or recovery_spent or jumps_used >= (5 if character_id == "ggb" else 2) or charging or hitstun > 0.0 or not controls_enabled:
         return false
+    if ssb_movement and ssb_movement.intercept_jump(): return true
     _cancel_witcheer()
     _cancel_ice_attack()
     torpedo_phase = "idle"
     velocity.y = JUMP_SPEED * pow(0.84, jumps_used) if character_id == "ggb" else JUMP_SPEED
+    if ssb_movement: ssb_movement.on_takeoff()
     _cancel_turbofit_attack()
     _cancel_doge_attack()
     jumps_used += 1
@@ -1525,6 +1639,7 @@ func _fire_air_cushion() -> void:
     air_cushion_fx.fire(global_position, AIR_CUSHION_STYLE[character_id])
 
 func start_special(aim: Vector2) -> void:
+    if doge_super_punch and doge_super_punch.committed(): return
     if air_doge and air_doge.active(): return
     if turbofit_snapline and turbofit_snapline.active(): return
     if revival and not revival.permit_attack(): return
@@ -1693,7 +1808,9 @@ func start_special(aim: Vector2) -> void:
         attack_cooldown = 0.55
         last_move = "STICKY GOO" if character_id == "ggb" else ("SOUND WAVE" if character_id == "turbofit" else "PROJECTILE")
     elif aim == Vector2.ZERO:
-        if character_id == "doge_man" and not is_grounded(): return
+        if character_id == "doge_man":
+            if is_grounded(): doge_super_punch.start()
+            return
         doge_goalkeeper_hold = 0.0
         if character_id == "teknium":
             teknium_magic.start_grab()
@@ -1745,6 +1862,7 @@ func _tick_recovery(delta: float) -> void:
     if recovery_active <= 0.0:
         return
     recovery_active = maxf(0.0, recovery_active - delta)
+    SsbClankScript.strike(self, "recovery", global_position + Vector3(0, 0.6, 0), global_position + Vector3(0, 2.0, 0), 0.8, 12.0)
     for target in get_tree().get_nodes_in_group("fighters"):
         if not can_hit(target) or target in recovery_targets:
             continue
@@ -1754,9 +1872,15 @@ func _tick_recovery(delta: float) -> void:
             target.receive_hit_from(12.0, Vector3(facing * 0.2, 1, 0), 5.5, self)
 
 func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
+    # Early-return presenters (grab/freeze) must also revoke a completed pose.
+    if interrupted or freeze_remaining > 0 or is_instance_valid(caught_by):
+        witcheer_finished_pose = ""
     if character_id == "turbofit" and _visual_root:
         var review_view = _visual_root.get_node_or_null("TurboFitVisual")
         if review_view and review_view.guitar_moves: review_view.guitar_moves.guard(self, interrupted)
+    if doge_super_punch and doge_super_punch.active:
+        doge_super_punch.present()
+        return
     var guitar_performing := false
     if character_id == "turbofit" and _visual_root:
         guitar_performing = not _visual_root.get_node("TurboFitVisual").guitar_moves.phase.is_empty()
@@ -1794,10 +1918,17 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
             _visual_root.scale = Vector3.ONE
             _visual_root.rotation = Vector3.ZERO
             if not controls_enabled or interrupted: _cancel_witcheer()
+            # Never reinterpret arbitrary cooldown as idle. Only natural grounded
+            # basic completion retains its exact final pose until the real clock
+            # expires; all interruption/air/input owners keep their priority.
+            if attack_cooldown <= 0 or hitstun > 0 or magic_locked() or stocks <= 0 or charging or shielding or recovery_active > 0 or (not is_grounded() and witcheer_finished_pose not in ["Celebration", "Toss"]):
+                witcheer_finished_pose = ""
             if not witcheer_clip.is_empty():
                 witcheer_visual.show_move(witcheer_clip, witcheer_source_time(), facing)
+            elif not witcheer_finished_pose.is_empty():
+                witcheer_visual.show_move(witcheer_finished_pose, float(witcheer_moves[witcheer_finished_pose].duration), witcheer_facing)
             else:
-                witcheer_visual.sync_pose(is_grounded() or sleep_remaining > 0, velocity, interrupted or hitstun > 0 or not controls_enabled or charging or attack_cooldown > 0 or recovery_active > 0, shielding, facing)
+                witcheer_visual.sync_pose(is_grounded() or sleep_remaining > 0, velocity, interrupted or hitstun > 0 or not controls_enabled or stocks <= 0 or charging or attack_cooldown > 0 or recovery_active > 0, shielding, facing)
         var doge_visual = _visual_root.get_node_or_null("DogeVisual")
         if doge_visual:
             # Weak fitted hits do not enter launch_tumble's expiry cleanup.
@@ -1853,7 +1984,10 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
             _visual_root.scale = Vector3.ONE
             _visual_root.rotation = Vector3.ZERO
             var teknium_move := last_move if charging or attack_cooldown > 0.0 else ""
-            teknium_visual.sync_pose((is_grounded() and velocity.y <= 0) or sleep_remaining > 0 or not controls_enabled or interrupted, velocity, hitstun > 0.0, shielding, teknium_move, facing, delta)
+            if teknium_move == "LOW SWEEP" and is_grounded() and hitstun <= 0 and not interrupted and controls_enabled and not magic_locked():
+                teknium_visual.present_crouch_kick(0.32 - attack_cooldown, facing)
+            else:
+                teknium_visual.sync_pose((is_grounded() and velocity.y <= 0) or sleep_remaining > 0 or not controls_enabled or interrupted, velocity, hitstun > 0.0, shielding, teknium_move, facing, delta)
             if teknium_magic: teknium_magic.present()
             if teknium_specials: teknium_specials.present()
 
@@ -1864,7 +1998,6 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
             var ice_move := last_move if charging or attack_cooldown > 0.0 else ""
             ice_mage_visual.sync_pose(is_grounded() or sleep_remaining > 0 or not controls_enabled, velocity, hitstun > 0.0 or freeze_remaining > 0, shielding, ice_move, facing, delta, ice_attack_clip, ice_attack_elapsed)
 
-    # Mike's rule: no explanatory text during gameplay unless Dev Mode is on.
     if _move_status:
         var dev = get_node_or_null("/root/DevMode")
         _move_status.visible = dev != null and dev.enabled
@@ -1892,6 +2025,7 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
 
 
 func basic_attack(aim: Vector2, airborne: bool) -> void:
+    if doge_super_punch and doge_super_punch.committed(): return
     if air_doge and air_doge.active(): return
     if turbofit_snapline and turbofit_snapline.active(): return
     if ggb_combat and ggb_combat.committed(): return
@@ -1936,8 +2070,9 @@ func basic_attack(aim: Vector2, airborne: bool) -> void:
     if character_id == "witcheer" and absf(aim.y) <= 0.1 and aim.x * facing < -0.1:
         _start_witcheer("TurnaroundKick")
         return
-    # The paired brute never consumes libraries bound to the girl's skeleton.
-    if mephisto_moves and mephisto_moves.demon_form:
+    # Regular Mephisto owns all eight basic slots before shared aerial routing.
+    # Old libraries remain read-only donors; other fighters are unchanged.
+    if mephisto_moves:
         if mephisto_moves.move.is_empty(): mephisto_moves.start_kit(mephisto_moves.route(aim,airborne,false),signf(aim.x) if absf(aim.x)>.1 else facing)
         return
     # Doge-only neutral air shares the existing native-limb Superman route.
@@ -1957,7 +2092,7 @@ func basic_attack(aim: Vector2, airborne: bool) -> void:
         return
     if character_id == "witcheer":
         if absf(aim.x) > 0.1: facing = signf(aim.x)
-        _start_witcheer(("SpinRise" if aim.y < -0.1 else "JumpPunch") if airborne else ("CaneSweep" if aim.y > 0.1 else ("NeutralHook" if absf(aim.y) <= 0.1 and absf(aim.x) <= 0.1 else "HighKick")))
+        _start_witcheer(("SpinRise" if aim.y < -0.1 else "JumpPunch") if airborne else ("CaneDownPokeV002" if aim.y > 0.1 else ("CaneUpV002" if aim.y < -0.1 else ("CaneNeutralV003" if absf(aim.x) <= 0.1 else "HighKick"))))
         return
     if reaction_recovery and airborne and aim.y < -.1:
         reaction_recovery.lab_start("air_up")
@@ -2002,6 +2137,12 @@ func basic_attack(aim: Vector2, airborne: bool) -> void:
         last_move = ("AIR DOWN KICK" if turbofit_attack_clip == "AirDownKick" else "AIR SIDE KICK") if airborne else "GOALKEEPER KICK"
         _update_move_visuals()
         return
+    if character_id == "ggb" and airborne and preload("res://scripts/ggb_air.gd").handles(aim) and "--ggb-current" not in OS.get_cmdline_user_args():
+        if ggb_air == null:
+            ggb_air = preload("res://scripts/ggb_air.gd").new()
+            add_child(ggb_air)
+        ggb_air.start(aim)
+        return
     if character_id == "ggb" and absf(aim.y) <= .1:
         if not ggb_combat:
             ggb_combat = preload("res://scripts/ggb_combat.gd").new()
@@ -2022,6 +2163,8 @@ func basic_attack(aim: Vector2, airborne: bool) -> void:
     elif aim.y > 0.1:
         direction = Vector3.DOWN if airborne else Vector3(facing, -0.25, 0.0).normalized()
         last_move = "DOWN STRIKE" if airborne else "LOW SWEEP"
+        if character_id == "teknium" and not airborne:
+            velocity.x = 0.0 # Plant at acceptance; do not carry run momentum into the kick.
     else:
         if absf(aim.x) > 0.1:
             facing = signf(aim.x)
@@ -2255,6 +2398,7 @@ func _tick_doge_attack(delta: float) -> void:
     if doge_attack_clip not in ["SupermanMoves2", "TysonTwoPiece", "AirDownKarate", "GoalkeeperKick"] and not _doge_struck and doge_attack_elapsed + 0.000001 >= float(timing.impact_time):
         _doge_struck = true
         if doge_attack_clip == "Uppercut":
+            SsbClankScript.strike(self, "doge:Uppercut", global_position + Vector3(facing * 0.3, 1.2, 0), global_position + Vector3(facing * 1.2, 1.6, 0), SsbClankScript.CONE_STRIKE_RADIUS, 8.0)
             # Fighter origins are feet: test a front/upper chest volume instead.
             for target in get_tree().get_nodes_in_group("fighters"):
                 if not can_hit(target):
@@ -2307,6 +2451,7 @@ func _query_doge_two_piece() -> void:
             continue
         var center: Vector3 = skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin
         var radius: float = float(event.radius) * view.global_basis.x.length() / 1.25
+        SsbClankScript.strike(self, "doge:TwoPiece:%d" % _doge_two_piece_event, center, center, radius, float(event.damage))
         for target in get_tree().get_nodes_in_group("fighters"):
             if not can_hit(target) or (target.global_position.x - global_position.x) * doge_attack_facing <= 0:
                 continue
@@ -2370,6 +2515,7 @@ func _query_doge_goalkeeper() -> void:
     skeleton.force_update_all_bone_transforms()
     var center: Vector3 = skeleton.global_transform * skeleton.get_bone_global_pose(skeleton.find_bone("RightFoot")).origin
     var radius: float = 0.22 * view.global_basis.x.length() / 1.25
+    SsbClankScript.strike(self, "doge:Goalkeeper", center, center, radius, lerpf(10, 26, doge_goalkeeper_power))
     for target in get_tree().get_nodes_in_group("fighters"):
         if not can_hit(target) or target in _doge_goalkeeper_targets: continue
         for child in target.get_hurtbox_shapes():
@@ -2399,6 +2545,7 @@ func _query_doge_superman() -> void:
     if _attack_flash: _attack_flash.visible = false
 
 func _cancel_doge_attack(preserve_up_pose := false) -> void:
+    if doge_super_punch: doge_super_punch.cancel()
     if air_doge: air_doge.cancel()
     if doge_cape_attack: doge_cape_attack.cancel()
     if doge_air_drop: doge_air_drop.cancel()
@@ -2447,6 +2594,7 @@ func _tick_torpedo(delta: float) -> void:
                 velocity = Vector3(facing * 17.0, 0, 0)
         "tackle":
             velocity = Vector3(facing * 17.0, 0, 0)
+            SsbClankScript.strike(self, "doge:torpedo", global_position + Vector3(0, 1.0, 0), global_position + Vector3(facing * 0.8, 1.0, 0), 0.9, 14.0)
             for target in get_tree().get_nodes_in_group("fighters"):
                 if can_hit(target) and target not in tackle_targets and global_position.distance_to(target.global_position) < 2.0:
                     tackle_targets.append(target)
@@ -2505,6 +2653,9 @@ func _directional_hit(hit_damage: float, base_knockback: float, attack_range: fl
         contact_direction = Vector3(facing, 1.0, 0.0).normalized()
     attack_cooldown = cooldown
     attack_flash_time = 0.18
+    # SSB clank: actor-range moves have no limb volume; chest-to-reach capsule.
+    var chest := global_position + Vector3.UP
+    SsbClankScript.strike(self, "dir:" + last_move, chest + contact_direction * 0.3, chest + contact_direction * attack_range * 0.75, SsbClankScript.CONE_STRIKE_RADIUS, hit_damage)
     if _attack_flash:
         _attack_flash.position = Vector3.UP + direction * attack_range * 0.62
         _attack_flash.scale = Vector3.ONE * (0.65 if hit_damage < 10.0 else 1.0)
@@ -2604,6 +2755,7 @@ func _build_visuals() -> void:
             placeholder.queue_free()
         var ggb_visual = preload("res://scripts/ggb_visual.gd").new()
         ggb_visual.name = "GGBVisual"
+        ggb_visual.costume_id = costume_id
         _visual_root.add_child(ggb_visual)
     if character_id == "turbofit":
         # Use the imported character without the retired primitive guitar prop.
@@ -2614,6 +2766,7 @@ func _build_visuals() -> void:
         var turbofit_visual = preload("res://scripts/turbofit_visual.gd").new()
         turbofit_visual.name = "TurboFitVisual"
         turbofit_visual.palette = body_color
+        turbofit_visual.costume_id = costume_id
         _visual_root.add_child(turbofit_visual)
 
     if character_id == "doge_man":
@@ -2623,7 +2776,7 @@ func _build_visuals() -> void:
             placeholder.queue_free()
         var doge_visual = preload("res://scripts/doge_visual.gd").new()
         doge_visual.name = "DogeVisual"
-        doge_visual.palette = body_color
+        doge_visual.costume_id = costume_id
         _visual_root.add_child(doge_visual)
 
     if character_id == "teknium":
@@ -2633,6 +2786,7 @@ func _build_visuals() -> void:
             placeholder.queue_free()
         var teknium_visual = preload("res://scripts/teknium_visual.gd").new()
         teknium_visual.name = "TekniumVisual"
+        teknium_visual.costume_id = costume_id
         _visual_root.add_child(teknium_visual)
 
     if character_id == "ice_mage":
@@ -2649,6 +2803,7 @@ func _build_visuals() -> void:
             placeholder.queue_free()
         var witcheer_visual = preload("res://scripts/witcheer_visual.gd").new()
         witcheer_visual.name = "WitcheerVisual"
+        witcheer_visual.costume_id = costume_id
         _visual_root.add_child(witcheer_visual)
 
     if character_id == "mephisto":
