@@ -1,7 +1,5 @@
 extends Node
-# Ledge grab MVP (PROVISIONAL, candidate build only; Mike 2026-09-30: "cleared to add ledge grabbing").
 # Doge Man, Teknium and TurboFit.
-# Clips: Doge ledge v3e (Mike: "much better"). Hands align to the REAL stage edge every tick:
 # each clip carries its Blender ledge-edge point in skeleton space, and the fighter origin is placed so
 # that point lands on the game ledge corner. The controller owns position; no physics while on the ledge.
 const FPS := 30.0
@@ -13,7 +11,6 @@ const CONFIG := {
 		"catch": [13.0, 45.0, 0.45],   # source frames from..to, gameplay seconds
 		"climb": [20.0, 131.0, 1.25],
 	},
-	# Tek ledge v001 (2026-10-01, PROVISIONAL; Mike: "looks good" on the review, install approved).
 	# Same Mixamo sources/frame layout and v3e fingertip method as Doge, retargeted onto Tek's game rig.
 	"teknium": {
 		"view": "TekniumVisual",
@@ -22,7 +19,6 @@ const CONFIG := {
 		"catch": [13.0, 45.0, 0.45],
 		"climb": [20.0, 131.0, 1.25],
 	},
-	# TurboFit ledge v001 (2026-10-01, PROVISIONAL; Mike: "sufficient to put into the game and let everyone play with it").
 	# Same Mixamo sources and v3e fingertip method; skeleton space is -Z up / +Y back (rig node rotated).
 	"turbofit": {
 		"view": "TurboFitVisual",
@@ -261,6 +257,8 @@ func ledge_jump() -> void:
 	actor.jumps_used = 0
 	actor.try_jump()
 	actor.velocity.y = cfg.get("jump_speed", LEDGE_JUMP_SPEED)
+	# Ledge-jump speeds are tuned for classic gravity 25: keep it for this flight (SSB64 Batch 2 jump arc).
+	if actor.get("ssb_movement"): actor.ssb_movement.begin_authored_flight()
 	actor.velocity.x = 0.0
 	jump_assist = 0.8; assist_hold = -1.0
 	cooldown = REGRAB_COOLDOWN

@@ -127,7 +127,6 @@ func run() -> void:
 	dev.frozen = true; fkey(arena, KEY_F2)
 	dev.frozen = false
 	check(not paused, "training keys inert when Dev Mode off")
-	# restore Mike's real settings file
 	if backup == "": DirAccess.remove_absolute(ProjectSettings.globalize_path(CFG))
 	else:
 		var f := FileAccess.open(CFG, FileAccess.WRITE); f.store_string(backup); f.close()

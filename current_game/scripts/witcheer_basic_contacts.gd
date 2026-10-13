@@ -17,6 +17,7 @@ static func sample(actor,from_time:float,to_time:float)->void:
   var bone=sk.global_transform*sk.get_bone_global_pose(bone_index)
   var center=bone*Vector3(spec.center[0],spec.center[1],spec.center[2])
   var shape=SphereShape3D.new();shape.radius=float(spec.radius)*maxf(bone.basis.x.length(),maxf(bone.basis.y.length(),bone.basis.z.length()))
+  preload("res://scripts/ssb_clank.gd").strike(actor,"wit:"+str(actor.witcheer_clip),center,center,shape.radius,float(move.damage)) # SSB clank volume
   var query=PhysicsShapeQueryParameters3D.new();query.shape=shape;query.transform=Transform3D(Basis.IDENTITY,center);query.collision_mask=7
   HURT.prepare(actor,query)
   var space=actor.get_world_3d().direct_space_state;var hits=space.intersect_shape(query,64)

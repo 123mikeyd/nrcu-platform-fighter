@@ -1,11 +1,12 @@
 extends Node3D
+const CostumeMaterials = preload("res://scripts/costume_materials.gd")
 # Presentation only: never apply animation root motion to Fighter.
 # Approved Moves2 body motion; controller owns all travel and interruptions.
 const MODEL = preload("res://assets/doge_man/doge_attacks.glb")
 var model: Node3D
 var animation_player: AnimationPlayer
 var current_clip := ""
-var palette := Color.WHITE
+var costume_id := "01"
 
 # Source frames 1..19 at 24 FPS span 18 frame intervals.
 const FALL_START_TIME := 18.0 / 24.0
@@ -136,14 +137,13 @@ func _ready() -> void:
     var ground_library = load("res://assets/doge_man/ground_basic_20260915.tres")
     for clip in ground_library.get_animation_list():
         animation_player.get_animation_library("").add_animation(clip, ground_library.get_animation(clip).duplicate(true))
-    # V5 "Thanos" 6-hit boxing string (neutral ground basic, installed 2026-09-28).
     var boxing_library = load("res://assets/doge_man/boxing_string_v5_20260928.tres")
     for clip in boxing_library.get_animation_list():
         animation_player.get_animation_library("").add_animation(clip, boxing_library.get_animation(clip).duplicate(true))
-    # Approved skydiver helpless-fall wiggle loop after Air Doge (installed 2026-09-30).
     var helpless_library = load("res://assets/doge_man/helpless_fall_v001_20260930.tres")
     for clip in helpless_library.get_animation_list():
         animation_player.get_animation_library("").add_animation(clip, helpless_library.get_animation(clip).duplicate(true))
+    var atlas := CostumeMaterials.texture("res://assets/costumes/doge_man/%s_%s.png" % [costume_id, {"01":"Original", "02":"Midnight", "04":"Emerald", "07":"Obsidian"}.get(costume_id, "Original")])
     for mesh in model.find_children("*", "MeshInstance3D", true, false):
         for shape_index in mesh.mesh.get_blend_shape_count():
             if "Fist_STUDY" in str(mesh.mesh.get_blend_shape_name(shape_index)):
@@ -152,10 +152,12 @@ func _ready() -> void:
             var source = mesh.get_active_material(surface)
             if source is StandardMaterial3D:
                 var material: StandardMaterial3D = source.duplicate()
-                material.albedo_color *= Color.WHITE.lerp(palette, 0.25)
+                # Costumes retain their approved native atlas: player markers
+                # live in HUD/UI, never in a whole-body tint.
                 material.metallic = 0
                 material.roughness = 0.8
                 material.emission_enabled = false
+                if atlas: material.albedo_texture = atlas
                 mesh.set_surface_override_material(surface, material)
     animation_player.set_blend_time("FallStart", "FallLoop", 4.0 / 24.0)
     sync_pose("idle", 1, 0.4, 0.42, 0.18, 0.6)
@@ -193,7 +195,7 @@ func sync_pose(phase: String, facing: float, launch_time: float, dive_time: floa
     var clip: String = {"launch":"Launch", "tackle":"Dive", "fall":"Brake", "landing":"Landing"}.get(phase, locomotion)
     # Update speed without replaying the clip or resetting its timeline.
     animation_player.speed_scale = clampf(absf(motion.x) / (7.5 if clip == "Run" else 2.5), 0.55, 1.6) if clip in ["Run", "Walk"] else 1.0
-    if clip == current_clip:
+    if clip == current_clip and animation_player.assigned_animation == clip and animation_player.is_playing():
         return
     current_clip = clip
     if not animation_player or not animation_player.has_animation(clip):

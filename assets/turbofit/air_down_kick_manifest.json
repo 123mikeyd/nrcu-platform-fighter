@@ -1,6 +1,5 @@
 {
   "source": "Turbofit_air_down_kick.blend",
-  "source_sha256": "54ed841e59308649ee494ea09684f070941b660f71767a24c4479eb0f24713ef",
   "source_frames": [
     4,
     42
@@ -11,7 +10,6 @@
   "duration_seconds": 1.2666666666666666,
   "rest_matrix_max_error": 1.52587890625e-05,
   "full_world_pose_matrix_max_error_before_root_anchor": 7.152557373046875e-07,
-  "root_policy": "Saved source object orientation baked rigidly into hips on verified master basis; scene translation and ballistic hip translation removed. All other bone poses directly reused. No skin retarget.",
   "clip": "AirDownKick",
   "loop": false,
   "active_source_frames": [
@@ -19,7 +17,6 @@
     19
   ],
   "impact_source_frame": 18,
-  "impact_basis": "Left foot/toe midpoint descends after source10 windup to local minimum at source18; compact contact interval16-19.",
   "preserved_clips": [
     "BlockIdle",
     "HitReactRight",

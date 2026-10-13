@@ -16,8 +16,6 @@
   },
   "selected": [
     {
-      "source_rig": "idle",
-      "source_action": "Armature|Idle_13|baselayer",
       "source_range": [
         0.8000000715255737,
         274.3999938964844
@@ -25,12 +23,9 @@
       "clip": "Idle",
       "duration": 11.399999742706617,
       "sample_frames": 342,
-      "export_fps": 30,
-      "root_policy": "world XY centered; source Z preserved"
+      "export_fps": 30
     },
     {
-      "source_rig": "run",
-      "source_action": "Armature|ForwardLeft_Run_Fight|baselayer",
       "source_range": [
         0.8000000715255737,
         15.199999809265137
@@ -38,12 +33,9 @@
       "clip": "Run",
       "duration": 0.5999999890724818,
       "sample_frames": 18,
-      "export_fps": 30,
-      "root_policy": "world XY centered; source Z preserved"
+      "export_fps": 30
     },
     {
-      "source_rig": "hit_reaction",
-      "source_action": "Armature|Block8|baselayer",
       "source_range": [
         0.8000000715255737,
         40.0
@@ -51,8 +43,7 @@
       "clip": "Hit",
       "duration": 1.633333330353101,
       "sample_frames": 49,
-      "export_fps": 30,
-      "root_policy": "world XY centered; source Z preserved"
+      "export_fps": 30
     }
   ],
   "samples": [

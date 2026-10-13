@@ -2,6 +2,7 @@ extends "res://scripts/fighter.gd"
 # Freeplay foundation, deliberately NOT a subclass of stationary health Bobo.
 # Approved Orc Walk and normal jump phases use a separate player-only visual.
 var motion_origin := Vector3.ZERO
+var down_air
 func ground_speed_multiplier() -> float:
     var inherited := super.ground_speed_multiplier()
     if not is_grounded(): return inherited
@@ -14,6 +15,10 @@ func _ready() -> void:
     character_id = "bobo"
     fighter_name = "BOBO (PROTOTYPE)"
     super._ready()
+    # Down air v004 (Claw Hammer Drop Flip, review install 10-05): see scripts/bobo_down_air.gd.
+    down_air = load("res://scripts/bobo_down_air.gd").new()
+    down_air.name = "BoboDownAir"
+    add_child(down_air)
 func _build_visuals() -> void:
     super._build_visuals()
     for child in _visual_root.get_children():
@@ -21,6 +26,7 @@ func _build_visuals() -> void:
         child.queue_free()
     var visual = load("res://scripts/bobo_player_visual.gd").new()
     visual.name = "BoboVisual"
+    visual.costume_id = costume_id
     _visual_root.add_child(visual)
     get_node("PlayerLabel").position.y = 3.2
 func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
@@ -35,11 +41,20 @@ func _update_move_visuals(delta := 0.0, interrupted := false) -> void:
         visual.cancel_locomotion()
         visual.react("Idle")
         return
+    if tumble and tumble.active and freeze_remaining <= 0 and not is_instance_valid(caught_by) and tumble.clock >= tumble.BOBO_TUMBLE_ENTRY:
+        if fitted_reaction and fitted_reaction.active: fitted_reaction.clear()
+        visual.cancel_locomotion()
+        visual.present_tumble(tumble.clock - tumble.BOBO_TUMBLE_ENTRY, tumble.reeling)
+        return
+    visual.end_tumble()
     if freeze_remaining > 0 or is_instance_valid(caught_by) or hitstun > 0 or (tumble and tumble.active):
         visual.cancel_locomotion()
         return
     if fitted_reaction and fitted_reaction.active:
         visual.cancel_locomotion()
+        return
+    if down_air and down_air.active:
+        down_air.present()
         return
     if not special_move.is_empty():
         present_bobo_special()
@@ -234,6 +249,8 @@ func query_down_a_contact() -> void:
     query.collision_mask = 1 | 4
     query.exclude = [get_rid()]
     query.margin = 0
+    var cv: Array = SsbClankScript.shape_volume(shape, global_position)
+    SsbClankScript.strike(self, "bobo:down_a", cv[0], cv[1], cv[2], float(down_a_manifest.damage)) # SSB clank volume
     var hurt = preload("res://scripts/body_hurtboxes.gd")
     hurt.prepare(self,query)
     var space = get_world_3d().direct_space_state
@@ -257,7 +274,7 @@ var thrust_serial := 0
 var thrust_rest := 0.0
 func begin_thrust_slash(direction: float) -> bool:
     if thrust_active or thrust_rest > 0 or not controls_enabled or stocks <= 0 or hitstun > 0 or freeze_remaining > 0 or magic_locked(): return false
-    if attack_cooldown > 0 or not is_grounded() or (tumble and tumble.active): return false
+    if attack_cooldown > 0 or landing_lag > 0 or not is_grounded() or (tumble and tumble.active): return false
     if revival and not revival.permit_attack(): return false
     thrust_active = true
     thrust_elapsed = 0
@@ -295,12 +312,14 @@ func _cancel_locomotion_episode() -> void:
         var v = _visual_root.get_node_or_null("BoboVisual")
         if v: v.cancel_locomotion()
 func cancel_magic() -> void:
+    if down_air: down_air.cancel()
     cancel_bobo_special()
     cancel_down_a()
     _cancel_locomotion_episode()
     cancel_thrust_slash()
     super.cancel_magic()
 func cancel_for_grab() -> void:
+    if down_air: down_air.cancel()
     cancel_bobo_special()
     cancel_down_a()
     _cancel_locomotion_episode()
@@ -373,6 +392,8 @@ func _query_thrust_pose_contacts() -> void:
         query.exclude = [get_rid()]
         query.margin = 0
         preload("res://scripts/body_hurtboxes.gd").prepare(self, query)
+        var tcv: Array = SsbClankScript.shape_volume(shape, global_position)
+        SsbClankScript.strike(self, "bobo:thrust:%s" % str(hit), tcv[0], tcv[1], tcv[2], float(event.damage)) # SSB clank volume
         var space = get_world_3d().direct_space_state
         var hits = space.intersect_shape(query, 32)
         for result in hits:
@@ -390,6 +411,10 @@ func _query_thrust_pose_contacts() -> void:
                 if target.tumble: target.tumble.clear()
 func basic_attack(aim: Vector2, airborne: bool) -> void:
     if not special_move.is_empty(): return
+    if down_air and down_air.active: return # flip and settle are not attack-cancelable
+    if airborne and aim.y > 0.5:
+        down_air.start()
+        return
     if not airborne and aim.y > 0.5:
         begin_down_a()
         return
@@ -406,6 +431,7 @@ func read_controls(delta: float) -> Dictionary:
     return input
 func try_jump() -> bool:
     if thrust_active or down_a_active or not special_move.is_empty(): return false
+    if down_air and down_air.active: return false
     var accepted := super.try_jump()
     if accepted: _visual_root.get_node("BoboVisual").begin_jump()
     return accepted
@@ -413,6 +439,7 @@ func _physics_process(delta: float) -> void:
     if not special_allowed(): cancel_bobo_special()
     var paused_down_a := counter_hitstop > 0
     if down_a_active and not down_a_allowed(): cancel_down_a()
+    if down_air and down_air.active and not down_air.allowed(): down_air.cancel()
     motion_origin=global_position
     if is_grounded() and not thrust_active and hitstun<=0 and freeze_remaining<=0:
         var v = _visual_root.get_node_or_null("BoboVisual") if _visual_root else null
@@ -428,6 +455,8 @@ func _physics_process(delta: float) -> void:
         special_effect.contact(self)
     if down_a_active and not paused_down_a:
         tick_down_a(delta)
+    if down_air and down_air.active and not paused_down_a:
+        down_air.tick(delta)
     thrust_rest = maxf(0, thrust_rest - delta)
     if thrust_active:
         facing = thrust_facing

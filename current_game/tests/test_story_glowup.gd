@@ -1,5 +1,4 @@
 extends SceneTree
-# Story glow-up (Mike 2026-09-30): VS splash, locked-opponent silhouette reveal,
 # Smash-style victory screen after Story wins, STORY COMPLETE? ending + credits.
 const U = preload("res://scripts/unlocks.gd")
 var failures := 0
@@ -71,7 +70,7 @@ func run():
 		arena.story_action.pressed.emit()
 		await process_frame
 		vs.skip()
-	check(arena.player_two.character_id == "mephisto", "last encounter is Mephisto")
+	check(arena.player_two.character_id == "doge_man", "Teknium final encounter is Doge Man")
 	arena._cancel_ready()
 	_force_result(arena, arena.player_two)
 	var ending = arena.story_ending
@@ -94,4 +93,4 @@ func run():
 	U.path_override = ""
 	if FileAccess.file_exists(save): DirAccess.remove_absolute(save)
 	print("%s story glowup (%d checks, %d failed)" % ["PASS" if failures == 0 else "FAIL", checks, failures])
-	quit(1 if failures else 0)
+	print("STORY_GLOWUP_COMPLETE");quit(1 if failures else 0)

@@ -24,7 +24,7 @@ func cancel():
 func present(delta:float,interrupted:bool) -> bool:
  if interrupted or not allowed():cancel();return false
  var input=actor._read_raw_controls(0)
- if input.left or input.right or input.up or input.jump or input.attack or input.special or absf(actor.velocity.x)>.2:
+ if input.left or input.right or input.up or input.jump or input.special or absf(actor.velocity.x)>.2:
   cancel();return false
  var down:bool=input.down
  if phase=="idle" and not down:return false

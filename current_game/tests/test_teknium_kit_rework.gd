@@ -47,7 +47,6 @@ func run():
         check(not is_instance_valid(kit.grenade),"reset clears grenade and held input does not retoss")
     for code in [KEY_S,KEY_G]: key(code,false)
     await reset_case()
-    # 2026-09-28: neutral B is now Laser Blast (fixed charge). The old hold/store/resume/release
     # Charge Shot checks were retired on purpose; see tests/test_teknium_laser_blast.gd.
     key(KEY_G,true); await frames(2); key(KEY_G,false); await frames(4)
     check(kit.phase == "laser" and not f.charging,"neutral B starts Laser Blast rather than grabbing or charging")
@@ -141,7 +140,6 @@ func run():
     kit.cancel(); await frames(2); f.start_special(Vector2.DOWN)
     f.lose_stock(); await frames(2)
     check(kit.phase == "idle" and not is_instance_valid(kit.grenade),"stock loss clears laser and remote grenade")
-    # Retired 2026-09-28 with the Charge Shot: shield-store and touch-store checks (no stored charge exists now).
     arena.queue_free(); await frames(2)
     print("TEKNIUM_KIT_COMPLETE checks=%d failures=%d" % [checks,fails])
     quit(1 if fails else 0)

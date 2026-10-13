@@ -62,7 +62,9 @@ func run_test() -> void:
 	root.size = Vector2i(720, 1280); await frames(3)
 	root.size = Vector2i(1280, 720); await frames(3)
 	check(paused and arena.pause_menu.visible and not pad.rotate_pause_owned, "rotate does not resume a player Pause menu")
-	arena.resume_match(); await frames(3)
+	# Resume is a GUI/idle action, not a physics_frame callback. Resuming
+	# AnimatableBody3D while physics synchronization is active double-inserts it.
+	arena.call_deferred("resume_match"); await frames(3)
 	check(not paused and pad.gameplay_enabled, "resume restores touch gameplay")
 	# Portrait during a live fight: owned rotate pause, released on landscape.
 	root.size = Vector2i(720, 1280); await frames(3)

@@ -61,6 +61,7 @@ func _build_visuals() -> void:
         child.queue_free()
     var visual = load("res://scripts/bobo_visual.gd").new()
     visual.name = "BoboVisual"
+    visual.costume_id = costume_id
     _visual_root.add_child(visual)
     get_node("PlayerLabel").text = "BOBO"
     get_node("PlayerLabel").position.y = 3.2

@@ -2,6 +2,11 @@ extends Node
 # A single actor owns both leads: no damage/stocks are copied or reset on switching.
 const Kit=preload("res://scripts/mephisto_kit.gd")
 const ArmTiming=preload("res://scripts/mephisto_arm_timing.gd")
+const Playable=preload("res://scripts/mephisto_playable_basics.gd")
+var playable
+func basics():
+ if not playable:playable=Playable.new();playable.moves=self
+ return playable
 var actor
 var demon_form=false
 var move=""
@@ -51,14 +56,15 @@ func route(aim:Vector2,air:bool,special:bool)->String:
   if aim.y>.1:return "GroundPalmSlam"
   return "ForwardBackhand" if absf(aim.x)>.1 else "RightSwipe"
  if special:return "PairTeleport" if aim.y<-.1 else ("EmberHold" if absf(aim.x)>.1 else "Barrier")
- return Kit.route(aim,air,special)
+ return Playable.route(aim,air)
 func start_kit(id:String,direction:float):
  if id.begins_with("Switch"):return
  demon_form=false
  if id in ["CinderToss","PairTeleport","PairVanish"] and actor.recovery_spent:return
  if id.begins_with("Switch") and not actor.is_grounded():return
  cancel();move=id;facing=direction;actor.facing=direction;serial+=1
- actor.last_move=id;elapsed=0;contacts.clear();impulse_done=false
+ actor.last_move="Dream Hand" if id=="DreamGrasp" else id;elapsed=0;contacts.clear();impulse_done=false
+ if Playable.DATA.has(id):basics().begin()
  if id=="AnkleRake":kick().begin()
  if id=="DreamGrasp":grasp().begin()
  if id in ["Barrier","EmberHold","PairTeleport","PairVanish"]:magic().begin(id)
@@ -68,6 +74,7 @@ func start_kit(id:String,direction:float):
  if id=="ShadowChain":
   shadow_chain=preload("res://scripts/mephisto_shadow_chain.gd").new();shadow_chain.moves=self;actor.get_parent().add_child(shadow_chain)
 func duration()->float:
+ if Playable.DATA.has(move):return Playable.DATA[move].end
  if move=="CompanionPalm":return view().companion.attack_duration()
  if move=="DreamGrasp":return grasp().duration()
  if move in ["ForwardBackhand","GroundPalmSlam"]:return ArmTiming.duration(move)
@@ -87,6 +94,7 @@ func duration()->float:
 func present():
  if not view():return
  view().shadow_move=move
+ if Playable.DATA.has(move):basics().present(elapsed);return
  if move=="CompanionPalm":
   view().pose_frame(704,facing);view().show_native_girl(facing);view().native_pose("Idle",elapsed,true)
   view().companion.sync_pose();return
@@ -111,6 +119,7 @@ func release():
  move="SmokeRelease";elapsed=0;actor.attack_cooldown=duration();actor.last_move="ORANGE SMOKE"
  present()
 func cancel():
+ if playable:playable.cancel()
  if chain_pose:chain_pose.cancel()
  if dream_grasp:dream_grasp.cancel()
  if is_instance_valid(shadow_chain):shadow_chain.hide();shadow_chain.queue_free()
@@ -131,7 +140,10 @@ func tick(delta:float):
  elapsed+=delta;present()
  if move in ["ShadowChain","ShadowRecover"] and is_instance_valid(shadow_chain):shadow_chain.tick(delta)
  if move in ["Barrier","EmberHold","EmberRelease","PairTeleport","PairVanish"]:magic().tick(delta)
- if move=="DreamGrasp":
+ if Playable.DATA.has(move):
+  basics().tick(previous,elapsed)
+  if move.is_empty():return
+ elif move=="DreamGrasp":
   grasp().tick(previous,elapsed);actor.attack_cooldown=maxf(actor.attack_cooldown,duration()-elapsed)
  elif move=="CompanionPalm":
   view().companion.tick_contact(self,previous,elapsed)
@@ -169,6 +181,7 @@ func tick(delta:float):
   cancel();actor.attack_cooldown=0
   actor._update_move_visuals()
 func query_hand(point:Vector3,radius:float,damage:float,direction:Vector3,kb:float,forward_only=false):
+ preload("res://scripts/ssb_clank.gd").strike(actor,"meph:"+str(move),point,point,radius,damage) # SSB clank volume
  for target in get_tree().get_nodes_in_group("fighters"):
   if target in targets or not actor.can_hit(target):continue
   if forward_only and (target.global_position.x-actor.global_position.x)*facing<=0:continue

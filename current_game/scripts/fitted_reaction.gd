@@ -48,7 +48,7 @@ func _physics_process(delta):
  tick(delta)
 func tick(delta):
  if not active:return
- if actor.freeze_remaining>0:return
+ if actor.freeze_remaining>0 or actor.counter_hitstop>0:return # hitlag holds the reaction pose
  if not actor.controls_enabled or actor.stocks<=0 or actor.magic_locked():clear();return
  clock+=delta
  if clock>(samples[kind].size()-1)/60.0:clear();return

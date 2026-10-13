@@ -1,6 +1,5 @@
 extends Node
 # GGB side special: Wing Gust (zero-damage push). Owned by ggb_combat (phase "gust").
-# Timing mirrors Mike-approved Blender v001: 60 fps frames.
 # Tap: rear back 9f -> 3 flaps (3f power down + 5f up) -> 12f recovery.
 # Hold: keep flapping while special is held, ~2 s cap, 2 sputter flaps, 15f recovery.
 const F := 1.0 / 60.0

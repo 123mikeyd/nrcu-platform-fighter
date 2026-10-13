@@ -161,6 +161,7 @@ func _track_hits(f) -> void:
 			var gap: int = DevMode.frame - int(_press_frame[attacker])
 			if gap <= 90: startup = "  press→hit %df" % gap
 		var line := "f%d  %s → P%d %s  %.1f%%  hitstun %df  launch %.1f%s" % [DevMode.frame, who, f.player_index, f.fighter_name, dealt, roundi(stun * 60.0), f.velocity.length(), startup]
+		if f.get("hit_feel") != null: line += f.hit_feel.readout()  # SSB hit feel (kb, hitlag, tier)
 		hit_log.push_front(line)
 		if hit_log.size() > 7: hit_log.pop_back()
 		markers.append({"pos": _hurt_center(f), "frames_left": 45, "text": "%.0f" % dealt})
@@ -297,6 +298,8 @@ func _update_text(fs: Array) -> void:
 			Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0]
 	log_label.visible = DevMode.is_on("hits")
 	log_label.text = "HIT LOG (measured)\n" + "\n".join(hit_log) if not hit_log.is_empty() else "HIT LOG (measured)\n—"
+	var clanks: Array[String] = preload("res://scripts/ssb_clank.gd").log_lines  # SSB clanks (attack vs attack)
+	if preload("res://scripts/ssb_clank.gd").DEV_READOUT_ENABLED and not clanks.is_empty(): log_label.text += "\n" + "\n".join(clanks)
 	var humans := fs.filter(func(f): return f.player_index in [1, 2])
 	for i in 2:
 		var l := input_labels[i]
@@ -323,6 +326,7 @@ func _update_text(fs: Array) -> void:
 		var flags: Array[String] = []
 		if f.hitstun > 0: flags.append("HITSTUN %df" % roundi(f.hitstun * 60.0))
 		if f.tumble and f.tumble.active: flags.append("TUMBLE")
+		if f.get("counter_hitstop") and f.counter_hitstop > 0: flags.append("HITLAG %df" % roundi(f.counter_hitstop * 60.0))
 		if f.get("freeze_remaining") and f.freeze_remaining > 0: flags.append("FROZEN")
 		if f.get("shielding"): flags.append("SHIELD")
 		if f.get("landing_lag") and f.landing_lag > 0: flags.append("LANDING LAG %df" % roundi(f.landing_lag * 60.0))

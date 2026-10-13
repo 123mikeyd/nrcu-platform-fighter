@@ -20,6 +20,5 @@
       "radius": 14.5381145477295,
       "vertices": 2765
     }
-  },
-  "method": "Bind-pose enclosing spheres over dominant native hand / foot+toe mesh vertices; no receiving anatomy changes"
+  }
 }

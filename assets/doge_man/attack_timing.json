@@ -2,7 +2,7 @@
   "fps": 24,
   "combo_reset_seconds": 0.45,
   "attacks": {
-    "GoalkeeperKick": {"clip": "GoalkeeperKick", "duration": 0.9833333333, "playback_speed": 2.0, "impact_time": 0.45, "damage": 14.0, "base_knockback": 5.5, "range": 2.8, "input": "Ground neutral G charge; release G"},
+    "GoalkeeperKick": {"clip": "GoalkeeperKick","duration": 0.9833333333,"playback_speed": 2.0,"impact_time": 0.45,"damage": 14.0,"base_knockback": 5.5,"range": 2.8,"input": "Ground neutral G charge; release G"},
     "AirDownKarate": {
       "clip": "AirDownKarate",
       "duration": 0.6,
@@ -12,7 +12,7 @@
       "damage": 10.0,
       "knockback": 4.2,
       "angle_below_horizontal": 30,
-      "angle_tolerance": [25, 35],
+      "angle_tolerance": [25,35],
       "input": "Jump then S+F. Aerial only; no automatic fast fall.",
       "status": "provisional native-rig karate knee chamber, heel extension, retraction"
     },
@@ -28,13 +28,12 @@
       "uncommitted_recovery": "After 0.35 seconds reverse source 0.35 to 0 by combat 0.70; guard until 1.0. Full source retained.",
       "timing_basis": "Hand-authored native rig: simultaneous left jab/deep duck; connected rising rotating right; guard recovery",
       "hits": [
-        {"time": 0.25, "bone": "LeftHand", "damage": 4.0, "knockback": 0.1, "radius": 0.24},
-        {"time": 0.45, "bone": "RightHand", "damage": 12.0, "knockback": 5.5, "radius": 0.26}
+        {"time": 0.25,"bone": "LeftHand","damage": 4.0,"knockback": 0.1,"radius": 0.24},
+        {"time": 0.45,"bone": "RightHand","damage": 12.0,"knockback": 5.5,"radius": 0.26}
       ]
     },
     "SupermanMoves2": {
       "clip": "SupermanMoves2",
-      "source_action": "Armature|Jumping_Punch|baselayer",
       "source_start": 25,
       "source_end": 35,
       "source_impact": 32.25,
@@ -47,7 +46,6 @@
     },
     "Punch1": {
       "clip": "Punch1",
-      "source_action": "Armature|Punch_Combo_1|baselayer",
       "source_start": 10,
       "source_end": 19,
       "source_impact": 16,
@@ -62,7 +60,6 @@
     },
     "Punch2": {
       "clip": "Punch2",
-      "source_action": "Armature|Punch_Combo_1|baselayer",
       "source_start": 19,
       "source_end": 25,
       "source_impact": 22,
@@ -77,7 +74,6 @@
     },
     "Punch3": {
       "clip": "Punch3",
-      "source_action": "Armature|Punch_Combo_1|baselayer",
       "source_start": 25,
       "source_end": 31,
       "source_impact": 28,
@@ -92,7 +88,6 @@
     },
     "Punch4": {
       "clip": "Punch4",
-      "source_action": "Armature|Punch_Combo_1|baselayer",
       "source_start": 31,
       "source_end": 44,
       "source_impact": 33,
@@ -107,7 +102,6 @@
     },
     "Uppercut": {
       "clip": "Uppercut",
-      "source_action": "Armature|Right_Upper_Hook_from_Guard|baselayer",
       "source_start": 6,
       "source_end": 29,
       "source_impact": 17,

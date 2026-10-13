@@ -66,7 +66,9 @@ func before_tick():
  if active and (not actor.controls_enabled or actor.hitstun>0 or actor.freeze_remaining>0 or actor.magic_locked() or actor._read_raw_controls(0).shield):cancel()
 func before_move():
  if active:actor.facing=direction
+var hurt_synced:=false
 func present(time:float):
+ hurt_synced=false
  actor._visual_root.scale=Vector3.ONE;actor._visual_root.rotation=Vector3.ZERO
  view.model.rotation.y=direction*PI/2
  if actor.character_id=="teknium":view.position.y=0
@@ -78,12 +80,14 @@ func bone_point(bone:String)->Vector3:
 func query(point:Vector3,radius:float,time:float):
  var shape=SphereShape3D.new();shape.radius=radius
  var q=PhysicsShapeQueryParameters3D.new();q.shape=shape;q.transform=Transform3D(Basis.IDENTITY,point);q.collision_mask=7;q.margin=0
- HURT.prepare(actor,q)
+ if hurt_synced:HURT.prepare_presynced(actor,q)
+ else:HURT.prepare(actor,q);hurt_synced=true
  for hit in actor.get_world_3d().direct_space_state.intersect_shape(q,64):
   var target=HURT.resolve(hit.collider)
   if actor.can_hit(target) and target not in targets and (move!="down" or target.global_position.y<actor.global_position.y):
    targets.append(target)
    contacts.append({"time":time,"source_time":source_time(time),"source_frame":(33 if move=="up" else (4 if move=="down" else 36))+source_time(time)*30,"point":str(point),"radius":radius,"target":target.character_id,"collider":str(hit.collider.name),"shape":hit.shape,"receiver":"fitted anatomy" if hit.collider.has_meta("hurtbox_actor") else "existing movement capsule"})
+   hurt_synced=false
    hit.position=point;HURT.deliver(target,8.0 if move=="up" else 14.0,Vector3.DOWN if move=="down" else Vector3(direction,0 if move=="up" else .35,0),3.8 if move=="up" else 5.5,hit, actor)
 func source_time(t:float)->float:
  return air_up_source_time(t) if move=="up" else t
@@ -137,4 +141,4 @@ func after_tick(delta:float):
     var radius=minf(.22,elbow.distance_to(wrist)*.5)
     query(elbow.lerp(wrist,.5),radius,t)
  elapsed=end;present(elapsed)
- if elapsed>=duration:cancel();actor._update_move_visuals(0,true)
+ if elapsed>=duration:cancel();actor._update_move_visuals()

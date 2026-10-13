@@ -80,6 +80,7 @@ func tick(delta:float):
   if kind=="side":query(cue.to_global(Vector3(.64,0,0)),.12)
   else:query(view.body_center_world()+direction*.16,.27)
 func query(point:Vector3,radius:float):
+ preload("res://scripts/ssb_clank.gd").strike(actor,"ggb_basic:"+str(kind),point,point,radius,8.0) # SSB clank volume
  var origin=base_center
  var ray=PhysicsRayQueryParameters3D.create(origin,point,2);ray.exclude=[actor.get_rid()]
  if not actor.get_world_3d().direct_space_state.intersect_ray(ray).is_empty():return

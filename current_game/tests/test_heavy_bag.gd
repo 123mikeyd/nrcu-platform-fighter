@@ -108,4 +108,4 @@ func run() -> void:
 	check(not any_bag and arena.fighters.size() == 4, "normal match has no bag")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(test_save))
 	print("HEAVY_BAG_TEST failures=%d" % failures)
-	quit(1 if failures else 0)
+	print("HEAVY_BAG_COMPLETE");quit(1 if failures else 0)

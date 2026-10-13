@@ -58,7 +58,7 @@ func run():
 	await process_frame
 	var row = arena.setup.rows[0]
 	var ids := _option_ids(row.character)
-	check(not ids.has("ice_mage"), "versus select has no Ice Mage")
+	check(not arena.setup.tiles.has("ice_mage") and not row.character.visible, "visible versus roster has no Ice Mage")
 	check(ids.get("ggb", {}).get("disabled", false) and ids.ggb.text == "??? (Locked)", "GGB shows ??? (Locked) in versus")
 	check(not ids.get("teknium", {"disabled": true}).disabled, "Teknium selectable in versus")
 	for r in arena.setup.rows:
@@ -136,12 +136,11 @@ func run():
 		if arena.story_character.get_item_metadata(i) == "teknium": arena.story_character.select(i)
 	arena.story_action.pressed.emit()
 	await process_frame
-	check(arena.story_route == ["bobo", "ice_mage", "witcheer", "ggb", "turbofit", "doge_man", "mephisto"], "Teknium route skips Teknium, 7 encounters, Mephisto last")
+	check(arena.story_route == ["bobo", "ice_mage", "witcheer", "ggb", "turbofit", "doge_man"], "Teknium route skips Teknium; rejected Mephisto boss absent")
 	for n in arena.story_route.size():
 		var opp: String = arena.story_route[n]
 		check(arena.story_state == "playing" and arena.player_two.character_id == opp, "encounter %d vs %s" % [n + 1, opp])
-		if opp == "mephisto":
-			check(arena.player_two.get_script().resource_path == "res://story_boss/scripts/fighter.gd", "Mephisto encounter uses preserved Story boss")
+		check(opp != "mephisto", "rejected Mephisto boss remains absent")
 		arena._cancel_ready()
 		if opp == "bobo":
 			arena.player_two.controls_enabled = true
@@ -206,4 +205,4 @@ func run():
 	await process_frame
 	_wipe()
 	print("UNLOCKS_GAUNTLET failures=", failures)
-	quit(1 if failures else 0)
+	print("UNLOCKS_GAUNTLET_COMPLETE");quit(1 if failures else 0)

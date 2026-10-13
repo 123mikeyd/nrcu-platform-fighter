@@ -2,9 +2,6 @@ extends Control
 # Melee-style after-fight screen: the winner plays a short pose-in that ends on a
 # freeze frame; everyone who lost claps in the back row. Own 3D world inside a
 # SubViewport, so the arena and fighter logic are untouched. No flashing
-# overlays (Mike's rule): dark backdrop, a soft slide/slam-in only.
-# Clips: Mixamo retargets, approved by Mike
-# 2026-09-30 ("just use what ever and I will fix turbo later").
 
 const DemoStyle = preload("res://scripts/demo_style.gd")
 const LIBS := {
@@ -16,19 +13,18 @@ const LIBS := {
 const VISUALS := {
 	"teknium": "res://scripts/teknium_visual.gd",
 	"doge_man": "res://scripts/doge_visual.gd",
-	"turbofit": "res://scripts/turbofit_visual.gd",
+	"turbofit": "res://scripts/turbofit_legacy_clap_visual.gd",
 	"witcheer": "res://scripts/witcheer_visual.gd",
 	"ggb": "res://scripts/ggb_visual.gd",
+	"bobo": "res://scripts/bobo_visual.gd",
 	"ice_mage": "res://scripts/ice_mage_visual.gd",
 }
-# Not shown yet (their visuals need a live Fighter owner): mephisto, bobo.
+# Mephisto still needs a live Fighter owner. Bobo uses native Idle; no new celebration.
 # Witcheer has no retargeted pose-in; their own authored Celebration is used.
 const NATIVE_POSE := {"witcheer": "Celebration"}
 # Freeze partway through a clip (seconds) instead of on its last frame.
-# Witcheer: just after the kicked leg starts to drop (Mike 2026-09-30); peak is ~0.73 s.
 const FREEZE_AT := {"witcheer": 0.80}
 # Dance pool: a winner whose library has "VictoryDance_*" clips picks one at random
-# and loops it instead of pose-in + freeze. Teknium only (Mike 2026-09-30): Gangnam A,
 # Gangnam B, Robot, Tut.
 const DANCE_PREFIX := "VictoryDance_"
 var dance_rng := RandomNumberGenerator.new()
@@ -37,7 +33,7 @@ var force_dance := ""           # tests/captures: pick this dance instead of ran
 const FACE_CAMERA := -PI / 2.0
 # TurboFit's imported rig faces the opposite way from the Meshy rigs (checked: toe
 # direction pointed away from the camera without this).
-const YAW_FIX := {"turbofit": PI}
+const YAW_FIX := {"turbofit": PI, "bobo": PI / 2.0}
 # Victory-screen floor placement (visual.position.y), replacing each visual's in-game
 # clip offset. Teknium's visual keeps its Idle offset (-0.224) after _ready, which sank
 # every Mixamo victory clip ~23 cm through the podium; TurboFit's retargets sit ~11 cm low.
@@ -204,6 +200,7 @@ func _spawn(entry: Dictionary, at: Vector3, role: String, index: int) -> void:
 	stage.add_child(holder)
 	var visual: Node3D = load(VISUALS[id]).new()
 	if "palette" in visual and entry.has("color"): visual.set("palette", entry.color)
+	if "costume_id" in visual: visual.set("costume_id", str(entry.get("costume", "01")))
 	holder.add_child(visual)
 	visual.set_process(false)       # presentation only; no fighter owner here
 	visual.set_physics_process(false)
@@ -216,6 +213,15 @@ func _spawn(entry: Dictionary, at: Vector3, role: String, index: int) -> void:
 	if LIBS.has(id) and not player.has_animation_library("victory"):
 		player.add_animation_library("victory", load(LIBS[id]))
 	if role == "winner":
+		# TurboFit celebrates with the same authored looping clap as the back row.
+		# Like Teknium's dances, this is settled without pausing the player.
+		if id == "turbofit" and player.has_animation("victory/VictoryClap"):
+			player.play("victory/VictoryClap", 0.2)
+			rec["clip"] = "victory/VictoryClap"
+			rec["looping"] = true
+			rec["frozen"] = true
+			_ground(rec)
+			return
 		var dances := _dance_pool(player)
 		if not dances.is_empty():
 			var pick: String = "victory/" + DANCE_PREFIX + force_dance

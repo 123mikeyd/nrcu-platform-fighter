@@ -3,8 +3,6 @@
   "fps": 24,
   "moves": {
     "Celebration": {
-      "carrier": "celebration",
-      "source_action": "Armature|happy_jump_m|baselayer",
       "full_source_range": [
         0.8,
         236.8
@@ -19,12 +17,9 @@
       "input": "G celebrate / S+G projectile absorption dance",
       "role": "both",
       "provisional": true,
-      "selection": "Reviewed source pose sheet: raise arms24.8, heel-out celebratory hop32.8..40.8, settle48.8..56.8. Startup16.8..24.8 and recovery48.8..56.8 vulnerable. No loop.",
       "healing": "Enemy contact only, actual projectile payload, clamp percent to zero. No melee protection."
     },
     "HighKick": {
-      "carrier": "high_kick",
-      "source_action": "Armature|High_Kick|baselayer",
       "full_source_range": [
         0.8,
         50.4
@@ -47,8 +42,6 @@
       "active_end": 0.6
     },
     "JumpPunch": {
-      "carrier": "double_jump_superman_punch",
-      "source_action": "Armature|Jumping_Punch|baselayer",
       "full_source_range": [
         0.8,
         65.6
@@ -64,8 +57,6 @@
       "provisional": true
     },
     "CaneSweep": {
-      "carrier": "cane_twirl",
-      "source_action": "Armature|Reaping_Swing|baselayer",
       "full_source_range": [
         0.8,
         143.20000000000002
@@ -81,8 +72,6 @@
       "provisional": true
     },
     "SpinRise": {
-      "carrier": "spiny_flippy_kick",
-      "source_action": "Armature|360_Power_Spin_Jump|baselayer",
       "full_source_range": [
         0.8,
         74.4
@@ -99,8 +88,6 @@
       "provisional": true
     },
     "AirSwim": {
-      "carrier": "swimming",
-      "source_action": "Armature|Swim_Forward|baselayer",
       "full_source_range": [
         0.8,
         109.60000000000001
@@ -117,8 +104,6 @@
       "provisional": true
     },
     "Toss": {
-      "carrier": "pickup_n_toss",
-      "source_action": "Armature|Female_Crouch_Pick_Throw_Forward|baselayer",
       "full_source_range": [
         0.8,
         118.4
@@ -138,8 +123,6 @@
       "provisional": true
     },
     "NeutralHook": {
-      "carrier": "approved_Witcheer_retarget",
-      "source_action": "Witcheer_Neutral_Hook_F05_RETARGET_PREVIEW",
       "full_source_range": [
         1,
         66
@@ -155,12 +138,9 @@
       "damage": 8,
       "input": "F neutral ground / K neutral ground",
       "role": "ground",
-      "provisional": false,
-      "selection": "Full user-approved retarget; right-hand extension observed at frames33\u201340; active hand samples31\u201340, no animation trim."
+      "provisional": false
     },
     "TurnaroundKick": {
-      "carrier": "dance_flying_kick",
-      "source_action": "Armature|Flying_Fist_Kick|baselayer",
       "start": 59,
       "contact": 71,
       "end": 95,
@@ -172,8 +152,7 @@
       "damage": 8,
       "input": "Opposite horizontal direction + basic, ground and air; pre-input facing captured",
       "role": "both",
-      "provisional": true,
-      "selection": "User-approved exact start59. Native right-foot extension observed71; provisional active68..74; planted/guard recovery95. Full original0.8..112.8 preserved externally. Ordinary gravity; no lift or recovery resource change; native horizontal hip travel anchored to existing Run. Native spin starts back-to-target and ends forward; whole model yaw targets opposite initial facing without reflecting bones."
+      "provisional": true
     }
   },
   "unassigned": {

@@ -43,6 +43,7 @@ func sample(clip:String,time:float):
  skeleton.force_update_all_bone_transforms()
 func sync_pose():
  if not view:return
+ skeleton.clear_bones_global_pose_override()
  var actor=view.actor();var moves=actor.mephisto_moves
  var direction=actor.facing
  # Mirror only combat direction: keep the demon behind the girl in camera depth.
@@ -69,7 +70,8 @@ func sync_pose():
 func _process(delta):
  if not view:return
  var actor=view.actor()
- if actor.freeze_remaining<=0:clock+=delta
+ if actor.freeze_remaining<=0:
+  clock+=delta
  sync_pose()
  for i in mist.size():
   var phase=clock*mist_speed+float(i)*1.71

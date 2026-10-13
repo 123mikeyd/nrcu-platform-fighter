@@ -50,6 +50,7 @@ func reconcile(actor) -> void:
     action_owner = "counter" if actor.doge_counter and actor.doge_counter.phase != "idle" else "special" if actor.teknium_specials and actor.teknium_specials.phase != "idle" else "input"
     if actor.ggb_combat and actor.ggb_combat.committed(): action_owner = "special"
     if actor.air_doge and actor.air_doge.active(): action_owner = "special"
+    if actor.doge_super_punch and actor.doge_super_punch.committed(): action_owner = "special"
     if actor.turbofit_snapline and actor.turbofit_snapline.active(): action_owner = "special"
     scripted_axis = (actor.mephisto_moves != null and not actor.mephisto_moves.move.is_empty()) or (actor.doge_ground_rush != null and actor.doge_ground_rush.phase != "idle")
     var next_action := "landing_lock" if actor.landing_lag > 0 else "movement_lock" if actor.charging or actor.shielding or scripted_axis or action_owner != "input" else "neutral"

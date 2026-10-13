@@ -61,4 +61,8 @@ jobs:
           "GODOT=$env:RUNNER_TEMP/engine/bin/Godot_v4.7.2-stable_win64_console.exe" >> $env:GITHUB_ENV
       - name: Fresh nested project import and bounded v0.6 contracts
         run: python tools/release_v06_runner.py --engine "${{ env.GODOT }}" --project current_game --output .verification/v06 --import-project --timeout 900
+      # This job is headless source coverage, NOT rendered frontend acceptance.
+      # Required before packaging on a graphics-capable local machine:
+      # python tools/release_v06_runner.py --engine <engine> --project current_game --output <private-output> --native --timeout 900
+      # Both native frontend and Help must pass on the exact candidate bytes.
       # Raw import/test logs remain private runner-local evidence: do not publish paths.

@@ -1,5 +1,7 @@
 # v0.2 alpha playtest: Doge, Bobo, and the current fighters
 
+> **Historical v0.2 guide — not current controls.** The original checklist below is retained as release history. For the v0.6.1 alpha, use [CONTROLS.md](CONTROLS.md) and the [current playtest checklist in the patch notes](PATCH_NOTES_v0.6.1.md#please-test-and-report). In the candidate, grounded Doge Down+basic is the cape attack, there is no universal E/shield input, and Story Mode is directly on Home. Other old encounter/menu descriptions below are not current acceptance criteria.
+
 **This is an unfinished public alpha playtest, not a finished game.** Use the build tag or commit ID in every report. Mephisto's unfinished kit and later experiments are outside this test pass. Homepage polish and incomplete fighter animation coverage are known work.
 
 ## Windows build

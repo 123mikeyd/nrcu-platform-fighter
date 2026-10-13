@@ -17,7 +17,6 @@ const CHEST_NAMES := ["Spine", "mixamorig_Spine2", "DEF-spine.003"]
 const CHEST_DEG := 7.0
 const NECK_DEG := 12.0
 const HEAD_DEG := 20.0
-# Limp arms (Mike 09-29: "can we make the arms go limp?")
 const ARM_SETS := [
 	["LeftArm", "LeftForeArm", "LeftHand"], ["RightArm", "RightForeArm", "RightHand"],
 	["mixamorig_LeftArm", "mixamorig_LeftForeArm", "mixamorig_LeftHand"], ["mixamorig_RightArm", "mixamorig_RightForeArm", "mixamorig_RightHand"],

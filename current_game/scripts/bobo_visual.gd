@@ -1,9 +1,11 @@
 extends Node3D
+const CostumeMaterials = preload("res://scripts/costume_materials.gd")
 const VISUAL_SCALE := 1.75
 var model: Node3D
 var animation_player: AnimationPlayer
 var current_clip := "Idle"
 var elapsed := 0.0
+var costume_id := "01"
 func _ready() -> void:
     scale = Vector3.ONE * VISUAL_SCALE
     position.y = -0.108
@@ -19,13 +21,24 @@ func _ready() -> void:
             library.add_animation(clip,animation)
         animation_player.remove_animation_library(name)
         animation_player.add_animation_library(name,library)
+    var albedo := CostumeMaterials.texture("res://assets/costumes/bobo/%s/Bobo_%s_Albedo.png" % [costume_id, costume_id])
+    var metal_rough := CostumeMaterials.texture("res://assets/costumes/bobo/%s/Bobo_%s_MetalRough.png" % [costume_id, costume_id])
     for mesh in model.find_children("*", "MeshInstance3D", true, false):
         for surface in mesh.mesh.get_surface_count():
             var source = mesh.get_active_material(surface)
             if source is StandardMaterial3D:
                 var material: StandardMaterial3D = source.duplicate()
-                material.metallic = 0
-                material.roughness = 0.8
+                if albedo: material.albedo_texture = albedo
+                material.albedo_color = Color.WHITE
+                # Godot reads metallic from B and roughness from G of this
+                # reviewed combined map; both slots must point to the same map.
+                if metal_rough:
+                    material.metallic_texture = metal_rough
+                    material.roughness_texture = metal_rough
+                material.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+                material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+                material.metallic = 1.0
+                material.roughness = 1.0
                 material.emission_enabled = false
                 mesh.set_surface_override_material(surface,material)
     react("Idle")

@@ -1,7 +1,6 @@
 extends Node
 # Doge-only native ground basics.
-# Neutral basic = V5 "Thanos" 6-hit boxing string (installed 2026-09-28, replaces
-# Lead Jab + Alternating Flurry). Side basic = Roundhouse25_42 (unchanged).
+# Neutral basic chains six punches. Side basic = Roundhouse25_42.
 # Each fresh basic press during a punch queues the next punch; no press = short
 # recovery blend back to Idle. One hit ledger per punch, sampled at 240 Hz on the
 # same controller clock that poses the rig (native hand/forearm, not actor range).
@@ -16,7 +15,6 @@ const BOX_PUSH:=[0.0,0.0,0.0,0.0,0.0,4.5]   # 1-5 keep the victim in range; hook
 const BOX_LIFT:=[0.0,0.0,0.0,0.0,0.0,.35]
 const BOX_ACTIVE_PRE:=3.0     # frames before contact (fist is already travelling fast)
 const BOX_ACTIVE_POST:=2.0    # frames after contact (drive-through)
-# Tempo (2026-09-29, Mike: "faster first punch, tighter gaps, shorter recovery
 # after each tap; not too fast"). Contact frames/poses stay the V5 source; only
 # the playback clock is sped up. Internal timings above stay in SOURCE seconds.
 var box_speed_open:=1.5      # source-clock rate until punch 1 contact (wind-up)
@@ -159,7 +157,7 @@ func after_tick(delta:float):
     actor.attack_cooldown=real_remaining(elapsed,duration())+box_recover_time
    else:
     begin(BOX_RECOVER,box_recover_time)
-  else:cancel()
+  else:cancel();actor._update_move_visuals()
 
 func point(bone:String)->Vector3:
  return skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin
@@ -195,6 +193,7 @@ func query_contact(t:float):
  query_segment(t,limb,point(limb+"Leg"),a,radius)
 
 func query_segment(t:float,limb:String,a:Vector3,b:Vector3,radius:float):
+ preload("res://scripts/ssb_clank.gd").strike(actor,"doge_basic:%d:%s:%d"%[serial,clip,box_index],a,b,radius,float(BOX_DAMAGE[box_index] if clip==BOX else 10.0)) # SSB clank volume
  for target in get_tree().get_nodes_in_group("fighters"):
   if not actor.can_hit(target) or target in targets or (target.global_position.x-actor.global_position.x)*direction<=0:continue
   for shape in target.get_hurtbox_shapes():

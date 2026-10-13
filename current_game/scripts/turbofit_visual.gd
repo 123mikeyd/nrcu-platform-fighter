@@ -12,81 +12,29 @@ var current_clip := ""
 # TurboFit has no flight pivot: the model is NOT parented to it, it stays at identity.
 var flight_root: Node3D
 var palette := Color.WHITE
+var costume_id := "01"
 var falling := false
 var landing_remaining := 0.0
 var _kick_skeleton: Skeleton3D
 var _kick_foot := -1
 var _kick_toe := -1
 var guitar_moves
-# v3b hair: 5 bone chains under mixamorig_Head, driven by Godot spring bones.
-# Mike picked "A": bouncy, big whips on mosh/kick moves. Presentation only.
-const HAIR_CHAINS := [
-    ["Hair_Back_C_01", "Hair_Back_C_04"], ["Hair_Back_L_01", "Hair_Back_L_04"], ["Hair_Back_R_01", "Hair_Back_R_04"],
-    ["Hair_Side_L_01", "Hair_Side_L_03"], ["Hair_Side_R_01", "Hair_Side_R_03"],
-]
-const HAIR_STIFFNESS := 1.0
-const HAIR_DRAG := 0.3
-const HAIR_GRAVITY := 0.0 # gravity made the chains creep/sag over time
-const HAIR_RADIUS := 2.5 # skeleton units (cm)
-# Keep hair out of his back/shoulders/head: [bone, radius, height] in skeleton units (cm).
-const HAIR_COLLIDERS := [
-    ["mixamorig_Head", 9.0, 0.0], ["mixamorig_Neck", 6.0, 14.0],
-    ["mixamorig_Spine2", 13.0, 34.0], ["mixamorig_Spine1", 12.0, 30.0], ["mixamorig_Spine", 12.0, 30.0],
-    ["mixamorig_LeftShoulder", 6.0, 18.0], ["mixamorig_RightShoulder", 6.0, 18.0],
-]
-var hair_spring: SpringBoneSimulator3D
+# Authored-review response; no world-space simulation or drape redesign.
+var hair_response
+var hair_spring = null # compatibility for diagnostic harness only
 var _hair_facing := 0.0
-
 func _process(_delta: float) -> void:
     _hair_check()
-
 func _hair_check() -> void:
-    # Facing flips are instant 180 degree turns; without a reset the world-space
-    # springs whip the hair through his body. Snap it behind him on each flip.
-    if hair_spring == null or model == null:
-        return
-    var f := signf(sin(model.rotation.y))
-    if f != 0.0 and f != _hair_facing:
-        if _hair_facing != 0.0:
-            hair_spring.reset()
-        _hair_facing = f
-
+    if model != null:
+        _hair_facing = signf(sin(model.rotation.y))
 func _setup_hair_spring(skeleton: Skeleton3D) -> void:
-    if skeleton.find_bone(HAIR_CHAINS[0][0]) < 0:
-        return
-    hair_spring = SpringBoneSimulator3D.new()
-    hair_spring.name = "HairSpring"
-    skeleton.add_child(hair_spring)
-    hair_spring.setting_count = HAIR_CHAINS.size()
-    # SpringBoneSimulator3D works in WORLD units; the constants above are skeleton cm.
-    var k := skeleton.global_transform.basis.get_scale().x if skeleton.is_inside_tree() else 0.0125
-    for i in HAIR_CHAINS.size():
-        hair_spring.set_root_bone_name(i, HAIR_CHAINS[i][0])
-        hair_spring.set_end_bone_name(i, HAIR_CHAINS[i][1])
-        hair_spring.set_extend_end_bone(i, true)
-        hair_spring.set_end_bone_direction(i, SpringBoneSimulator3D.BONE_DIRECTION_FROM_PARENT)
-        hair_spring.set_end_bone_length(i, 12.0 * k)
-        hair_spring.set_stiffness(i, HAIR_STIFFNESS)
-        hair_spring.set_drag(i, HAIR_DRAG)
-        hair_spring.set_gravity(i, HAIR_GRAVITY)
-        hair_spring.set_radius(i, HAIR_RADIUS * k)
-        hair_spring.set_enable_all_child_collisions(i, true)
-    for c in HAIR_COLLIDERS:
-        if skeleton.find_bone(c[0]) < 0:
-            continue
-        var col: SpringBoneCollision3D
-        if c[2] <= 0.0:
-            var sphere := SpringBoneCollisionSphere3D.new()
-            sphere.radius = c[1] * k
-            col = sphere
-        else:
-            var capsule := SpringBoneCollisionCapsule3D.new()
-            capsule.radius = c[1] * k
-            capsule.height = c[2] * k
-            col = capsule
-        col.name = "HairCol_" + c[0]
-        hair_spring.add_child(col)
-        col.bone_name = c[0]
+    # ORIGINAL33 hair is skinned to the original head; no invented hair chains.
+    if skeleton.find_bone("Hair_Swept_Crown_C_01") < 0: return
+    hair_response = preload("res://scripts/turbofit_hair_response.gd").new()
+    hair_response.name = "AuthoredHairResponse"
+    hair_response.actor = get_parent().get_parent()
+    skeleton.add_child(hair_response)
 
 # Approved Power Chord presentation: uncapped anticipation, immediate contact.
 # The combat controller retains the original charge, damage and cooldown clocks.
@@ -200,15 +148,9 @@ func _ready() -> void:
             var source = mesh.get_active_material(surface)
             if source is StandardMaterial3D:
                 var material: StandardMaterial3D = source.duplicate()
-                material.albedo_color *= Color.WHITE.lerp(palette, 0.10)
-                material.metallic = minf(material.metallic, 0.08)
-                material.roughness = maxf(material.roughness, 0.68)
-                # TurboFit's black clothing disappears against the dark arena.
-                # Reuse the static albedo as a restrained, non-flashing lift.
-                material.emission_enabled = true
-                material.emission = Color.WHITE
-                material.emission_texture = material.albedo_texture
-                material.emission_energy_multiplier = 0.25
+                material.albedo_texture = preload("res://scripts/costume_materials.gd").texture("res://assets/costumes/turbofit/%s_albedo.png" % costume_id)
+                material.albedo_color = Color.WHITE
+                material.emission_texture = material.albedo_texture # Approved material recolors both inputs.
                 mesh.set_surface_override_material(surface, material)
     guitar_moves = preload("res://scripts/turbofit_guitar.gd").new()
     guitar_moves.name = "TurboFitGuitar"

@@ -10,6 +10,8 @@ var shapes: Array[CollisionShape3D] = []
 var regions: Array = []
 var debug_visible := false
 var meshes: Array[MeshInstance3D] = []
+var _shape_cache := {}
+var _mesh_cache := {}
 func _ready() -> void:
 	actor=get_parent()
 	var skeletons=actor._visual_root.find_children("*","Skeleton3D",true,false)
@@ -42,10 +44,19 @@ func sync() -> void:
 		var bone:Transform3D=r.target.global_transform if r.has("target") else skeleton.global_transform*skeleton.get_bone_global_pose(r.index)
 		var a=bone*vector(r.a);var b=bone*vector(r.b);var axis=b-a
 		var radius=r.radius*maxf(bone.basis.x.length(),maxf(bone.basis.y.length(),bone.basis.z.length()))
-		var s=shapes[i];s.shape.radius=radius;s.shape.height=axis.length()+2*radius
-		s.global_transform=Transform3D(Basis.IDENTITY if axis.length_squared()<.00000001 else Basis(Quaternion(Vector3.UP,axis.normalized())),(a+b)*.5)
-		s.force_update_transform()
-		meshes[i].global_transform=s.global_transform;meshes[i].mesh.radius=radius;meshes[i].mesh.height=s.shape.height
+		var s=shapes[i];var h=axis.length()+2*radius
+		var xf=Transform3D(Basis.IDENTITY if axis.length_squared()<.00000001 else Basis(Quaternion(Vector3.UP,axis.normalized())),(a+b)*.5)
+		# Perf: skip identical re-writes (sync() runs before every attack query).
+		var key=[body.global_transform,radius,h,xf]
+		if _shape_cache.get(i)!=key:
+			s.shape.radius=radius;s.shape.height=h
+			s.global_transform=xf
+			s.force_update_transform()
+			_shape_cache[i]=key
+		var mkey=[global_transform,radius,s.shape.height,s.global_transform]
+		if _mesh_cache.get(i)!=mkey:
+			meshes[i].global_transform=s.global_transform;meshes[i].mesh.radius=radius;meshes[i].mesh.height=s.shape.height
+			_mesh_cache[i]=mkey
 		meshes[i].visible=debug_visible and actor.visible and actor.controls_enabled
 	body.force_update_transform()
 func _process(_delta: float) -> void:

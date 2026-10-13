@@ -25,6 +25,12 @@ func _ready() -> void:
     var specials: AnimationLibrary = load("res://assets/bobo/player_specials.res")
     for clip in specials.get_animation_list():
         library.add_animation(clip,specials.get_animation(clip).duplicate(true))
+    var tumble_clips: AnimationLibrary = load("res://assets/bobo/player_tumble.res")
+    for clip in tumble_clips.get_animation_list():
+        library.add_animation(clip,tumble_clips.get_animation(clip).duplicate(true))
+    var down_air_clips: AnimationLibrary = load("res://assets/bobo/player_down_air.res")
+    for clip in down_air_clips.get_animation_list():
+        library.add_animation(clip,down_air_clips.get_animation(clip).duplicate(true))
     pose_at("OrcWalk",0)
     contact=load("res://scripts/bobo_foot_contact.gd").new()
     contact.setup(self)
@@ -61,7 +67,51 @@ func present_crouch(actor, delta: float) -> bool:
             pose_at("TuckedCrouch",crouch_time)
             return true
     return false
+const TUMBLE_KEY0 := 1.0/30.0
+const TUMBLE_PERIOD := {"TumbleHold": 0.8, "TumbleRoll": 0.4}
+const TUMBLE_BLEND := 0.12
+var tumble_on := false
+var tumble_from := []
+func present_tumble(t: float, reeling: bool) -> void:
+    var clip := "TumbleRoll" if reeling else "TumbleHold"
+    if not tumble_on:
+        tumble_on = true
+        tumble_from.clear()
+        for i in contact.sk.get_bone_count(): tumble_from.append(contact.sk.get_bone_pose(i))
+    pose_at(clip, TUMBLE_KEY0 + fposmod(t, TUMBLE_PERIOD[clip]))
+    if t < TUMBLE_BLEND and not tumble_from.is_empty():
+        var w := smoothstep(0.0, TUMBLE_BLEND, t)
+        for i in contact.sk.get_bone_count():
+            contact.sk.set_bone_pose(i, tumble_from[i].interpolate_with(contact.sk.get_bone_pose(i), w))
+        contact.sk.force_update_all_bone_transforms()
+func end_tumble() -> void:
+    tumble_on = false
+# The move ends on AirIdle f1; while still airborne afterwards the approved wiggly AirIdle loops until a
+# landing, jump, hit or any other action clears it (cancel_locomotion / begin_jump).
+const AIR_IDLE_PERIOD := 48.0/30.0
+var down_air_from := []
+var air_idle_on := false
+var air_idle_time := 0.0
+func begin_down_air() -> void:
+    air_idle_on = false
+    down_air_from.clear()
+    for i in contact.sk.get_bone_count(): down_air_from.append(contact.sk.get_bone_pose(i))
+func present_down_air(time: float, e: float) -> void:
+    pose_at("DownAir", time)
+    if e < 0.05 and not down_air_from.is_empty():
+        var w := smoothstep(0.0, 0.05, e)
+        for i in contact.sk.get_bone_count():
+            contact.sk.set_bone_pose(i, down_air_from[i].interpolate_with(contact.sk.get_bone_pose(i), w))
+        contact.sk.force_update_all_bone_transforms()
+func begin_air_idle() -> void:
+    air_idle_on = true
+    air_idle_time = 0.0
+    airborne = true
+    takeoff = -1.0
+    landing = -1.0
+    pose_at("AirIdle", TUMBLE_KEY0)
 func begin_jump() -> void:
+    air_idle_on = false
     if contact: contact.clear()
     ground_mode=""
     takeoff = 0.0
@@ -71,6 +121,7 @@ func begin_jump() -> void:
 func cancel_locomotion() -> void:
     # Cancellation changes episode bookkeeping, not a frozen displayed pose.
     if contact: contact.clear(true)
+    air_idle_on = false
     crouch_time = 0.0
     crouch_exit = -1.0
     gait_phase=0.0
@@ -107,6 +158,10 @@ func locomotion(actor, delta: float) -> void:
         ground_mode=""
         airborne = true
         landing = -1.0
+        if air_idle_on:
+            air_idle_time += delta
+            pose_at("AirIdle", TUMBLE_KEY0 + fposmod(air_idle_time, AIR_IDLE_PERIOD))
+            return
         if takeoff >= 0 and actor.velocity.y > 0:
             takeoff += delta
             if takeoff < TAKEOFF_SECONDS:
@@ -121,6 +176,7 @@ func locomotion(actor, delta: float) -> void:
             pose_at("JumpFall",clampf(-actor.velocity.y/actor.JUMP_SPEED,0,1)*0.4)
         return
     takeoff = -1.0
+    air_idle_on = false
     if airborne:
         airborne = false
         landing = 0.0

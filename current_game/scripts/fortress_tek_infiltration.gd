@@ -1,6 +1,5 @@
 extends Node3D
 # Fortress background cameo: Solid Teknium infiltrates the fortress.
-# Mike's low-poly Teknium (23 bones, albedo-only, 512px) with Tek's retargeted clips, plus
 # generic shadow ninjas. Decorative only: no collision, physics, lights, audio or text.
 # Runs a ~40 s pass every 5-10 min of Fortress play; while waiting it is hidden and its
 # AnimationPlayer is off, so the only cost is one float subtraction per frame.

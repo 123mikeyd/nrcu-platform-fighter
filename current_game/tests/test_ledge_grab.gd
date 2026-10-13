@@ -27,7 +27,10 @@ func build(p1: String, p2: String):
 	arena.setup.rows[1].character.select(ids.find(p2))
 	arena.setup.rows[0].kind.select(0); arena.setup.rows[1].kind.select(0)
 	arena.setup.rows[2].kind.select(2); arena.setup.rows[3].kind.select(2)
+	arena.setup._refresh()
 	arena.setup._start()
+	arena.setup.choose_stage(0)
+	arena.setup.launch_match()
 	await frames(140)
 func hands_mid(f) -> Vector3:
 	var sk: Skeleton3D = f.ledge_grab.skeleton
@@ -188,7 +191,9 @@ func run_fighter(cid: String, other: String):
 	check(d.damage_percent == dmg0 and d.ledge_grab.active(), T + "hit during grab intangibility is ignored", "dmg=%.1f" % d.damage_percent)
 	await wait_phase(d, "hang", 60); await frames(30)
 	d.receive_hit_from(10, Vector3(1, 0.3, 0), 5, o)
-	await frames(2)
+	# Current hitlag freezes dispatch before the ledge owner can release.
+	check(d.damage_percent > dmg0, T + "vulnerable ledge hit registers immediately")
+	await frames(ceili(d.counter_hitstop * Engine.physics_ticks_per_second) + 2)
 	check(d.damage_percent > dmg0 and not d.ledge_grab.active(), T + "hit while hanging deals damage and knocks him off", "dmg=%.1f phase=%s" % [d.damage_percent, d.ledge_grab.phase])
 	await frames(120)
 	# 8) hang timeout
@@ -219,4 +224,4 @@ func run():
 		var f = FileAccess.open(out + "/ledge_test.json", FileAccess.WRITE)
 		f.store_string(JSON.stringify({"checks": checks, "failures": failures, "rows": rows, "log": log}, "  ")); f.close()
 	print("LEDGE_TEST_DONE checks=%d failures=%d" % [checks, failures])
-	quit(1 if failures > 0 else 0)
+	print("LEDGE_GRAB_COMPLETE");quit(1 if failures > 0 else 0)

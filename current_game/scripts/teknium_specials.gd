@@ -59,7 +59,6 @@ func start(aim: Vector2) -> void:
         actor.last_move = "SHADOW KICK"
     elif aim == Vector2.ZERO:
         start_laser()
-# ---------------- LASER BLAST (neutral special, replaces Charge Shot 2026-09-28) ----------------
 # Clip: laser/LaserBlast (24 fps source, 56 frames). Fixed-length telegraph, jump cancels before the
 # white flash, hitstop on fire, recoil pushback owned here (ledge-safe on ground, bigger in air).
 const LF := 1.0 / 24.0
@@ -347,6 +346,7 @@ func after_move(delta: float) -> void:
     for i in range(steps+1):
         var point: Vector3 = start.lerp(foot,float(i)/steps)
         var sphere := SphereShape3D.new(); sphere.radius=0.32 if phase=="shadow_dash" else 0.6
+        preload("res://scripts/ssb_clank.gd").strike(actor,"tek:"+phase,point,point,sphere.radius,13.0 if phase=="shadow_dash" else 12.0) # SSB clank volume
         var q := PhysicsShapeQueryParameters3D.new(); q.shape=sphere; q.transform.origin=point; q.collision_mask=7
         HURT.prepare(actor,q)
         for hit in actor.get_world_3d().direct_space_state.intersect_shape(q,64):

@@ -4,6 +4,7 @@ const THRESHOLD := 12.0
 const DANGER_SPEED := 7.0
 const DRAG := 1.55
 const MAX_TIME := 1.6
+const BOBO_TUMBLE_ENTRY := 0.18  # same instant the shared fitted body reaction stops advancing
 var actor
 var active := false
 var clock := 0.0
@@ -15,22 +16,44 @@ var collateral_allowed := true
 var effects
 var launch_speed := 0.0
 var paused_players: Array = []
+## SSB64 reeling (DamageFlyRoll): FACT ssb-decomp ftcommondamage.c:564-574 + ftcommon.h:78,114-116 --
+## tumble-level hit, airborne, launch angle not 70-110 deg (that is DamageFlyTop), percent >= 100, 50% chance.
+static var REEL_CHANCE := 0.5
+const REEL_PERCENT_MIN := 100.0
+var reeling := false
 func _ready():actor=get_parent()
 func begin(attacker: Node, collateral := false):
  clear()
- if collateral or actor.shielding or actor.velocity.length()<THRESHOLD:return
+ if collateral or actor.shielding:return
+ # SSB hit feel: the hitstun tier (kb>=60, 32f) decides tumble when enabled.
+ var feel=actor.get("hit_feel")
+ if feel!=null and feel.tiers_active():
+  if not feel.is_tumble():return
+ elif actor.velocity.length()<THRESHOLD:return
  active=true;source=attacker;collateral_allowed=not collateral
+ reeling=roll_check()
  # Horizontal strong ground blows need lift to enter flight; downward spikes stay downward.
  if actor.is_grounded() and actor.velocity.y>=0:actor.velocity.y=maxf(actor.velocity.y,3.8)
+ if feel!=null:feel.rebase()
  launch_speed=actor.velocity.length()
  if effects==null:
   effects=preload("res://scripts/tumble_effects.gd").new()
   actor.add_child(effects);effects.setup(actor)
  effects.impact(actor.global_position+Vector3.UP,1.0)
- pause_remaining=.055
- if is_instance_valid(source) and source.get("tumble")!=null:
-  source.tumble.pause_remaining=maxf(source.tumble.pause_remaining,.055)
+ # SSB hitlag (ssb_hit_feel.gd) already froze both fighters; skip the old flat pause.
+ if feel!=null and feel.froze():pass
+ else:
+  pause_remaining=.055
+  if is_instance_valid(source) and source.get("tumble")!=null:
+   source.tumble.pause_remaining=maxf(source.tumble.pause_remaining,.055)
  ignore_fighters()
+func roll_check() -> bool:
+ if actor.get("damage_percent")==null or actor.damage_percent<REEL_PERCENT_MIN:return false
+ # Grounded spikes stay grounded in SSB64 (no air status), so they never reel.
+ if actor.is_grounded() and actor.velocity.y<0:return false
+ var ang:=rad_to_deg(atan2(actor.velocity.y,absf(actor.velocity.x)))
+ if ang>70.0:return false
+ return randf()<REEL_CHANCE
 func ignore_fighters():
  for other in get_tree().get_nodes_in_group("fighters"):
   if other==actor or other in ignored:continue
@@ -40,7 +63,7 @@ func ignore_fighters():
 func clear():
  if actor and actor.has_node("AirReaction"):actor.get_node("AirReaction").finish()
  restore_players()
- active=false;clock=0;pause_remaining=0;source=null;recipients.clear()
+ active=false;reeling=false;clock=0;pause_remaining=0;source=null;recipients.clear()
  if effects:effects.clear()
  for other in ignored:
   if is_instance_valid(other):
@@ -71,29 +94,37 @@ func tick(delta: float) -> bool:
  restore_players()
  if not active:return false
  clock+=delta
- launch_speed*=exp(-DRAG*delta)
+ var feel=actor.get("hit_feel")
+ var ssb_decay: bool = feel!=null and feel.decay_active()
  ignore_fighters()
  actor.hitstun=maxf(0,actor.hitstun-delta)
- actor.velocity*=exp(-DRAG*delta)
- actor.velocity.y=maxf(actor.velocity.y-actor.GRAVITY*delta,-actor.MAX_FALL_SPEED)
+ if ssb_decay:
+  # SSB: launch channel decays linearly; gravity acts on own motion only.
+  feel.tumble_step(delta)
+  launch_speed=feel.knock.length()
+ else:
+  launch_speed*=exp(-DRAG*delta)
+  actor.velocity*=exp(-DRAG*delta)
+  actor.velocity.y=maxf(actor.velocity.y-actor.GRAVITY*delta,-actor.MAX_FALL_SPEED)
  actor._update_platform_collisions(delta)
  var start: Vector3 = actor.global_position
  actor.move_and_slide()
+ if ssb_decay:feel.after_slide()
  contact_sweep(start, actor.global_position)
  actor._floor_contacts_valid=true
  actor.global_position.z=0
- # Existing reaction presentation is provisional until Mike authors tumble.
  var saved=actor.hitstun
  actor.hitstun=maxf(saved,.001)
  actor._update_move_visuals(delta)
  actor.hitstun=saved
- if actor.fitted_reaction and actor.character_id!="ice_mage":
+ # Bobo: approved fitted hit reaction for the impact, then his own tumble pose (bobo_player.gd).
+ if actor.fitted_reaction and actor.character_id!="ice_mage" and not (actor.character_id=="bobo" and clock>=BOBO_TUMBLE_ENTRY):
   if actor.character_id=="doge_man":actor.fitted_reaction.trial_present(clock,true)
   else:
    actor.fitted_reaction.begin("body",signf(actor.velocity.x))
    actor.fitted_reaction.present_sample(minf(clock,.18))
  if actor.has_node("AirReaction"):actor.get_node("AirReaction").present(clock,true)
- if actor.hitstun<=0 or actor.is_grounded() or clock>=MAX_TIME:
+ if actor.hitstun<=0 or actor.is_grounded() or clock>=(feel.max_flight() if feel!=null else MAX_TIME):
   # This tick already moved and latched blocked inputs. Keep its true return:
   # ordinary control resumes next tick, never a second gravity/movement pass.
   # End collateral/passthrough ownership with flight; retain velocity/resources.
@@ -102,7 +133,7 @@ func tick(delta: float) -> bool:
   actor._update_move_visuals(0)
   if actor.is_grounded():actor.reset_air_resources()
  if actor.global_position.y < -8 or absf(actor.global_position.x)>16 or actor.global_position.y>15:
-  actor._handle_blast_zone()
+  if not preload("res://scripts/ssb_presentation.gd").begin_ko(actor): actor._handle_blast_zone()
  return true
 
 func contact_sweep(start: Vector3, finish: Vector3):

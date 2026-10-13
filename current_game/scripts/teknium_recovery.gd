@@ -62,8 +62,6 @@ func side_source_time(t: float) -> float:
 const JAB_SPEED := 3.5
 const JAB_ACTIVE_START := .5
 const JAB_ACTIVE_END := 17.0/24.0
-# Neutral jab string (Mike 2026-10-01): left jab -> right straight -> scoop kick, one hit per fresh press.
-# Mike's hand-keyed Blender clip, authored at half game tempo (edit frames @30fps, played at 2x).
 # A lone tap is the exact original jab: the clip's frames 0..12.14 equal Punch@3.5x through the jab's active end,
 # then the native Punch retraction finishes it (same 8%, same duration).
 const STRING_CLIP := "jab_string/TekJabString"
@@ -298,6 +296,7 @@ func lab_start(move: String) -> bool:
  jab_step=0;jab_buffered=false;jab_attack_held=actor._read_raw_controls(0).attack
  actor.attack_cooldown=lab_duration()
  if move in ["side_basic","jab"]:actor.last_move="SIDE STRIKE"
+ if move=="uppercut":actor.last_move="UPPERCUT"
  if move=="air_up":actor.last_move="AIR BACKFLIP 33-73"
  if move=="crouch_kick":actor.last_move="CROUCH KICK"
  return true
@@ -380,8 +379,14 @@ func lab_active(t:float)->bool:
   return (frame>=86 and frame<=93) or (frame>=101 and frame<=108) or (frame>=116 and frame<=123)
  if lab_move=="uppercut":return t>=.08+1.0/30.0 and t<=.08+4.0/30.0
  return t>=.16 and t<=.30 if lab_move=="crouch_kick" else t>=.18 and t<=.27
+func lab_clank_damage()->float:
+ if lab_move=="side_basic":return [2.5,2.5,3.0][side_step]
+ if lab_move=="air_up":return 8.0
+ if lab_move=="jab" and jab_step>0:return float(STRING_DAMAGE[jab_step])
+ return 10.0 if lab_move=="uppercut" else 8.0
 func lab_query(point: Vector3, sample_time: float) -> void:
  var shape=SphereShape3D.new();shape.radius=.10 if lab_move=="crouch_kick" else lab_sample_radius
+ preload("res://scripts/ssb_clank.gd").strike(actor,"tek:%s:%d:%d"%[lab_move,jab_step,side_step],point,point,shape.radius,lab_clank_damage()) # SSB clank volume
  var query=PhysicsShapeQueryParameters3D.new();query.shape=shape;query.transform=Transform3D(Basis.IDENTITY,point);query.collision_mask=7
  HURT.prepare(actor,query)
  for hit in actor.get_world_3d().direct_space_state.intersect_shape(query,64):
@@ -420,7 +425,6 @@ func lab_tick(delta: float) -> void:
    jab_begin_next();lab_present(0);return
   var point=lab_present(t)
   if lab_active(t) and lab_move=="jab" and jab_step==2:
-   # Scoop kick: kicking shin and foot segments (Mike's keyed path), controller owns travel.
    var knee=lab_bone_point("RightLeg");var ankle=lab_bone_point("RightFoot");var toe=lab_bone_point("RightToeBase")
    lab_sample_radius=.10
    for fraction in [0.0,.25,.5,.75,1.0]:
