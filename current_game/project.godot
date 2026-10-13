@@ -10,8 +10,8 @@ config_version=5
 
 [application]
 
-config/name="NRCU v0.6.9.42.0"
-config/version="0.6.9.42.0"
+config/name="NRCU v0.6.1"
+config/version="0.6.1"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="NRCU_v06"
 config/description="Original 2.5D NRCU platform-fighter prototype"

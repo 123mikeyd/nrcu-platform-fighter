@@ -15,7 +15,7 @@ The reference is **Super Smash Bros. Ultimate Zelda**, adapted to NRCU's simplif
 - **Up special — Paired Teleport:** the young woman and guardian disappear and return together.
 - **Down special — Dream Hand:** the guardian reaches out, catches and lifts an opponent, then releases them asleep. Older release labels and internal identifiers use **Dream Grasp** for this move.
 
-The regular kit does not use voluntary lead switching. In the **v0.6.9.42.0 candidate**, all eight directional ground/air basic slots route to the regular caster kit, not the historical demon-led brawler moveset. Grounded Down+basic selects the low basic; airborne Down+basic selects **Meteor Heel** (internally `FallingStar`). Its controller is connected to that route. This establishes candidate source installation, not final art approval of every basic or verification of a downloadable package.
+The regular kit does not use voluntary lead switching. In the **v0.6.1 candidate**, all eight directional ground/air basic slots route to the regular caster kit, not the historical demon-led brawler moveset. Grounded Down+basic selects the low basic; airborne Down+basic selects **Meteor Heel** (internally `FallingStar`). Its controller is connected to that route. This establishes candidate source installation, not final art approval of every basic or verification of a downloadable package.
 
 ## Story presentation direction — Boss_Meph (not installed-status evidence)
 

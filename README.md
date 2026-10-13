@@ -10,11 +10,11 @@ Big personalities. Weird powers. Unlockable challengers. Ledges, lasers, guitar 
   <img src="images/play_browser_button.svg" alt="Play now in your browser" width="900">
 </a>
 
-<a href="https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.6">
+<a href="https://github.com/123mikeyd/nrcu-platform-fighter/releases/tag/v0.6.1">
   <img src="images/download_windows_button.svg" alt="Download the Windows tester build" width="680">
 </a>
 
-[📜 Patch v0.6 notes](PATCH_NOTES_v0.6.md) · [🃏 Full roster](ROSTER.md) · [📖 Meet the cast in the NRCU Vault](https://123mikeyd.github.io/Nous_Research_Cinematic_Universe/library/)
+[📜 Patch v0.6.1 notes](PATCH_NOTES_v0.6.1.md) · [🃏 Full roster](ROSTER.md) · [📖 Meet the cast in the NRCU Vault](https://123mikeyd.github.io/Nous_Research_Cinematic_Universe/library/)
 
 <sub>🚧 Public alpha / friend demo. It is unfinished, it is chaotic, and that is half the fun. Browser first load is big; grab a snack.</sub>
 
@@ -34,13 +34,7 @@ Pick a starter, fight friends or CPUs, unlock challengers, run Story mode, chase
 
 <div align="center">
 
-<a href="ROSTER.md#-teknium--the-green-haired-master"><img src="images/roster/teknium.png" height="150" alt="Teknium"></a>
-<a href="ROSTER.md#-turbofit--the-quiet-riff"><img src="images/roster/turbofit.png" height="150" alt="TurboFit"></a>
-<a href="ROSTER.md#-doge-man--super-shiba"><img src="images/roster/doge_man.png" height="150" alt="Doge Man"></a>
-<a href="ROSTER.md#-ggb--the-gifted-gummy-bee"><img src="images/roster/ggb.png" height="150" alt="GGB"></a>
-<a href="ROSTER.md#-bobo--the-designer"><img src="images/roster/bobo.png" height="150" alt="Bobo"></a>
-<a href="ROSTER.md#-witcheer--the-luck-merchant"><img src="images/roster/witcheer.png" height="150" alt="Witcheer"></a>
-<a href="ROSTER.md#-mephisto--the-young-woman-and-her-shadow-guardian"><img src="images/roster/mephisto.png" height="150" alt="Mephisto"></a>
+<a href="ROSTER.md#-teknium--the-green-haired-master"><img src="images/roster/teknium.png" height="150" alt="Teknium"></a> <a href="ROSTER.md#-turbofit--the-quiet-riff"><img src="images/roster/turbofit.png" height="150" alt="TurboFit"></a> <a href="ROSTER.md#-doge-man--super-shiba"><img src="images/roster/doge_man.png" height="150" alt="Doge Man"></a> <a href="ROSTER.md#-ggb--the-gifted-gummy-bee"><img src="images/roster/ggb.png" height="150" alt="GGB"></a> <a href="ROSTER.md#-bobo--the-designer"><img src="images/roster/bobo.png" height="150" alt="Bobo"></a> <a href="ROSTER.md#-witcheer--the-luck-merchant"><img src="images/roster/witcheer.png" height="150" alt="Witcheer"></a> <a href="ROSTER.md#-mephisto--the-young-woman-and-her-shadow-guardian"><img src="images/roster/mephisto.png" height="150" alt="Mephisto"></a>
 
 **Teknium · TurboFit · Doge Man** are ready to go.<br>
 **GGB · Bobo · Witcheer · Mephisto** have to be *earned*. 🔓
@@ -69,11 +63,17 @@ Pick a starter, fight friends or CPUs, unlock challengers, run Story mode, chase
 
 ---
 
-## ✨ Current public build: v0.6
+## ✨ v0.6.1 alpha — Pick your color. Bring the chaos.
 
-**Ledges are here.** Story mode got a glow-up. Teknium dances on victory. TurboFit has hair motion. GGB can Wing Gust people away. Doge Man throws hands. Heavy Bag is live. The public browser build is playable now.
+**TurboFit’s original look returns.** Four colors, corrected guitar grip, and the results-screen clap you know. Transparent costume portraits make the lineup clearer; the new two-step setup lets you choose your fighters first, then your stage.
 
-Read the full notes here: **[Patch v0.6 — Ledges Are Here!](PATCH_NOTES_v0.6.md)**
+- **Fresh fights:** Super Doge Punch, Witcheer’s cane basics and crouch, Bobo’s down-air, and current Mephisto ground/air routes.
+- **Mind the gaps:** Hermes Weaver’s revised floor and repair cycle are ready for playtesting.
+- **Browser first:** a smaller color-texture payload, with source art and portrait transparency preserved. The initial download is still large.
+
+**[Read the v0.6.1 patch notes and move tips →](PATCH_NOTES_v0.6.1.md)**
+
+> **Unfinished alpha, not a finished beta.** Desktop Windows/browser playbacks have been checked. Real-phone testing is deferred until after publication; physical gamepads, long sessions and a full natural Story clear remain unverified. Teknium’s down-air is provisional.
 
 ---
 

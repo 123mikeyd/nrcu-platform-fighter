@@ -1,6 +1,6 @@
 # 🎮 NRCU Platform Fighter — How to Play
 
-Current instructions for the **v0.6.9.42.0 candidate**, not an announcement of a published download. See the [draft release notes and current playtest checklist](RELEASE_NOTES_v0.6.9.42.0_DRAFT.md). These mappings are checked against candidate source; that is not exported-package or physical-device verification.
+Current instructions for the **v0.6.1 alpha**. See the [release notes and current playtest checklist](PATCH_NOTES_v0.6.1.md). Physical-controller and real-phone acceptance remain unverified.
 
 ## Buttons
 
@@ -77,7 +77,7 @@ See [current Mephisto design](docs/MEPHISTO_CURRENT_DESIGN.md) for candidate ins
 - Grounded F: cane swipe · ↑+F: rising cane · ↓+F: low cane poke. Grounded ↔+F remains a kick.
 - On solid ground, hold Down to crouch and release it to rise. Use a fresh F press for the poke; holding F does not repeat it. On pass-through platforms, Down drops first, before the attack routes. These cane mappings are grounded basics, not replacements for the aerial kit.
 - ↔+G: coin toss · ↑+G: swim recovery · ↓+G: absorb
-- Candidate caveat: cane idle/airborne lifecycle verification is pending; these source mappings do not claim that issue is resolved.
+- Focused cane idle/airborne lifecycle checks pass; exhaustive matchup and physical-device coverage is not claimed.
 
 **❄️ Ice Mage** (CPU only, Story mode)
 - Frost Bolt · Frost Rise

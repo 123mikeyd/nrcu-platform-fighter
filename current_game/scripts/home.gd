@@ -17,7 +17,7 @@ var progress: Array = []
 var entering := false
 var transition_started := 0
 func _ready():
- get_window().title="NRCU — v0.6.9.42.0"
+ get_window().title="NRCU — v0.6.1"
  if not OS.has_feature("web"): get_window().min_size=Vector2i(800,450)
  theme=Style.make()
  var background=TextureRect.new()
@@ -62,7 +62,7 @@ func show_page(next: String):
   label("YOUR CREW. YOUR COLORS. YOUR FIGHT.",Vector2(64,549),14,Color("b7c8bc"))
   add_button("QUIT","quit",640,func():show_page("quit"));buttons.quit.size=Vector2(138,40);buttons.quit.add_theme_font_size_override("font_size",17)
   buttons.quit.add_theme_stylebox_override("normal",Style.box(Color("5c3034"),Color("a65c5b"),1));buttons.quit.add_theme_color_override("font_color",Color("f5d7cc"))
-  label("NRCU  /  v0.6.9.42.0",Vector2(968,668),13,Color("c1a36f"))
+  label("NRCU  /  v0.6.1",Vector2(968,668),13,Color("c1a36f"))
  else:
   label("Leave the game?",Vector2(64,295),26,Color("fff0cf"))
   add_button("Stay here","home",370,func():show_page("home"))

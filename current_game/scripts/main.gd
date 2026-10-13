@@ -74,7 +74,7 @@ var world: Node3D
 var world_environment: Dictionary = {}
 
 func _ready() -> void:
-    DisplayServer.window_set_title("NRCU — v0.6.9.42.0")
+    DisplayServer.window_set_title("NRCU — v0.6.1")
     if not OS.has_feature("web"): get_window().min_size = Vector2i(800,450)
     _build_environment()
     _build_stage()
