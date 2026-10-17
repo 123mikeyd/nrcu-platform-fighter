@@ -22,7 +22,7 @@ var events: Array = []
 func mark(event: String) -> void:
 	events.append({"event": event, "ms": Time.get_ticks_msec(), "elapsed": elapsed})
 func _ready() -> void:
-	get_window().title = "NRCU — v0.6.1"
+	get_window().title = "The Legends of Nous Research: Hermes, Breaking Containment"
 	var black := ColorRect.new()
 	black.color = Color.BLACK
 	black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

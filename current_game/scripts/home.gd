@@ -17,7 +17,7 @@ var progress: Array = []
 var entering := false
 var transition_started := 0
 func _ready():
- get_window().title="NRCU — v0.6.1"
+ get_window().title="The Legends of Nous Research: Hermes, Breaking Containment"
  if not OS.has_feature("web"): get_window().min_size=Vector2i(800,450)
  theme=Style.make()
  var background=TextureRect.new()
@@ -50,8 +50,9 @@ func show_page(next: String):
   var help=Style.help(page,func():show_page("home"));buttons["home"]=help.find_child("HelpBack",true,false);buttons.home.grab_focus();return
  label("NOUS RESEARCH  /  HERMES AGENT",Vector2(60,45),15,Color("c5bc9f"))
  var badge=TextureRect.new();badge.name="NousFightBadge";badge.texture=load("res://assets/select_identity/badge.svg");badge.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;badge.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;badge.position=Vector2(56,90);badge.size=Vector2(136,136);badge.mouse_filter=Control.MOUSE_FILTER_IGNORE;page.add_child(badge)
- label("NRCU",Vector2(205,88),94,Color("fff0cf"))
- label("H E R M E S   F I G H T   N I G H T",Vector2(64,222),16,Color("dcb775"))
+ var game_title=label("The Legends of Nous Research: Hermes, Breaking Containment",Vector2(205,96),36,Color("fff0cf"))
+ game_title.name="GameTitle";game_title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;game_title.set_deferred("size",Vector2(1000,126))
+ label("N R C U   /   T H E   S H A R E D   U N I V E R S E",Vector2(64,238),16,Color("dcb775"))
  if next=="home":
   add_button("LOCAL MATCH","play",294,func():enter_game("freeplay"))
   buttons.play.size=Vector2(482,86);buttons.play.add_theme_font_size_override("font_size",33)
@@ -62,7 +63,7 @@ func show_page(next: String):
   label("YOUR CREW. YOUR COLORS. YOUR FIGHT.",Vector2(64,549),14,Color("b7c8bc"))
   add_button("QUIT","quit",640,func():show_page("quit"));buttons.quit.size=Vector2(138,40);buttons.quit.add_theme_font_size_override("font_size",17)
   buttons.quit.add_theme_stylebox_override("normal",Style.box(Color("5c3034"),Color("a65c5b"),1));buttons.quit.add_theme_color_override("font_color",Color("f5d7cc"))
-  label("NRCU  /  v0.6.1",Vector2(968,668),13,Color("c1a36f"))
+  label("HERMES WEAVER  /  NRCU",Vector2(968,668),13,Color("c1a36f"))
  else:
   label("Leave the game?",Vector2(64,295),26,Color("fff0cf"))
   add_button("Stay here","home",370,func():show_page("home"))

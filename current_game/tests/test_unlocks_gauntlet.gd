@@ -139,6 +139,11 @@ func run():
 	check(arena.story_route == ["bobo", "ice_mage", "witcheer", "ggb", "turbofit", "doge_man"], "Teknium route skips Teknium; rejected Mephisto boss absent")
 	for n in arena.story_route.size():
 		var opp: String = arena.story_route[n]
+		if opp == "turbofit":
+			check(arena.story_video.active and arena.story_video.clip_id == "turbofit_celebration", "Turbo entrance precedes its encounter")
+			arena.story_video.skip()
+			check(not paused and arena.story_vs.visible, "Turbo skip hands off to VS")
+		arena.story_vs.skip()
 		check(arena.story_state == "playing" and arena.player_two.character_id == opp, "encounter %d vs %s" % [n + 1, opp])
 		check(opp != "mephisto", "rejected Mephisto boss remains absent")
 		arena._cancel_ready()
@@ -168,6 +173,9 @@ func run():
 	arena._cancel_ready()
 	_force_result(arena, arena.player_two)
 	check(U.is_playable("witcheer"), "Witcheer unlocked")
+	check(arena.story_video.active and arena.story_video.clip_id == "witcheer_unlock", "first Witcheer unlock plays its movie")
+	arena.story_video.skip()
+	check(not paused and cs.mode == "joined", "unlock movie skip returns to joined card")
 	await create_timer(1.0).timeout
 	cs.primary.pressed.emit()
 	await process_frame

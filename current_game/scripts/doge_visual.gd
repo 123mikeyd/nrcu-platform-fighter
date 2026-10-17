@@ -3,6 +3,7 @@ const CostumeMaterials = preload("res://scripts/costume_materials.gd")
 # Presentation only: never apply animation root motion to Fighter.
 # Approved Moves2 body motion; controller owns all travel and interruptions.
 const MODEL = preload("res://assets/doge_man/doge_attacks.glb")
+const BARK_MOUTH = preload("res://assets/doge_man/bark/doge_with_bark_mouth.glb")
 var model: Node3D
 var animation_player: AnimationPlayer
 var current_clip := ""
@@ -137,12 +138,20 @@ func _ready() -> void:
     var ground_library = load("res://assets/doge_man/ground_basic_20260915.tres")
     for clip in ground_library.get_animation_list():
         animation_player.get_animation_library("").add_animation(clip, ground_library.get_animation(clip).duplicate(true))
+    # Six-hit boxing string for neutral ground basic.
     var boxing_library = load("res://assets/doge_man/boxing_string_v5_20260928.tres")
     for clip in boxing_library.get_animation_list():
         animation_player.get_animation_library("").add_animation(clip, boxing_library.get_animation(clip).duplicate(true))
+    # Skydiver helpless-fall wiggle loop after Air Doge.
     var helpless_library = load("res://assets/doge_man/helpless_fall_v001_20260930.tres")
     for clip in helpless_library.get_animation_list():
         animation_player.get_animation_library("").add_animation(clip, helpless_library.get_animation(clip).duplicate(true))
+    # Add only the approved lip morph mesh. Keep the native rig, skin bindings,
+    # exact imported animation libraries and costume material route unchanged.
+    var mouth_source = BARK_MOUTH.instantiate()
+    var mouth_mesh = mouth_source.find_children("*", "MeshInstance3D", true, false)[0].mesh
+    for body in model.find_children("*", "MeshInstance3D", true, false): body.mesh = mouth_mesh
+    mouth_source.free()
     var atlas := CostumeMaterials.texture("res://assets/costumes/doge_man/%s_%s.png" % [costume_id, {"01":"Original", "02":"Midnight", "04":"Emerald", "07":"Obsidian"}.get(costume_id, "Original")])
     for mesh in model.find_children("*", "MeshInstance3D", true, false):
         for shape_index in mesh.mesh.get_blend_shape_count():

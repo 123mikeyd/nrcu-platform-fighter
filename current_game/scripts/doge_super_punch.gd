@@ -17,6 +17,32 @@ var targets: Array = []
 var contacts: Array = []
 var geometry: Array = []
 var morphs: Array = []
+const VFX=preload("res://scripts/doge_punch_vfx.gd")
+var windup_vfx: Node3D
+var impact_vfx: Array = []
+var impact_count := 0
+var feedback_target: Node
+func fist_position()->Vector3:
+ var g=geometry[0] # Native right fist center, not an actor-origin offset.
+ return skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone(g.bone))*vector(g.a)
+func clear_vfx():
+ feedback_target=null
+ if is_instance_valid(windup_vfx):windup_vfx.queue_free()
+ windup_vfx=null
+ for effect in impact_vfx:
+  if is_instance_valid(effect):effect.queue_free()
+ impact_vfx.clear()
+func update_windup():
+ if elapsed>=.20 and elapsed<START:
+  if not is_instance_valid(windup_vfx):
+   windup_vfx=VFX.new();actor.add_child(windup_vfx)
+  windup_vfx.global_position=fist_position();windup_vfx.pose(elapsed)
+ elif is_instance_valid(windup_vfx):windup_vfx.queue_free();windup_vfx=null
+ impact_vfx=impact_vfx.filter(func(effect):return is_instance_valid(effect) and not effect.is_queued_for_deletion())
+func impact_at(point:Vector3):
+ var effect=VFX.new();effect.impact=true;actor.add_child(effect)
+ effect.top_level=true;effect.global_position=point
+ impact_vfx.append(effect);impact_count+=1
 func _ready():
  actor=get_parent();view=actor._visual_root.get_node("DogeVisual");player=view.animation_player
  skeleton=view.model.find_children("*","Skeleton3D",true,false)[0]
@@ -29,6 +55,7 @@ func _ready():
 func committed()->bool:return active and elapsed<TOTAL-.000001
 func start():
  if active or not actor.is_grounded():return
+ clear_vfx();impact_count=0
  active=true;elapsed=0;direction=actor.facing;serial+=1;targets.clear();contacts.clear()
  actor.charging=false;actor.charge_time=0;actor.attack_cooldown=TOTAL;actor.last_move="SUPER DOGE PUNCH"
  actor.attack_flash_time=0
@@ -36,6 +63,7 @@ func start():
  for m in morphs:m[0].set_blend_shape_value(m[1],0.0)
  present()
 func cancel():
+ clear_vfx()
  if not active:return
  active=false;elapsed=0;targets.clear();actor.attack_cooldown=0
  for m in morphs:m[0].set_blend_shape_value(m[1],m[2])
@@ -54,6 +82,7 @@ func present():
  skeleton.force_update_all_bone_transforms()
  var hurt=actor.get_node_or_null("BodyHurtboxes")
  if hurt:hurt.sync()
+ update_windup()
 func after_tick(delta:float):
  if not active:return
  # Grounded-only first candidate: losing support cancels before outgoing contact.
@@ -88,5 +117,12 @@ func query_contact():
     if not actor.get_world_3d().direct_space_state.intersect_ray(ray).is_empty():continue
     targets.append(target)
     contacts.append({"time":elapsed,"serial":serial,"target":target.character_id,"bone":g.bone,"receiver":str(shape.name),"point":str(pair[0]),"receiver_axis":str(pair[1]),"radius":g.radius,"receiver_radius":radius,"separation":pair[0].distance_to(pair[1])})
+    var before_damage:float=target.damage_percent
+    var was_shielding:bool=target.shielding
+    feedback_target=target
     preload("res://scripts/body_hurtboxes.gd").deliver_capsule(target,DAMAGE,Vector3(direction,.25,0),PUSH,shape,pair[1],pair[0],actor)
+    feedback_target=null
+    # Deliver is authoritative: shield/counter/protection/clank cannot spawn impact.
+    if not was_shielding and target.damage_percent>before_damage:
+     impact_at(pair[1]+(pair[0]-pair[1]).normalized()*radius)
     break

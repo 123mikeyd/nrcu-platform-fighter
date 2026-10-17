@@ -148,6 +148,11 @@ func run_suite():
 		check(arena.story_hero == hero and arena.story_route == ["bobo", "ice_mage", "witcheer", "ggb", "turbofit", "doge_man", "teknium"].filter(func(id): return id != hero), "route skips hero " + hero)
 		check(arena.story_route[-1] == ("doge_man" if hero == "teknium" else "teknium"), "final opponent " + hero)
 		while true:
+			# Turbo's entrance owns pause until its normal skip callback runs.
+			if arena.story_opponent() == "turbofit":
+				check(arena.story_video.active and arena.story_video.clip_id == "turbofit_celebration", "Turbo entrance before encounter " + hero)
+				arena.story_video.skip()
+				check(not paused and arena.story_vs.visible, "Turbo skip hands off to VS " + hero)
 			arena.story_vs.skip(); arena._cancel_ready()
 			var opp: String = arena.story_opponent()
 			check(arena.story_state == "playing" and arena.player_one.character_id == hero and arena.player_two.character_id == opp, "real actors %s vs %s" % [hero, opp])

@@ -44,7 +44,8 @@ def run_process(command, log, timeout, marker=None, env=None):
     return {'exit': code, 'passed': passed, 'completion_count': markers}
 
 
-CONTRACTS = [('test_v06_release', 'V06_RELEASE_COMPLETE'),
+CONTRACTS = [('test_story_video_contract', 'PASS: story video contract'),
+             ('test_v06_release', 'V06_RELEASE_COMPLETE'),
              ('test_v06_worlds', 'V06_WORLDS_COMPLETE'),
              ('test_v06_contact_lifecycle', 'V06_CONTACT_COMPLETE'),
              ('test_v06_mobile', 'V06_MOBILE_COMPLETE'),

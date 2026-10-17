@@ -69,6 +69,10 @@ func run():
 		await process_frame
 		arena.story_action.pressed.emit()
 		await process_frame
+		if arena.story_opponent() == "turbofit":
+			check(arena.story_video.active and arena.story_video.clip_id == "turbofit_celebration", "Turbo entrance precedes its encounter")
+			arena.story_video.skip()
+			check(not paused and vs.visible, "Turbo skip hands off to VS")
 		vs.skip()
 	check(arena.player_two.character_id == "doge_man", "Teknium final encounter is Doge Man")
 	arena._cancel_ready()
@@ -81,7 +85,7 @@ func run():
 	check(ending.black.modulate.a > 0.99 and ending.is_rolling(), "faded to black, credits rolling")
 	var names := []
 	for l in ending.roll.get_children(): names.append(l.text)
-	check("Mike" in names and "Quark" in names and "Arts Bro" in names and "Hermes Agent" in names, "credits list Mike, Quark, Arts Bro, Hermes Agent")
+	check("123mikeyD" in names and "Quark2World" in names and "Arts Bro" in names and "Hermes Agent" in names and "GPT Astra & Claude Opus" in names, "credits list all five current contributor names")
 	check(arena.challenger_screen.visible == false, "no challenger interrupts the credits")
 	ending.skip()
 	check(arena.story_panel.visible and arena.story_action.text == "RESTART RUN" and "STORY COMPLETE?" in arena.story_detail.text, "result panel after credits")

@@ -12,6 +12,7 @@ var current_clip := ""
 # TurboFit has no flight pivot: the model is NOT parented to it, it stays at identity.
 var flight_root: Node3D
 var palette := Color.WHITE
+var costume_id := "01"
 var falling := false
 var landing_remaining := 0.0
 var _kick_skeleton: Skeleton3D
@@ -19,6 +20,7 @@ var _kick_foot := -1
 var _kick_toe := -1
 var guitar_moves
 # v3b hair: 5 bone chains under mixamorig_Head, driven by Godot spring bones.
+# Bouncy hair with large whips on mosh/kick moves. Presentation only.
 const HAIR_CHAINS := [
     ["Hair_Back_C_01", "Hair_Back_C_04"], ["Hair_Back_L_01", "Hair_Back_L_04"], ["Hair_Back_R_01", "Hair_Back_R_04"],
     ["Hair_Side_L_01", "Hair_Side_L_03"], ["Hair_Side_R_01", "Hair_Side_R_03"],
@@ -199,7 +201,12 @@ func _ready() -> void:
             var source = mesh.get_active_material(surface)
             if source is StandardMaterial3D:
                 var material: StandardMaterial3D = source.duplicate()
-                material.albedo_color *= Color.WHITE.lerp(palette, 0.10)
+                # Legacy83 has separate body/hair UV atlases, unlike gameplay33.
+                # Keep both meshes, the rig and clap untouched; recolor only their maps.
+                var selected := costume_id if costume_id in ["01", "02", "03", "04"] else "01"
+                var region := "hair" if source.resource_name == "TurboFit_Hair_Material" else "body"
+                material.albedo_texture = preload("res://scripts/costume_materials.gd").texture("res://assets/turbofit_legacy_clap/costumes/%s_%s.png" % [selected, region])
+                material.albedo_color = Color.WHITE
                 material.metallic = minf(material.metallic, 0.08)
                 material.roughness = maxf(material.roughness, 0.68)
                 # TurboFit's black clothing disappears against the dark arena.
