@@ -887,8 +887,8 @@ func _ready() -> void:
         doge_ground_basic = preload("res://scripts/doge_ground_basic.gd").new()
         doge_ground_basic.name = "DogeGroundBasic"
         add_child(doge_ground_basic)
-        doge_cape_attack = preload("res://scripts/doge_cape_attack.gd").new()
-        doge_cape_attack.name = "DogeCapeAttack"
+        doge_cape_attack = preload("res://scripts/doge_bark_attack.gd").new()
+        doge_cape_attack.name = "DogeBarkAttack"
         add_child(doge_cape_attack)
         doge_air_drop = preload("res://scripts/doge_air_drop.gd").new()
         doge_air_drop.name = "DogeAirDrop"

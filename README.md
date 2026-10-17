@@ -14,7 +14,7 @@ Big personalities. Weird powers. Unlockable challengers. Ledges, lasers, guitar 
   <img src="images/download_windows_button.svg" alt="Download the Windows tester build" width="680">
 </a>
 
-[📜 Patch v0.6.1 notes](PATCH_NOTES_v0.6.1.md) · [🃏 Full roster](ROSTER.md) · [📖 Meet the cast in the NRCU Vault](https://123mikeyd.github.io/Nous_Research_Cinematic_Universe/library/)
+[📜 Patch v0.6.2 browser notes](PATCH_NOTES_v0.6.2.md) · [🃏 Full roster](ROSTER.md) · [📖 Meet the cast in the NRCU Vault](https://123mikeyd.github.io/Nous_Research_Cinematic_Universe/library/)
 
 <sub>🚧 Public alpha / friend demo. It is unfinished, it is chaotic, and that is half the fun. Browser first load is big; grab a snack.</sub>
 
@@ -63,7 +63,13 @@ Pick a starter, fight friends or CPUs, unlock challengers, run Story mode, chase
 
 ---
 
-## ✨ v0.6.1 alpha — Pick your color. Bring the chaos.
+## ✨ v0.6.2 browser alpha — Legends, barks and Story movies
+
+Updated Doge attacks and punch effects, Story movies and credits, TurboFit clap costume colors, and a lossless texture-payload reduction. The complete browser download is still about 911 MB before transport compression. **[Read the browser patch notes →](PATCH_NOTES_v0.6.2.md)**
+
+This release updates the browser game; the Windows button above still downloads v0.6.1. Real-phone performance and long-session stability need tester feedback. No FPS improvement is claimed from the smaller download.
+
+## Previously in v0.6.1 — Pick your color. Bring the chaos.
 
 **TurboFit’s original look returns.** Four colors, corrected guitar grip, and the results-screen clap you know. Transparent costume portraits make the lineup clearer; the new two-step setup lets you choose your fighters first, then your stage.
 

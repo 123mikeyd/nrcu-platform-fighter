@@ -1,5 +1,5 @@
 extends Node
-# pose from the approved crouch library (approved_crouch_20260928.tres "Hold").
+# Character-specific static crouch holds with reversible FK transitions.
 # Entry/exit are a responsive reversible FK blend (gameplay transition, not authored animation):
 # Doge .18s, Tek/Turbo .30s. The previous authored Tek v004 / Turbo v005 libraries stay on disk.
 # A grounded down-basic started from the crouch begins on the crouch pose and blends into the attack.
@@ -27,10 +27,13 @@ func _ready():
  var ap=view.animation_player
  ap.play("Idle",0);ap.seek(0,true);ap.pause()
  for b in skeleton.get_bone_count():standing.append(skeleton.get_bone_pose(b))
- ap.play("crouch/Hold",0);ap.seek(0,true);ap.pause()
+ ap.play("bark/Bark" if actor.character_id=="doge_man" else "crouch/Hold",0)
+ ap.seek(1.0/30 if actor.character_id=="doge_man" else 0.0,true);ap.pause()
  for b in skeleton.get_bone_count():endpoint.append(skeleton.get_bone_pose(b))
  view.current_clip=""
- if actor.character_id=="doge_man":view.sync_pose("idle",actor.facing,.4,.42,.18,.6)
+ if actor.character_id=="doge_man":
+  actor.doge_cape_attack.reset_morphs()
+  view.sync_pose("idle",actor.facing,.4,.42,.18,.6)
  attack_modifier=preload("res://scripts/crouch_attack_blend.gd").new()
  attack_modifier.name="CrouchAttackBlend";attack_modifier.pose=endpoint;attack_modifier.active=false
  skeleton.add_child(attack_modifier)
@@ -56,6 +59,11 @@ func cancel():
  # A second FK overlay would displace its anchored foot and replay the stand-up.
  if actor.character_id!="doge_man" and not (actor.character_id=="teknium" and actor.last_move=="LOW SWEEP") and amount>=.5 and attack_started():attack_modifier.start(ATTACK_BLEND*amount)
  phase="idle";amount=0;hold_time=0
+ if actor.character_id=="doge_man" and not actor.doge_cape_attack.active:
+  actor.doge_cape_attack.reset_morphs()
+  # FK crouch already owns the displayed pose. Discard the paused bark clock
+  # before native locomotion blends, or it reintroduces crouch for one frame.
+  view.animation_player.stop(true)
  view.current_clip=""
  view.animation_player.speed_scale=1
  if actor.character_id!="teknium":view.position.y=base_y
@@ -86,7 +94,9 @@ func present(delta:float,interrupted:bool) -> bool:
  if actor.character_id=="turbofit":
   view.falling=false;view.landing_remaining=0
   view.cancel_power_chord()
- if actor.character_id=="doge_man":view.flight_root.rotation=Vector3.ZERO
+ if actor.character_id=="doge_man":
+  view.flight_root.rotation=Vector3.ZERO
+  actor.doge_cape_attack.reset_morphs(true)
  view.current_clip="crouch/Hold"
  view.animation_player.pause()
  var weight=smoothstep(0,1,amount)

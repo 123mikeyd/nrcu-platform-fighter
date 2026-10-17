@@ -181,6 +181,11 @@ static func on_hit(victim, source, damage: float, base_knockback: float) -> void
     if is_instance_valid(source) and source != victim and source.get("input_device") != null:
         rumble(source, 0.5, 0.0, attacker_rumble_seconds(damage))
     if not HIT_SPARK_ENABLED: return
+    # Super Doge Punch supplies its own restrained, confirmed-contact burst.
+    # Keep rumble and every other move's shared spark unchanged.
+    if is_instance_valid(source):
+        var punch = source.get("doge_super_punch")
+        if punch and punch.feedback_target == victim: return
     # Launch speed if already applied, else the shared knockback formula (works if a hitlag pass defers launch).
     var strength: float = maxf(victim.velocity.length(), float(KnockbackMath.knockback_strength(victim.damage_percent, damage, base_knockback)))
     var center: Vector3 = victim.global_position + Vector3.UP * 1.05

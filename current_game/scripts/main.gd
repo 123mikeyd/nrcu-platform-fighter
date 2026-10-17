@@ -59,6 +59,9 @@ var story_route: Array = []
 # victory screen after Story wins, and the STORY COMPLETE? ending + credits roll.
 var story_vs: Control
 var story_ending: Control
+var story_video: Control
+var _story_video_context := ""
+var _story_video_fresh := false
 var story_shade: ColorRect
 var story_center: CenterContainer
 var story_column: VBoxContainer
@@ -74,7 +77,7 @@ var world: Node3D
 var world_environment: Dictionary = {}
 
 func _ready() -> void:
-    DisplayServer.window_set_title("NRCU — v0.6.1")
+    DisplayServer.window_set_title("The Legends of Nous Research: Hermes, Breaking Containment")
     if not OS.has_feature("web"): get_window().min_size = Vector2i(800,450)
     _build_environment()
     _build_stage()
@@ -121,6 +124,12 @@ func _ready() -> void:
     challenger_screen.fight_requested.connect(start_challenger)
     challenger_screen.later_requested.connect(show_setup)
     challenger_screen.continue_requested.connect(show_setup)
+    var video_layer := CanvasLayer.new()
+    video_layer.layer = 30
+    add_child(video_layer)
+    story_video = preload("res://scripts/story_video.gd").new()
+    video_layer.add_child(story_video)
+    story_video.finished.connect(_on_story_video_finished)
     dev_overlay.name = "DevOverlay"
     dev_overlay.main = self
     add_child(dev_overlay)
@@ -222,7 +231,9 @@ func show_setup() -> void:
     if victory_screen: victory_screen.clear()
     story_state = ""
     if story_vs: story_vs.skip()
-    if story_ending: story_ending.skip()   # state is already cleared: no result panel
+    if story_ending: story_ending.cancel()
+    _story_video_context = ""
+    if story_video: story_video.cancel()
     story_panel.hide()
     _layout_story_panel(false)
     bobo_health_bar.hide()
@@ -534,6 +545,7 @@ func _show_story_briefing() -> void:
     story_action.text = "START ENCOUNTER"
 
 func start_story() -> void:
+    if story_video.active or story_ending.visible: return
     if story_state.begins_with("bag"):
         start_heavy_bag()
         return
@@ -591,11 +603,26 @@ func start_story() -> void:
         player_one.facing = 1.0
         player_two.facing = -1.0
         _begin_ready()
-        if fresh:
-            # The match loads behind the splash; READY counts down once it clears.
-            ready_remaining += story_vs.SECONDS
+        if opponent == "turbofit":
+            _story_video_context = "turbo_encounter"
+            _story_video_fresh = fresh
             ready_label.hide()
-            story_vs.play(story_hero, opponent, Unlocks.is_locked(opponent), "STORY %02d / %02d" % [story_encounter + 1, story_route.size()])
+            story_video.play_clip("turbofit_celebration")
+        elif fresh:
+            _play_story_vs()
+
+func _play_story_vs() -> void:
+    ready_remaining += story_vs.SECONDS
+    ready_label.hide()
+    var opponent := story_opponent()
+    story_vs.play(story_hero, opponent, Unlocks.is_locked(opponent), "STORY %02d / %02d" % [story_encounter + 1, story_route.size()])
+
+func _on_story_video_finished() -> void:
+    var context := _story_video_context
+    _story_video_context = ""
+    if context == "turbo_encounter" and story_state == "playing":
+        if _story_video_fresh: _play_story_vs()
+        else: ready_label.show()
 
 func _create_fighter(slot: Dictionary, index: int, bobo_encounter: bool, heavy_bag: bool) -> Node:
     if heavy_bag and index == 1: return load("res://scripts/heavy_bag.gd").new()
@@ -863,10 +890,14 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
     if story_state == "challenger":
         var beat: bool = player_one.stocks > 0 and player_two.stocks <= 0
         story_state = "challenger_done"
+        var first_unlock: bool = beat and not Unlocks.earned(challenger_id)
         if beat: Unlocks.record_unlock(challenger_id)
         winner_label.visible = false
         if beat: challenger_screen.show_joined(challenger_id)
         else: challenger_screen.show_escaped(challenger_id)
+        if first_unlock and challenger_id == "witcheer":
+            _story_video_context = "witcheer_unlock"
+            story_video.play_clip("witcheer_unlock")
         return
     if story_state == "playing":
         var won: bool = player_one.stocks > 0 and player_two.stocks <= 0
@@ -882,11 +913,11 @@ func _on_fighter_eliminated(_loser: CharacterBody3D) -> void:
             _show_story_victory(story_title.text, opponent)
             if last:
                 Unlocks.record_story_clear(story_hero)
-                story_detail.text = "STORY COMPLETE?\n%s beat all %d encounters!\n\n%s\n%s" % [_story_name(story_hero), story_route.size(), StoryCredits.CLOSING, " · ".join(StoryCredits.NAMES)]
+                story_detail.text = "STORY COMPLETE?\n%s beat all %d encounters!\n\n%s\n%s" % [_story_name(story_hero), story_route.size(), StoryCredits.CLOSING, StoryCredits.CREATED_BY]
                 story_action.text = "RESTART RUN"
                 # Victory pose -> fade to black -> credits; the result panel follows.
                 story_panel.hide()
-                story_ending.play()
+                story_ending.play(story_hero)
                 return
             _layout_story_panel(true)
         else:
@@ -969,6 +1000,7 @@ func _begin_ready() -> void:
         fighter.ready_settling = true
 
 func _physics_process(delta: float) -> void:
+    if story_video and story_video.active: return
     if ready_remaining > 0:
         ready_remaining = maxf(0,ready_remaining-delta)
         if ready_remaining == 0:
