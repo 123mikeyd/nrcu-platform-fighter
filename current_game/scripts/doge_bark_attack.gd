@@ -99,7 +99,7 @@ func emit_wave():
 func query_contact(t:float):
  if not emitted or t<STRIKE or t>=ACTIVE_END:return
  var age=t-STRIKE;var radius=lerpf(.12,.72,age/WAVE_SECONDS);var center=wave_origin+Vector3(direction*2.0*age/WAVE_SECONDS,0,0)
- var q=PhysicsShapeQueryParameters3D.new();q.shape=SphereShape3D.new();q.shape.radius=radius;q.transform.origin=center;q.collision_mask=4;q.margin=0
+ var q=PhysicsShapeQueryParameters3D.new();q.shape=SphereShape3D.new();q.shape.radius=radius;q.transform.origin=center;q.collision_mask=1 | 4;q.margin=0
  Route.prepare(actor,q)
  var space=actor.get_world_3d().direct_space_state;var hits=space.intersect_shape(q,64)
  for hit in hits:
