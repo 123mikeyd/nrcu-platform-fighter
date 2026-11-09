@@ -6,10 +6,10 @@ concurrency:
   group: github-pages
   cancel-in-progress: false
 env:
-  RELEASE_TAG: v0.6.2
-  SOURCE_SHA: 4ab9dc8b90058f77b2d7e1edc772e1a41aed9cb5
-  ARCHIVE: NRCU-v0.6.2-Web.zip
-  ARCHIVE_SHA256: bac6e089b916c7f7ca7c9a7be46ef6daf72033c5691b33d37013cdead3a0ec53
+  RELEASE_TAG: rain-street-20261109
+  RECEIPT_SHA: 65d6ccc2ee37aaa85ba8220aa6f1ba6b962b0fb3
+  ARCHIVE: RainStreet-20261109-Web.zip
+  ARCHIVE_SHA256: d6a7adcd96182cbdb66d6fb0cb266bce0739b4a5cad5da1c06f92bf45764f6e2
 jobs:
   package:
     if: github.ref == 'refs/heads/main'
@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')" = "$SOURCE_SHA"
+          test "$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')" = "$RECEIPT_SHA"
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$ARCHIVE" --dir "$RUNNER_TEMP/download"
           cd "$RUNNER_TEMP/download"
           printf '%s  %s\n' "$ARCHIVE_SHA256" "$ARCHIVE" | sha256sum --check --strict
@@ -41,7 +41,7 @@ jobs:
               infos = z.infolist()
               names = [i.filename for i in infos]
               assert len(names) == len(set(names)) == 15, 'Unexpected or duplicate members'
-              assert sum(i.file_size for i in infos) == 911304797, 'Unexpected site size'
+              assert sum(i.file_size for i in infos) == 972101902, 'Unexpected site size'
               for i in infos:
                   p = PurePosixPath(i.filename)
                   assert not p.is_absolute() and '..' not in p.parts
@@ -51,11 +51,11 @@ jobs:
               manifest = json.loads(z.read('manifest.json'))
               assert set(manifest) == {'engine', 'preset', 'threaded', 'files', 'total_bytes'}
               assert manifest['threaded'] is False
-              assert json.loads(z.read('build.json'))['source_commit'] == os.environ['SOURCE_SHA']
+              assert json.loads(z.read('build.json'))['release_commit'] == os.environ['RECEIPT_SHA']
               entries = manifest['files']
               assert len(entries) == 14
               assert set(names) == {e['file'] for e in entries} | {'manifest.json'}
-              assert sum(e['bytes'] for e in entries) == manifest['total_bytes'] == 911302405
+              assert sum(e['bytes'] for e in entries) == manifest['total_bytes'] == 972099615
               for e in entries:
                   data = z.read(e['file'])
                   assert len(data) == e['bytes']
@@ -63,7 +63,7 @@ jobs:
               assert {'index.html', 'index.wasm', 'index.pck', 'index.js'} <= set(names)
               site.mkdir()
               z.extractall(site)
-          print('Verified 15 files, 911304797 bytes; exact reviewed archive and manifest hashes.')
+          print('Verified 15 files, 972101902 bytes; exact reviewed archive and manifest hashes.')
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
